@@ -6,10 +6,16 @@ import { CHUNK_SIZE } from '../components/game/Chunk';
 export function generateTerrain() {
   console.log("Generating terrain...");
   
-  // Create noise generators
-  const simplex = new SimplexNoise(Math.random());
-  const simplex2 = new SimplexNoise(Math.random());
-  const simplex3 = new SimplexNoise(Math.random());
+  try {
+    // Create noise generators with seeds for reproducibility 
+    const seed1 = Math.random();
+    const seed2 = Math.random();
+    const seed3 = Math.random();
+    console.log(`Using terrain seeds: ${seed1.toFixed(4)}, ${seed2.toFixed(4)}, ${seed3.toFixed(4)}`);
+    
+    const simplex = new SimplexNoise(seed1);
+    const simplex2 = new SimplexNoise(seed2);
+    const simplex3 = new SimplexNoise(seed3);
   
   // Terrain parameters
   const WORLD_SIZE = 8; // in chunks (16x16 each)
@@ -180,6 +186,32 @@ export function generateTerrain() {
   console.log(`Generated ${Object.keys(chunks).length} chunks with ${Object.keys(blocks).length} blocks`);
   
   return { generatedChunks: chunks, generatedBlocks: blocks };
+  } catch (error) {
+    console.error("Failed to generate terrain:", error);
+    
+    // Create a minimal fallback terrain (flat platform) to prevent game from crashing
+    const fallbackChunks: Record<string, boolean> = { '0,0': true };
+    const fallbackBlocks: Record<string, BlockType> = {};
+    
+    // Create a small 16x16 flat platform at y=20
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+      for (let z = 0; z < CHUNK_SIZE; z++) {
+        // Add stone base
+        for (let y = 15; y < 19; y++) {
+          fallbackBlocks[`${x},${y},${z}`] = 'stone';
+        }
+        
+        // Add dirt layer
+        fallbackBlocks[`${x},19,${z}`] = 'dirt';
+        
+        // Add grass top
+        fallbackBlocks[`${x},20,${z}`] = 'grass';
+      }
+    }
+    
+    console.log("Generated fallback terrain as emergency measure");
+    return { generatedChunks: fallbackChunks, generatedBlocks: fallbackBlocks };
+  }
 }
 
 // Get appropriate block type based on height and biome

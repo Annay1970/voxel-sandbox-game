@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useThree } from "@react-three/fiber";
+import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { Sky, Stars, OrbitControls } from "@react-three/drei";
 import { useVoxelGame } from "../../lib/stores/useVoxelGame";
@@ -7,9 +7,10 @@ import Player from "./Player";
 import Chunk from "./Chunk";
 import Creature from "./Creature";
 import { generateTerrain } from "../../lib/terrain";
+import { useErrorTracking, updatePerformanceMetrics } from "../../lib/utils/errorTracker";
 
 export default function World() {
-  const { scene } = useThree();
+  const { scene, gl } = useThree();
   const chunks = useVoxelGame(state => state.chunks);
   const blocks = useVoxelGame(state => state.blocks);
   const creatures = useVoxelGame(state => state.creatures);
@@ -23,6 +24,60 @@ export default function World() {
   
   const generatedRef = useRef(false);
   const worldRef = useRef<THREE.Group>(null);
+  
+  // Track errors in the World component
+  const { trackError } = useErrorTracking('World');
+  
+  // Monitor renderer performance and potential errors
+  useEffect(() => {
+    const canvas = gl.domElement;
+    
+    // Track WebGL context loss
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      trackError(new Error('WebGL context lost'), { 
+        renderer: gl.info.render,
+        memory: gl.info.memory,
+        programs: gl.info.programs
+      });
+    };
+    
+    // Track WebGL context restore
+    const handleContextRestored = () => {
+      trackError(new Error('WebGL context restored - reloading required'), {
+        action: 'reload_recommended'
+      });
+    };
+    
+    canvas.addEventListener('webglcontextlost', handleContextLost);
+    canvas.addEventListener('webglcontextrestored', handleContextRestored);
+    
+    return () => {
+      canvas.removeEventListener('webglcontextlost', handleContextLost);
+      canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+    };
+  }, [gl, trackError]);
+  
+  // Performance monitoring in the render loop
+  useFrame(() => {
+    // Update performance metrics
+    updatePerformanceMetrics();
+    
+    // Check for graphics memory issues
+    if (gl.info.memory && gl.info.memory.geometries > 10000) {
+      trackError(
+        new Error(`High geometry count: ${gl.info.memory.geometries}`),
+        { memory: gl.info.memory }
+      );
+    }
+    
+    if (gl.info.memory && gl.info.memory.textures > 100) {
+      trackError(
+        new Error(`High texture count: ${gl.info.memory.textures}`),
+        { memory: gl.info.memory }
+      );
+    }
+  });
 
   // Generate initial world
   useEffect(() => {
