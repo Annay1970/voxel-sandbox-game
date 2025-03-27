@@ -102,29 +102,19 @@ export default function Chunk({ chunkX, chunkZ, blocks }: ChunkProps) {
     );
   }
   
-  // Render instanced meshes for better performance
+  // For now, let's just use individual blocks instead of instanced meshes
+  // since we're having an issue with the instanced mesh implementation
   return (
     <group>
-      {Object.entries(instances).map(([type, matrices]) => {
-        if (matrices.length === 0) return null;
-        
+      {chunkBlocks.map(([x, y, z, type]) => {
+        if (type === 'air') return null;
         return (
-          <instancedMesh
-            key={type}
-            args={[undefined, undefined, matrices.length]}
-            count={matrices.length}
-          >
-            <boxGeometry args={[1, 1, 1]} />
-            <meshStandardMaterial 
-              map={textureMap[type as BlockType]} 
-              color={type === 'water' ? '#3498db' : '#ffffff'}
-              transparent={type === 'water' || type === 'leaves'}
-              opacity={type === 'water' ? 0.7 : type === 'leaves' ? 0.8 : 1}
-            />
-            {matrices.forEach((matrix, i) => {
-              instancedMesh.setMatrixAt(i, matrix);
-            })}
-          </instancedMesh>
+          <Block
+            key={`${x},${y},${z}`}
+            position={[x, y, z]}
+            type={type}
+            texture={textureMap[type]}
+          />
         );
       })}
     </group>
