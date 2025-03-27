@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { Sky, Stars } from "@react-three/drei";
+import { Sky, Stars, OrbitControls } from "@react-three/drei";
 import { useVoxelGame } from "../../lib/stores/useVoxelGame";
 import Player from "./Player";
 import Chunk from "./Chunk";
@@ -102,11 +102,16 @@ export default function World() {
   
   const isNight = timeOfDay > 0.75 || timeOfDay < 0.25;
   
+  const [debug, setDebug] = useState(true);
+
   return (
     <group ref={worldRef}>
       {/* Environment */}
       <Sky {...skyProps} />
       {isNight && <Stars radius={100} depth={50} count={1000} factor={4} />}
+      
+      {/* Debug controls */}
+      {debug && <OrbitControls />}
       
       {/* Create a large ground plane */}
       <mesh 
@@ -139,7 +144,7 @@ export default function World() {
       ))}
       
       {/* Player */}
-      <Player />
+      {!debug && <Player />}
     </group>
   );
 }

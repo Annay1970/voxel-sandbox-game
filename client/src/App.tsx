@@ -46,30 +46,84 @@ function App() {
     <div className="w-full h-full">
       {showCanvas && (
         <KeyboardControls map={keyMap}>
-          <Canvas
-            shadows
-            camera={{
-              position: [0, 20, 0], 
-              fov: 70,
-              near: 0.1,
-              far: 1000
-            }}
-            gl={{
-              antialias: true,
-              powerPreference: "high-performance"
-            }}
-          >
-            <color attach="background" args={["#87CEEB"]} />
-            <fog attach="fog" args={["#87CEEB", 30, 100]} />
-            
-            <Suspense fallback={null}>
-              <World />
-            </Suspense>
-          </Canvas>
-          <UI />
+          <ErrorBoundary>
+            <Canvas
+              shadows
+              camera={{
+                position: [5, 25, 5], 
+                fov: 70,
+                near: 0.1,
+                far: 1000
+              }}
+              gl={{
+                antialias: true,
+                powerPreference: "high-performance",
+                alpha: false,
+                preserveDrawingBuffer: true
+              }}
+              dpr={[1, 2]} // Limit DPR for better performance
+              onCreated={({ gl }) => {
+                // Configure renderer for better performance
+                gl.setClearColor('#87CEEB', 1);
+                console.log("Canvas created successfully");
+              }}
+            >
+              <color attach="background" args={["#87CEEB"]} />
+              <fog attach="fog" args={["#87CEEB", 30, 100]} />
+              
+              <Suspense fallback={<LoadingFallback />}>
+                <World />
+              </Suspense>
+            </Canvas>
+            <UI />
+          </ErrorBoundary>
         </KeyboardControls>
       )}
     </div>
+  );
+}
+
+// Custom error boundary component to catch and display render errors
+function ErrorBoundary({ children }: { children: React.ReactNode }) {
+  const [hasError, setHasError] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error("Error caught by ErrorBoundary:", event.error);
+      setError(event.error);
+      setHasError(true);
+    };
+
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+
+  if (hasError) {
+    return (
+      <div className="error-boundary p-4 bg-red-100 border border-red-400 rounded">
+        <h2 className="text-2xl mb-2 text-red-800">Something went wrong rendering the game</h2>
+        <p className="mb-4 text-red-700">The game engine encountered an error. Try refreshing the page.</p>
+        {error && <pre className="bg-white p-2 rounded text-xs overflow-auto max-h-40">{error.toString()}</pre>}
+        <button 
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded"
+          onClick={() => window.location.reload()}>
+          Reload Game
+        </button>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+// Loading fallback component
+function LoadingFallback() {
+  return (
+    <mesh position={[0, 0, 0]}>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial color="#FFFFFF" />
+    </mesh>
   );
 }
 

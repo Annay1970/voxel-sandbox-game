@@ -80,6 +80,13 @@ export default function Block({ position, type, texture }: BlockProps) {
         roughness={roughness}
         metalness={metalness}
         flatShading={true}
+        onBeforeCompile={shader => {
+          // Increase shader precision for better compatibility
+          shader.fragmentShader = shader.fragmentShader.replace(
+            'precision highp float;',
+            'precision highp float;'
+          );
+        }}
       />
     </mesh>
   );
