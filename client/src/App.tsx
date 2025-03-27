@@ -1,8 +1,64 @@
-import { Canvas } from "@react-three/fiber";
-import { Suspense, useState } from "react";
-import { KeyboardControls, OrbitControls } from "@react-three/drei";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { Suspense, useState, useRef } from "react";
+import { KeyboardControls, OrbitControls, useKeyboardControls } from "@react-three/drei";
 import "@fontsource/inter";
 import { Controls } from "./lib/stores/useVoxelGame";
+import * as THREE from "three";
+
+// Simple Player component with basic movement
+const Player = () => {
+  const [position, setPosition] = useState({ x: 0, y: 1, z: 0 });
+  const playerRef = useRef<THREE.Mesh>(null);
+  
+  // Access keyboard controls
+  const [subscribeKeys, getKeys] = useKeyboardControls<Controls>();
+  
+  // Update player position in animation frame
+  useFrame((state: any, delta: number) => {
+    if (!playerRef.current) return;
+    
+    // Get current key states
+    const { forward, backward, left, right, jump } = getKeys();
+    
+    // Simple movement logic
+    const moveSpeed = 5 * delta;
+    let newPosition = { ...position };
+    
+    if (forward) newPosition.z -= moveSpeed;
+    if (backward) newPosition.z += moveSpeed;
+    if (left) newPosition.x -= moveSpeed;
+    if (right) newPosition.x += moveSpeed;
+    if (jump) newPosition.y += moveSpeed * 2;
+    
+    // Apply gravity
+    if (newPosition.y > 1) {
+      newPosition.y -= 9.8 * delta;
+    } else {
+      newPosition.y = 1;
+    }
+    
+    // Update position
+    setPosition(newPosition);
+    
+    // Apply to mesh
+    playerRef.current.position.set(newPosition.x, newPosition.y, newPosition.z);
+    
+    // Update camera to follow player
+    state.camera.position.set(
+      newPosition.x, 
+      newPosition.y + 3, 
+      newPosition.z + 5
+    );
+    state.camera.lookAt(newPosition.x, newPosition.y, newPosition.z);
+  });
+  
+  return (
+    <mesh ref={playerRef} position={[position.x, position.y, position.z]} castShadow>
+      <boxGeometry args={[1, 2, 1]} />
+      <meshStandardMaterial color="red" />
+    </mesh>
+  );
+};
 
 // Simplified World component for debugging
 const SimplifiedWorld = () => {
@@ -18,14 +74,24 @@ const SimplifiedWorld = () => {
       <ambientLight intensity={0.4} />
       <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
       
-      {/* Debug controls */}
-      <OrbitControls />
-      
-      {/* Simple cube for testing */}
-      <mesh position={[0, 1, 0]} castShadow>
-        <boxGeometry args={[1, 1, 1]} />
+      {/* Basic environment objects */}
+      <mesh position={[5, 1, -5]} castShadow>
+        <boxGeometry args={[2, 2, 2]} />
         <meshStandardMaterial color="blue" />
       </mesh>
+      
+      <mesh position={[-5, 1, 5]} castShadow>
+        <boxGeometry args={[2, 2, 2]} />
+        <meshStandardMaterial color="green" />
+      </mesh>
+      
+      <mesh position={[-5, 1, -5]} castShadow>
+        <boxGeometry args={[2, 2, 2]} />
+        <meshStandardMaterial color="yellow" />
+      </mesh>
+      
+      {/* Player character */}
+      <Player />
     </>
   );
 };
@@ -45,8 +111,8 @@ const SimplifiedUI = () => {
   return (
     <div className="fixed top-4 left-4 text-white bg-black bg-opacity-50 p-2 rounded">
       <h2>Voxel Game (Debug Mode)</h2>
-      <p>WASD - Move | Space - Jump | E - Mine | Q - Place</p>
-      <p>Orbit controls enabled - Use mouse to rotate camera</p>
+      <p>WASD - Move | Space - Jump</p>
+      <p>Camera automatically follows player</p>
     </div>
   );
 };
