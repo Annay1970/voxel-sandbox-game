@@ -35,10 +35,14 @@ export default function Player() {
     const interval = setInterval(() => {
       const controls = getControls();
       console.log('Control state:', JSON.stringify(controls));
-    }, 2000);
+      console.log('Player position:', JSON.stringify(position));
+      console.log('Player velocity:', JSON.stringify(velocity));
+      console.log('Is on ground:', isOnGround);
+      console.log('Selected block:', selectedBlock);
+    }, 5000); // Reduced frequency to avoid flooding console
     
     return () => clearInterval(interval);
-  }, [getControls]);
+  }, [getControls, position, velocity, isOnGround, selectedBlock]);
 
   // Ray for block interaction
   const ray = useRef(new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(), 0, 5));
@@ -441,7 +445,7 @@ export default function Player() {
   return (
     <mesh ref={meshRef} position={[position.x, position.y, position.z]}>
       <boxGeometry args={[PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH]} />
-      <meshStandardMaterial color="#00AAFF" opacity={0.8} transparent />
+      <meshStandardMaterial color="#00AAFF" opacity={0.2} transparent />
     </mesh>
   );
 }

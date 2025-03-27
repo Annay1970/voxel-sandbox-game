@@ -86,7 +86,7 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   blocks: {},
   
   // Initial player state
-  playerPosition: { x: 0, y: 50, z: 0 }, // Start high to fall onto terrain
+  playerPosition: { x: 0, y: 20, z: 0 }, // Start at a reasonable height
   playerVelocity: { x: 0, y: 0, z: 0 },
   playerIsOnGround: false,
   playerHealth: 100,
@@ -114,7 +114,7 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   
   setPlayerVelocity: (velocity) => set({ playerVelocity: velocity }),
   
-  setPlayerIsOnGround: (isOnGround) => set({ playerIsOnGround }),
+  setPlayerIsOnGround: (isOnGround) => set({ playerIsOnGround: isOnGround }),
   
   setChunks: (chunks) => {
     set({ chunks });

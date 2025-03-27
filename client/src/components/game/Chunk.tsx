@@ -42,19 +42,34 @@ export default function Chunk({ chunkX, chunkZ, blocks }: ChunkProps) {
   const woodTexture = useTexture('/textures/wood.jpg');
   
   // Create a texture map for block types
-  const textureMap = useMemo(() => ({
-    'grass': grassTexture,
-    'dirt': grassTexture,
-    'stone': grassTexture,
-    'sand': sandTexture,
-    'wood': woodTexture,
-    'leaves': grassTexture,
-    'water': grassTexture,
-  }), [grassTexture, sandTexture, woodTexture]);
+  const textureMap = useMemo(() => {
+    const baseMap: Partial<Record<BlockType, THREE.Texture>> = {
+      'grass': grassTexture,
+      'dirt': grassTexture,
+      'stone': grassTexture,
+      'sand': sandTexture,
+      'wood': woodTexture,
+      'leaves': grassTexture,
+      'water': grassTexture,
+      'log': woodTexture,
+      'stick': woodTexture,
+      'craftingTable': woodTexture,
+      'woodenPickaxe': woodTexture, 
+      'stonePickaxe': grassTexture,
+      'woodenAxe': woodTexture,
+      'woodenShovel': woodTexture,
+      'coal': grassTexture,
+      'torch': woodTexture,
+      'air': grassTexture, // Fallback but not actually used
+    };
+    return baseMap as Record<BlockType, THREE.Texture>;
+  }, [grassTexture, sandTexture, woodTexture]);
   
   // Use instanced mesh for better performance with many blocks
   const instances = useMemo(() => {
-    const blocksByType: Record<BlockType, THREE.Matrix4[]> = {
+    // Create an initial record with all block types as empty arrays
+    const blocksByType: Partial<Record<BlockType, THREE.Matrix4[]>> = {
+      'air': [],
       'grass': [],
       'dirt': [],
       'stone': [],
@@ -62,6 +77,15 @@ export default function Chunk({ chunkX, chunkZ, blocks }: ChunkProps) {
       'wood': [],
       'leaves': [],
       'water': [],
+      'log': [],
+      'stick': [],
+      'craftingTable': [],
+      'woodenPickaxe': [],
+      'stonePickaxe': [],
+      'woodenAxe': [],
+      'woodenShovel': [],
+      'coal': [],
+      'torch': [],
     };
     
     // Group blocks by type
@@ -71,11 +95,11 @@ export default function Chunk({ chunkX, chunkZ, blocks }: ChunkProps) {
       
       const matrix = new THREE.Matrix4().setPosition(x, y, z);
       if (blocksByType[type]) {
-        blocksByType[type].push(matrix);
+        blocksByType[type]!.push(matrix);
       }
     });
     
-    return blocksByType;
+    return blocksByType as Record<BlockType, THREE.Matrix4[]>;
   }, [chunkBlocks]);
   
   // For small numbers of blocks, render individually instead of instanced meshes
