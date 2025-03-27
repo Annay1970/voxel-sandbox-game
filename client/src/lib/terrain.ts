@@ -13,9 +13,10 @@ export function generateTerrain() {
   
   // Terrain parameters
   const WORLD_SIZE = 8; // in chunks (16x16 each)
-  const WATER_LEVEL = 12;
-  const MOUNTAIN_HEIGHT = 40;
-  const BASE_HEIGHT = 15;
+  const WATER_LEVEL = 10;
+  const MOUNTAIN_HEIGHT = 60;
+  const BASE_HEIGHT = 20;
+  const CAVE_FREQUENCY = 0.03; // Controls how often caves appear
   
   // Data structures to store generated world
   const chunks: Record<string, boolean> = {};

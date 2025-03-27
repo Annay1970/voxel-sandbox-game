@@ -20,7 +20,7 @@ export default function Player() {
   const isOnGround = useVoxelGame(state => state.playerIsOnGround);
   const setIsOnGround = useVoxelGame(state => state.setPlayerIsOnGround);
   const blocks = useVoxelGame(state => state.blocks);
-  const selectBlock = useVoxelGame(state => state.selectBlock);
+  const selectedBlock = useVoxelGame(state => state.selectedBlock);
   const placeBlock = useVoxelGame(state => state.placeBlock);
   const removeBlock = useVoxelGame(state => state.removeBlock);
   
@@ -30,14 +30,71 @@ export default function Player() {
   // Get control states without causing re-renders
   const [, getControls] = useKeyboardControls<Controls>();
 
+  // Add debugging to check if controls are working
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const controls = getControls();
+      console.log('Control state:', JSON.stringify(controls));
+    }, 2000);
+    
+    return () => clearInterval(interval);
+  }, [getControls]);
+
   // Ray for block interaction
   const ray = useRef(new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(), 0, 5));
   
   // Player movement and physics
+  // Mouse movement tracking
+  const deltaX = useRef(0);
+  const deltaY = useRef(0);
+  const cameraXRotation = useRef(0); // Vertical rotation (pitch)
+  const cameraYRotation = useRef(0); // Horizontal rotation (yaw)
+    
+  // Mouse event handler
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      // Only update if pointer is locked
+      if (document.pointerLockElement) {
+        deltaX.current += e.movementX;
+        deltaY.current += e.movementY;
+      }
+    };
+    
+    // Request pointer lock on canvas click
+    const handleCanvasClick = () => {
+      const canvas = document.querySelector('canvas');
+      if (canvas) {
+        canvas.requestPointerLock();
+      }
+    };
+    
+    window.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('click', handleCanvasClick);
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('click', handleCanvasClick);
+    };
+  }, []);
+    
   useFrame(({ camera }) => {
     if (!meshRef.current) return;
     
     const controls = getControls();
+    
+    // Update camera rotation based on mouse movement (Minecraft-style)
+    if (document.pointerLockElement) {
+      // Update horizontal and vertical rotation with Minecraft-like sensitivity
+      cameraYRotation.current += deltaX.current * 0.003; // Horizontal (yaw)
+      cameraXRotation.current -= deltaY.current * 0.003; // Vertical (pitch)
+      
+      // Limit vertical look angle to Minecraft-like range
+      cameraXRotation.current = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, cameraXRotation.current));
+      
+      // Reset deltas
+      deltaX.current = 0;
+      deltaY.current = 0;
+    }
     
     // Calculate movement direction
     let moveX = 0;
@@ -48,7 +105,7 @@ export default function Player() {
     if (controls.left) moveX -= 1;
     if (controls.right) moveX += 1;
     
-    // Normalize diagonal movement
+    // Normalize diagonal movement (Minecraft doesn't actually normalize, but it's smoother)
     if (moveX !== 0 && moveZ !== 0) {
       moveX *= 0.7071; // 1/sqrt(2)
       moveZ *= 0.7071;
@@ -62,18 +119,14 @@ export default function Player() {
       .normalize()
       .multiplyScalar(PLAYER_SPEED * speedMultiplier);
     
-    // Rotate movement direction based on camera angle
-    // Extract yaw rotation from camera
-    const cameraYRotation = Math.atan2(
-      camera.matrix.elements[8],
-      camera.matrix.elements[10]
-    );
+    // Use our tracked camera rotation instead of extracting from matrix
+    const yRotation = cameraYRotation.current;
     
     // Apply camera rotation to movement
     const rotatedDirection = new THREE.Vector3(
-      direction.x * Math.cos(cameraYRotation) + direction.z * Math.sin(cameraYRotation),
+      direction.x * Math.cos(yRotation) + direction.z * Math.sin(yRotation),
       0,
-      direction.z * Math.cos(cameraYRotation) - direction.x * Math.sin(cameraYRotation)
+      direction.z * Math.cos(yRotation) - direction.x * Math.sin(yRotation)
     );
     
     // Apply movement to velocity
@@ -275,17 +328,23 @@ export default function Player() {
       newPosition.z
     );
     
-    // Smoothly move camera to follow player
+    // Set camera to first-person view (Minecraft-like)
     camera.position.lerp(
       new THREE.Vector3(
-        newPosition.x + 4 * Math.sin(cameraYRotation),
-        newPosition.y + 3,
-        newPosition.z + 4 * Math.cos(cameraYRotation)
+        newPosition.x,
+        newPosition.y + PLAYER_HEIGHT - 0.2, // Eye level
+        newPosition.z
       ),
       0.1
     );
     
-    camera.lookAt(cameraRef.current);
+    // Look in direction player is facing
+    const lookTarget = new THREE.Vector3(
+      newPosition.x - Math.sin(yRotation),
+      newPosition.y + PLAYER_HEIGHT - 0.2 + Math.sin(cameraXRotation.current),
+      newPosition.z - Math.cos(yRotation)
+    );
+    camera.lookAt(lookTarget);
     
     // Block interaction (mine/place)
     if (controls.mine || controls.place) {
@@ -293,9 +352,9 @@ export default function Player() {
       ray.current.set(
         cameraRef.current,
         new THREE.Vector3(
-          -Math.sin(cameraYRotation),
-          camera.rotation.x * 0.5,
-          -Math.cos(cameraYRotation)
+          -Math.sin(yRotation),
+          Math.sin(cameraXRotation.current) * 0.5,
+          -Math.cos(yRotation)
         ).normalize()
       );
       
@@ -371,7 +430,7 @@ export default function Player() {
           );
           
           if (!blockPlayerCollision) {
-            placeBlock(newBlockPos.x, newBlockPos.y, newBlockPos.z, selectBlock);
+            placeBlock(newBlockPos.x, newBlockPos.y, newBlockPos.z, selectedBlock);
             console.log(`Placed block at ${newBlockPos.x},${newBlockPos.y},${newBlockPos.z}`);
           }
         }

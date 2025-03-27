@@ -49,18 +49,18 @@ function App() {
           <Canvas
             shadows
             camera={{
-              position: [8, 8, 8],
+              position: [0, 25, 10],
               fov: 75,
               near: 0.1,
               far: 1000
             }}
             gl={{
               antialias: true,
-              powerPreference: "default"
+              powerPreference: "high-performance"
             }}
           >
             <color attach="background" args={["#87CEEB"]} />
-            <fog attach="fog" args={["#87CEEB", 10, 100]} />
+            <fog attach="fog" args={["#87CEEB", 30, 100]} />
             
             <Suspense fallback={null}>
               <World />

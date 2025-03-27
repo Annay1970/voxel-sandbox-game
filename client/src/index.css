@@ -28,3 +28,8 @@ canvas {
   height: 100% !important;
   touch-action: none;
 }
+
+/* Custom Minecraft-like styling */
+.text-shadow {
+  text-shadow: 2px 2px #000, -2px -2px #000, 2px -2px #000, -2px 2px #000;
+}

@@ -91,24 +91,31 @@ export default function UI() {
             </div>
           </div>
           
-          {/* Hotbar */}
+          {/* Hotbar - Minecraft style */}
           <div className="flex justify-center">
-            <div className="bg-gray-800 bg-opacity-70 p-2 rounded-md flex pointer-events-auto">
+            <div className="bg-gray-800 bg-opacity-80 p-2 border-2 border-gray-700 rounded flex pointer-events-auto">
               {inventory.slice(0, 9).map((item, index) => (
                 <div 
                   key={`hotbar-${index}`}
                   className={cn(
-                    "w-16 h-16 bg-gray-700 rounded-md m-1 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-600",
-                    selectedBlock === item.type ? "ring-2 ring-white" : ""
+                    "w-16 h-16 bg-gray-700 m-1 flex flex-col items-center justify-center cursor-pointer relative border border-black",
+                    selectedBlock === item.type ? "border-4 border-white" : ""
                   )}
                   onClick={() => useVoxelGame.getState().setSelectedBlock(item.type)}
                 >
-                  <div className="w-10 h-10 flex items-center justify-center rounded" style={{
+                  <div className="w-12 h-12 flex items-center justify-center" style={{
                     backgroundColor: getBlockColor(item.type)
                   }}>
-                    {item.type.charAt(0).toUpperCase()}
+                    {/* Display a block-like cube instead of just the letter */}
+                    <div className="w-full h-full relative">
+                      <div className="absolute inset-0 flex items-center justify-center font-bold text-white text-shadow">
+                        {item.type.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="absolute top-0 left-0 w-full h-full bg-white opacity-10"></div>
+                      <div className="absolute bottom-0 right-0 w-full h-full bg-black opacity-10"></div>
+                    </div>
                   </div>
-                  <span className="text-white text-xs mt-1">{item.count}</span>
+                  <span className="text-white text-xs mt-1 font-bold absolute bottom-0 right-1">{item.count}</span>
                 </div>
               ))}
               
@@ -116,7 +123,7 @@ export default function UI() {
               {Array.from({ length: Math.max(0, 9 - inventory.length) }).map((_, index) => (
                 <div 
                   key={`empty-${index}`}
-                  className="w-16 h-16 bg-gray-700 rounded-md m-1"
+                  className="w-16 h-16 bg-gray-700 border border-black m-1"
                 ></div>
               ))}
             </div>
