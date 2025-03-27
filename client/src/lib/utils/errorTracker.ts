@@ -170,10 +170,27 @@ export function getPerformanceMetrics() {
   return { ...performanceMetrics };
 }
 
+// Global flag to track if error tracking is already initialized
+let errorTrackingInitialized = false;
+
 // React hook to set up error tracking
 export function useErrorTracking(componentName?: string) {
   useEffect(() => {
+    // Prevent duplicate initialization that could cause infinite loops
+    if (errorTrackingInitialized) {
+      return;
+    }
+
+    errorTrackingInitialized = true;
+    console.log("Initializing error tracking");
+
     const handleError = (event: ErrorEvent) => {
+      // Skip React Maximum update depth errors to prevent recursion
+      if (event.message && event.message.includes("Maximum update depth exceeded")) {
+        console.warn("Maximum update depth error detected", event.message);
+        return;
+      }
+      
       trackError(event.error || new Error(event.message), { 
         componentName, 
         errorEvent: {
@@ -205,6 +222,7 @@ export function useErrorTracking(componentName?: string) {
     }
 
     return () => {
+      errorTrackingInitialized = false;
       window.removeEventListener('error', handleError);
       window.removeEventListener('unhandledrejection', handleRejection);
       
@@ -215,7 +233,7 @@ export function useErrorTracking(componentName?: string) {
         }
       }
     };
-  }, [componentName]);
+  }, []); // Empty dependency array so it only runs once
 
   return {
     trackError: (error: Error, info?: Record<string, any>) => 
@@ -274,10 +292,25 @@ function triggerErrorUI(error: Error, recentErrors: ErrorEntry[]): void {
   });
 }
 
+// Global reference to the update interval for debug panel
+let debugPanelInterval: number | null = null;
+
 // Export a debug panel component that can be used in development
 export function createPerformanceDebugPanel() {
+  // If we already have a debug panel, just return it
   let debugPanel = document.getElementById('performance-debug-panel');
   
+  if (debugPanel && debugPanelInterval) {
+    return debugPanel;
+  }
+  
+  // Clean up any existing interval
+  if (debugPanelInterval) {
+    window.clearInterval(debugPanelInterval);
+    debugPanelInterval = null;
+  }
+  
+  // Create the panel if it doesn't exist
   if (!debugPanel) {
     debugPanel = document.createElement('div');
     debugPanel.id = 'performance-debug-panel';
@@ -294,19 +327,21 @@ export function createPerformanceDebugPanel() {
     document.body.appendChild(debugPanel);
   }
   
-  // Update the panel periodically
-  setInterval(() => {
+  // Set up a single update interval
+  debugPanelInterval = window.setInterval(() => {
+    if (!debugPanel) return;
+    
     const metrics = getPerformanceMetrics();
     const errorCount = getErrors().length;
     
-    debugPanel!.innerHTML = `
+    debugPanel.innerHTML = `
       <div>FPS: ${metrics.fps.toFixed(1)}</div>
       <div>Frame Time: ${metrics.frameTime.toFixed(1)}ms</div>
       <div>Errors: ${errorCount}</div>
       <div>Memory: ${((metrics.memoryUsage.usedJSHeapSize || 0) / 1048576).toFixed(1)}MB / 
                    ${((metrics.memoryUsage.jsHeapSizeLimit || 0) / 1048576).toFixed(1)}MB</div>
     `;
-  }, 500);
+  }, 500) as unknown as number;
   
   return debugPanel;
 }

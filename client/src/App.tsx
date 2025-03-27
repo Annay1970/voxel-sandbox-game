@@ -40,14 +40,26 @@ function App() {
     }
   }, [setBackgroundMusic, setHitSound, setSuccessSound, trackError]);
   
-  // Create debug panel
+  // Create debug panel once, not on every render
   useEffect(() => {
+    let panel: HTMLElement | null = null;
+    
     if (showDebugPanel) {
-      const panel = createPerformanceDebugPanel();
-      return () => {
-        panel.remove();
-      };
+      // Check if panel already exists to avoid duplicate creation
+      panel = document.getElementById('performance-debug-panel');
+      
+      if (!panel) {
+        console.log("Creating performance debug panel");
+        panel = createPerformanceDebugPanel();
+      }
     }
+    
+    // Return cleanup function
+    return () => {
+      if (panel && showDebugPanel === false) {
+        panel.remove();
+      }
+    };
   }, [showDebugPanel]);
   
   // Define keyboard controls
@@ -104,30 +116,37 @@ function App() {
   );
 }
 
+// Track if error boundary event listeners are already initialized to prevent duplication
+let errorBoundaryInitialized = false;
+
 // Custom error boundary component to catch and display render errors
 function ErrorBoundary({ children }: { children: React.ReactNode }) {
   const [hasError, setHasError] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [errorDetails, setErrorDetails] = useState<any[]>([]);
-  
-  // Set up error tracking
-  const { trackError, getErrors } = useErrorTracking('ErrorBoundary');
+
+  // Set up error tracking - but don't directly use the hook functions in the dependency array
+  const errorTrackingUtils = useErrorTracking('ErrorBoundary');
+  const trackError = errorTrackingUtils.trackError;
+  const getErrors = errorTrackingUtils.getErrors;
 
   useEffect(() => {
+    // Skip if already initialized
+    if (errorBoundaryInitialized) {
+      return;
+    }
+    
+    errorBoundaryInitialized = true;
+    console.log("Initializing ErrorBoundary listeners");
+    
     const handleError = (event: ErrorEvent) => {
-      console.error("Error caught by ErrorBoundary:", event.error);
-      
-      // Track the error with our tracker
-      if (event.error) {
-        trackError(event.error, { source: 'window_error_event' });
-      } else {
-        trackError(new Error(event.message || 'Unknown error'), { 
-          source: 'window_error_event',
-          filename: event.filename,
-          lineno: event.lineno,
-          colno: event.colno
-        });
+      // Skip maximum update depth errors in error boundary to prevent loops
+      if (event.message && event.message.includes("Maximum update depth exceeded")) {
+        console.warn("Maximum update depth error skipped in ErrorBoundary", event.message);
+        return;
       }
+      
+      console.error("Error caught by ErrorBoundary:", event.error);
       
       // Update state with error information
       setError(event.error || new Error(event.message || 'Unknown error'));
@@ -151,10 +170,11 @@ function ErrorBoundary({ children }: { children: React.ReactNode }) {
     window.addEventListener('keydown', handleKeyDown);
     
     return () => {
+      errorBoundaryInitialized = false;
       window.removeEventListener('error', handleError);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [trackError, getErrors]);
+  }, []); // Empty dependency array prevents re-adding listeners on every render
 
   if (hasError) {
     return (
