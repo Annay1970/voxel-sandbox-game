@@ -95,12 +95,12 @@ export default function World() {
   
   // Set up ambient and directional light
   useEffect(() => {
-    // Add ambient light
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    // Add bright ambient light to make everything visible
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
     
-    // Add directional light (sun)
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    // Add directional light (sun) with strong intensity
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
     directionalLight.position.set(10, 20, 10);
     directionalLight.castShadow = true;
     
@@ -108,18 +108,31 @@ export default function World() {
     directionalLight.shadow.mapSize.width = 1024;
     directionalLight.shadow.mapSize.height = 1024;
     directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 50;
-    directionalLight.shadow.camera.left = -20;
-    directionalLight.shadow.camera.right = 20;
-    directionalLight.shadow.camera.top = 20;
-    directionalLight.shadow.camera.bottom = -20;
+    directionalLight.shadow.camera.far = 500; // Extended far plane
+    directionalLight.shadow.camera.left = -50; // Wider frustum
+    directionalLight.shadow.camera.right = 50;
+    directionalLight.shadow.camera.top = 50;
+    directionalLight.shadow.camera.bottom = -50;
     
     scene.add(directionalLight);
+    
+    // Add a secondary light from another angle to prevent dark shadows
+    const secondaryLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    secondaryLight.position.set(-10, 15, -10);
+    scene.add(secondaryLight);
+    
+    // Add hemisphere light for better ambient lighting that looks natural
+    const hemisphereLight = new THREE.HemisphereLight(0xffffbb, 0x080820, 0.5);
+    scene.add(hemisphereLight);
+    
+    console.log("Enhanced lighting setup complete");
     
     // Clean up lights on unmount
     return () => {
       scene.remove(ambientLight);
       scene.remove(directionalLight);
+      scene.remove(secondaryLight);
+      scene.remove(hemisphereLight);
     };
   }, [scene]);
   

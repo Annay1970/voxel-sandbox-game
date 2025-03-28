@@ -36,90 +36,38 @@ export default function Chunk({ chunkX, chunkZ, blocks }: ChunkProps) {
     return result;
   }, [blocks, minX, minZ, maxX, maxZ]);
   
-  // Use a simpler approach with basic colors rather than textures for now
-  // This is more reliable and will help diagnose the white screen issue
+  // Add debugging for chunk blocks
+  const totalBlocks = chunkBlocks.length;
+  const blocksNotAir = chunkBlocks.filter(([,,,type]) => type !== 'air').length;
   
-  // Create a basic color and texture map for block types
-  const textureMap = useMemo(() => {
-    // Empty texture map - we'll rely on the Block component's 
-    // fallback color handling instead of loading textures
-    const baseMap: Partial<Record<BlockType, THREE.Texture>> = {};
-    return baseMap as Record<BlockType, THREE.Texture>;
-  }, []);
-  
-  // Use instanced mesh for better performance with many blocks
-  const instances = useMemo(() => {
-    // Create an initial record with all block types as empty arrays
-    const blocksByType: Partial<Record<BlockType, THREE.Matrix4[]>> = {
-      'air': [],
-      'grass': [],
-      'dirt': [],
-      'stone': [],
-      'sand': [],
-      'wood': [],
-      'leaves': [],
-      'water': [],
-      'log': [],
-      'stick': [],
-      'craftingTable': [],
-      'woodenPickaxe': [],
-      'stonePickaxe': [],
-      'woodenAxe': [],
-      'woodenShovel': [],
-      'coal': [],
-      'torch': [],
-    };
-    
-    // Group blocks by type
-    chunkBlocks.forEach(([x, y, z, type]) => {
-      // Skip air blocks
-      if (type === 'air') return;
-      
-      const matrix = new THREE.Matrix4().setPosition(x, y, z);
-      if (blocksByType[type]) {
-        blocksByType[type]!.push(matrix);
-      }
+  // Log out helpful info only for the center chunk around world origin for debugging
+  if (chunkX === 0 && chunkZ === 0) {
+    console.log(`Center chunk (0,0) contains ${blocksNotAir} visible blocks out of ${totalBlocks} total blocks`);
+    // Log the first few blocks in the center chunk to see what's actually there
+    chunkBlocks.filter(([,,,type]) => type !== 'air').slice(0, 5).forEach(([x, y, z, type]) => {
+      console.log(`Block at ${x},${y},${z}: ${type}`);
     });
-    
-    return blocksByType as Record<BlockType, THREE.Matrix4[]>;
-  }, [chunkBlocks]);
-  
-  // For small numbers of blocks, render individually instead of instanced meshes
-  const shouldUseIndividualBlocks = Object.values(instances).reduce(
-    (sum, matrices) => sum + matrices.length, 
-    0
-  ) < 20;
-  
-  if (shouldUseIndividualBlocks) {
-    return (
-      <group>
-        {chunkBlocks.map(([x, y, z, type]) => {
-          if (type === 'air') return null;
-          return (
-            <Block
-              key={`${x},${y},${z}`}
-              position={[x, y, z]}
-              type={type}
-              texture={textureMap[type]}
-            />
-          );
-        })}
-      </group>
-    );
   }
   
-  // For now, let's just use individual blocks instead of instanced meshes
-  // since we're having an issue with the instanced mesh implementation
+  // If this chunk has no visible blocks, don't render anything
+  if (blocksNotAir === 0) {
+    return null;
+  }
+  
+  // Use this basic approach with individual blocks that doesn't use textures
+  // We're focusing on just getting the blocks to appear first
   return (
     <group>
       {chunkBlocks.map(([x, y, z, type]) => {
+        // Skip rendering air blocks
         if (type === 'air') return null;
+        
+        // Render each block individually
         return (
           <Block
             key={`${x},${y},${z}`}
             position={[x, y, z]}
             type={type}
-            texture={textureMap[type]}
           />
         );
       })}

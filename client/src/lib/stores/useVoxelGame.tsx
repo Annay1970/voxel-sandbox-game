@@ -107,7 +107,7 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   blocks: {},
   
   // Initial player state
-  playerPosition: { x: 0, y: 50, z: 0 }, // Start high enough to guarantee above terrain
+  playerPosition: { x: 0, y: 80, z: 0 }, // Start very high to guarantee visibility above terrain
   playerVelocity: { x: 0, y: 0, z: 0 },
   playerIsOnGround: false,
   playerHealth: 100,

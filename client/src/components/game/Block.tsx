@@ -12,81 +12,58 @@ export default function Block({ position, type, texture }: BlockProps) {
   // Skip rendering air blocks
   if (type === 'air') return null;
   
-  // Minecraft-style texture mapping
-  let blockTexture;
-  try {
-    // Try to load texture based on block type - fallback to custom colors if fails
-    blockTexture = texture || useTexture(`/textures/${type}.png`);
-  } catch (error) {
-    // If texture loading fails, we'll use colors
-    blockTexture = null;
-  }
-  
-  // Determine opacity and color based on block type
+  // Determine opacity and color based on block type - using bright, distinct colors
   let opacity = 1;
-  let color = '#ffffff';
+  let color = '#ff00ff'; // Default bright magenta to easily spot problems
   
   switch (type) {
     case 'water':
       opacity = 0.7;
-      color = '#3498db';
+      color = '#0088ff'; // Brighter blue for water
       break;
     case 'leaves':
       opacity = 0.9;
-      color = '#2ecc71';
+      color = '#00ff00'; // Bright green for leaves
       break;
     case 'grass':
-      color = '#5D9F42'; // Minecraft-like grass color
+      color = '#44ff44'; // Bright green for grass
       break;
     case 'stone':
-      color = '#888888'; // Minecraft-like stone
+      color = '#aaaaaa'; // Lighter gray for stone
       break;
     case 'sand':
-      color = '#E6C88C'; // Minecraft-like sand
+      color = '#ffff00'; // Yellow for sand
       break;
     case 'dirt':
-      color = '#8B4513'; // Minecraft-like dirt
+      color = '#aa5522'; // Brown for dirt
       break;
     case 'wood':
-      color = '#8B5A2B'; // Minecraft-like planks
+      color = '#cc8844'; // Light brown for planks
       break;
     case 'log':
-      color = '#6B4226'; // Minecraft-like log
+      color = '#885522'; // Dark brown for log
       break;
     case 'craftingTable':
-      color = '#9E6C4B'; // Minecraft-like crafting table
+      color = '#cc9966'; // Light brown for crafting table
       break;
     case 'torch':
-      color = '#FFA500'; // Minecraft-like torch
+      color = '#ffaa00'; // Orange for torch
       break;
   }
   
   // Determine if block needs to be transparent
   const isTransparent = opacity < 1;
   
-  // Add a small pixel-style roughness to mimic Minecraft look
-  const roughness = 1.0;
-  const metalness = 0.0;
-  
-  // Create a pixel-ish flat material effect
+  // Create a simpler material for better performance and compatibility
   return (
     <mesh position={position} castShadow receiveShadow>
       <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial 
-        map={blockTexture} 
+      <meshLambertMaterial 
         color={color}
         transparent={isTransparent}
         opacity={opacity}
-        roughness={roughness}
-        metalness={metalness}
-        flatShading={true}
-        onBeforeCompile={shader => {
-          // Increase shader precision for better compatibility
-          shader.fragmentShader = shader.fragmentShader.replace(
-            'precision highp float;',
-            'precision highp float;'
-          );
-        }}
+        emissive={type === 'torch' ? '#ffcc00' : '#000000'}
+        emissiveIntensity={type === 'torch' ? 0.5 : 0}
       />
     </mesh>
   );

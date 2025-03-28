@@ -17,12 +17,12 @@ export default function SkyDome() {
       // Night to sunrise transition
       const t = timeOfDay / 0.25;
       topColor = new THREE.Color().lerpColors(
-        new THREE.Color('#000033'), // Night
+        new THREE.Color('#0A0A2A'), // Night (made lighter for better visibility)
         new THREE.Color('#1E90FF'), // Dawn
         t
       );
       bottomColor = new THREE.Color().lerpColors(
-        new THREE.Color('#000033'), // Night
+        new THREE.Color('#0A0A2A'), // Night
         new THREE.Color('#FF7F50'), // Dawn horizon
         t
       );
@@ -57,12 +57,12 @@ export default function SkyDome() {
       const t = (timeOfDay - 0.75) / 0.25;
       topColor = new THREE.Color().lerpColors(
         new THREE.Color('#1E90FF'), // Dusk
-        new THREE.Color('#000033'), // Night
+        new THREE.Color('#0A0A2A'), // Night (made lighter for better visibility)
         t
       );
       bottomColor = new THREE.Color().lerpColors(
         new THREE.Color('#FF7F50'), // Dusk horizon
-        new THREE.Color('#000033'), // Night horizon
+        new THREE.Color('#0A0A2A'), // Night horizon
         t
       );
     }
@@ -79,9 +79,17 @@ export default function SkyDome() {
     return { topColor, bottomColor };
   }, [timeOfDay, weather]);
   
+  // Log sky status for debugging
+  console.log(`Sky rendering: time=${timeOfDay}, weather=${weather}`);
+  
+  // Create a gradient background effect
+  const skyColor = colors.topColor.getStyle();
+  const horizonColor = colors.bottomColor.getStyle();
+  
   return (
-    <>
-      {/* This is just a color scheme - Sky component is handled in World.tsx */}
-    </>
+    <group>
+      {/* Apply sky color to renderer background */}
+      <color attach="background" args={[skyColor]} />
+    </group>
   );
 }

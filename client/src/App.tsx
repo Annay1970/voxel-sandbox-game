@@ -97,7 +97,7 @@ function App() {
         <Canvas
           shadows
           camera={{
-            position: [0, 30, 30], // Higher starting camera position to see terrain
+            position: [0, 85, 0], // Position directly above player to look down
             fov: 75,
             near: 0.1,
             far: 2000
@@ -106,26 +106,46 @@ function App() {
             antialias: true,
             powerPreference: "high-performance",
             alpha: false,
-            stencil: false, // Disable stencil for better performance
-            depth: true,     // Enable depth for proper 3D
-            logarithmicDepthBuffer: true // Better for voxel worlds
+            stencil: false,
+            depth: true,
+            logarithmicDepthBuffer: true
           }}
-          dpr={[1, 1.5]} // Responsive DPR for better performance
-          onCreated={({ gl }) => {
-            gl.setClearColor(new THREE.Color('#87CEEB')); // Set clear color to blue sky
+          dpr={1} // Fixed DPR for more stable performance
+          style={{ background: "#87CEEB" }} // Set background via CSS too
+          onCreated={({ gl, scene }) => {
+            gl.setClearColor(new THREE.Color('#87CEEB')); // Set WebGL clear color
             console.log("WebGL renderer created successfully");
+            
+            // DEBUG: Force a white background to confirm Canvas is working
+            scene.background = new THREE.Color('#FFFFFF');
+            console.log("Scene background set to white for debugging");
+            
+            // Log WebGL capabilities to help debug
+            console.log("WebGL capabilities:", {
+              maxTextures: gl.capabilities.maxTextures,
+              precision: gl.capabilities.precision,
+              maxAttributes: gl.capabilities.maxAttributes,
+              maxVaryings: gl.capabilities.maxVaryings,
+              maxFragmentUniforms: gl.capabilities.maxFragmentUniforms,
+              maxVertexUniforms: gl.capabilities.maxVertexUniforms
+            });
           }}
         >
-          {/* Sky-colored background */}
-          <color attach="background" args={["#87CEEB"]} />
-          <fog attach="fog" args={["#87CEEB", 60, 200]} /> {/* Increased fog distances */}
-          
-          <ambientLight intensity={0.8} /> {/* Global light so everything is visible */}
-          <directionalLight position={[10, 20, 10]} intensity={1.0} castShadow /> {/* Sun-like light */}
-          
-          {/* Render the voxel world */}
+          {/* Minimal scene to guarantee something renders */}
           <Suspense fallback={<LoadingFallback />}>
+            {/* The World component contains everything */}
             <World />
+            
+            {/* Make sure we can see something: Just a box */}
+            <mesh position={[0, 60, 0]}>
+              <boxGeometry args={[10, 10, 10]} />
+              <meshBasicMaterial color="red" /> 
+            </mesh>
+            
+            {/* Add very bright light sources */}
+            <ambientLight intensity={2.0} />
+            <directionalLight position={[10, 100, 10]} intensity={2.0} />
+            <pointLight position={[0, 60, 0]} intensity={5.0} color="#ffffff" />
           </Suspense>
         </Canvas>
         
