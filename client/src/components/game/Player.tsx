@@ -3,7 +3,9 @@ import { useFrame } from "@react-three/fiber";
 import { useKeyboardControls } from "@react-three/drei";
 import * as THREE from "three";
 import { Group } from "three";
-import { useVoxelGame, Controls } from "../../lib/stores/useVoxelGame";
+import { useVoxelGame, Controls, Creature } from "../../lib/stores/useVoxelGame";
+import { useSkills } from "../../lib/stores/useSkills";
+import { useAudio } from "../../lib/stores/useAudio";
 import { isBlockSolid } from "../../lib/blocks";
 
 const GRAVITY = 0.08;
@@ -24,6 +26,11 @@ export default function Player() {
   const selectedBlock = useVoxelGame(state => state.selectedBlock);
   const placeBlock = useVoxelGame(state => state.placeBlock);
   const removeBlock = useVoxelGame(state => state.removeBlock);
+  const creatures = useVoxelGame(state => state.creatures);
+  const attackCreature = useVoxelGame(state => state.attackCreature);
+  
+  // Audio effects for combat
+  const playHitSound = useAudio(state => state.playHit);
   
   const meshRef = useRef<THREE.Group>(null);
   const cameraRef = useRef(new THREE.Vector3());
@@ -120,8 +127,11 @@ export default function Player() {
       moveZ *= 0.7071;
     }
     
-    // Apply sprint multiplier
-    const speedMultiplier = controls.sprint ? SPRINT_MULTIPLIER : 1;
+    // Get character speed from skills system
+    const characterSpeed = useSkills(state => state.characterSpeed);
+    
+    // Apply sprint multiplier and character skill speed
+    const speedMultiplier = (controls.sprint ? SPRINT_MULTIPLIER : 1) * characterSpeed;
     
     // Calculate movement in camera direction
     const direction = new THREE.Vector3(moveX, 0, moveZ)
@@ -417,12 +427,33 @@ export default function Player() {
         }
       }
       
+      // Get skill actions for updating skills
+      const addXp = useSkills(state => state.addXp);
+      
       // Handle block interaction
       if (closestBlockPos) {
         if (controls.mine) {
+          // Determine block type for appropriate skill gain
+          const blockType = blocks[`${closestBlockPos.x},${closestBlockPos.y},${closestBlockPos.z}`];
+          
           // Remove the block
           removeBlock(closestBlockPos.x, closestBlockPos.y, closestBlockPos.z);
           console.log(`Removed block at ${closestBlockPos.x},${closestBlockPos.y},${closestBlockPos.z}`);
+          
+          // Award XP based on block type
+          if (blockType === 'stone' || blockType === 'coal') {
+            // Mining skill for stone-type blocks
+            addXp('mining', 10);
+            console.log('Gained mining XP!');
+          } else if (blockType === 'wood' || blockType === 'log' || blockType === 'leaves') {
+            // Woodcutting skill for wood-type blocks
+            addXp('woodcutting', 10);
+            console.log('Gained woodcutting XP!');
+          } else if (blockType === 'grass' || blockType === 'dirt') {
+            // Farming skill for earth-type blocks
+            addXp('farming', 5);
+            console.log('Gained farming XP!');
+          }
         } else if (controls.place && closestBlockNormal) {
           // Place a block adjacent to the hit face
           const newBlockPos = {
@@ -441,44 +472,227 @@ export default function Player() {
           if (!blockPlayerCollision) {
             placeBlock(newBlockPos.x, newBlockPos.y, newBlockPos.z, selectedBlock);
             console.log(`Placed block at ${newBlockPos.x},${newBlockPos.y},${newBlockPos.z}`);
+            
+            // Award building XP for placing blocks
+            addXp('building', 5);
+            console.log('Gained building XP!');
           }
+        }
+      }
+    }
+    
+    // Combat functionality
+    if (controls.attack) {
+      // Set ray origin to player camera position for attacking
+      ray.current.set(
+        cameraRef.current,
+        new THREE.Vector3(
+          -Math.sin(yRotation),
+          Math.sin(cameraXRotation.current) * 0.5,
+          -Math.cos(yRotation)
+        ).normalize()
+      );
+      
+      // Detect creatures in attack range
+      const creatureIds = Object.keys(creatures);
+      let closestCreatureDist = Infinity;
+      let closestCreatureId = null;
+      
+      for (const creatureId of creatureIds) {
+        const creature = creatures[creatureId];
+        
+        // Skip creatures that are too far (basic distance check)
+        const distanceToCreature = Math.sqrt(
+          Math.pow(position.x - creature.position.x, 2) +
+          Math.pow(position.y - creature.position.y, 2) +
+          Math.pow(position.z - creature.position.z, 2)
+        );
+        
+        if (distanceToCreature > 5) continue; // Skip if too far
+        
+        // Create a simple bounding box for the creature
+        const creatureBox = new THREE.Box3(
+          new THREE.Vector3(
+            creature.position.x - 0.5,
+            creature.position.y - 0.5,
+            creature.position.z - 0.5
+          ),
+          new THREE.Vector3(
+            creature.position.x + 0.5,
+            creature.position.y + 1.0, // Taller than wide
+            creature.position.z + 0.5
+          )
+        );
+        
+        // Check for ray intersection with creature
+        const intersection = ray.current.ray.intersectBox(creatureBox, new THREE.Vector3());
+        
+        if (intersection) {
+          const distance = intersection.distanceTo(ray.current.ray.origin);
+          
+          if (distance < closestCreatureDist) {
+            closestCreatureDist = distance;
+            closestCreatureId = creatureId;
+          }
+        }
+      }
+      
+      // Attack the closest creature if one was found
+      if (closestCreatureId) {
+        console.log(`Attacking creature ${closestCreatureId}`);
+        
+        // Attack creature and get success result
+        const attackSuccess = attackCreature(closestCreatureId);
+        
+        if (attackSuccess) {
+          // Play hit sound on successful attack
+          playHitSound();
+          
+          // Grant combat XP when successfully attacking
+          const addXp = useSkills(state => state.addXp);
+          addXp('combat', 15);
+          console.log('Gained combat XP!');
         }
       }
     }
   });
   
+  // Get character growth values from skill system
+  const characterSize = useSkills(state => state.characterSize);
+  const characterSpeed = useSkills(state => state.characterSpeed);
+
+  // Apply character growth modifications
+  const sizeScale = characterSize; // Grows with skill level
+  
+  // Visual indicator effects for player skills
+  const miningLevel = useSkills(state => state.skills.mining.level);
+  const combatLevel = useSkills(state => state.skills.combat.level);
+  const woodcuttingLevel = useSkills(state => state.skills.woodcutting.level);
+  
+  // Custom colors based on skill levels (representing equipment/strength)
+  const bodyColor = combatLevel > 5 ? '#4444FF' : combatLevel > 2 ? '#3370d4' : '#666699';
+  const armColor = miningLevel > 5 ? '#FF2222' : miningLevel > 2 ? '#3370d4' : '#666699';
+  const legColor = woodcuttingLevel > 5 ? '#22FF22' : woodcuttingLevel > 2 ? '#0e4690' : '#666699';
+  
+  // Visual effects based on skill levels
+  const hasHeadgear = combatLevel >= 10;
+  const hasArmGuards = miningLevel >= 10;
+  const hasLegGuards = woodcuttingLevel >= 10;
+  
+  // Aura particles for higher level players
+  const hasAura = miningLevel + combatLevel + woodcuttingLevel >= 15;
+  
   return (
-    <group ref={meshRef} position={[position.x, position.y, position.z]}>
-      {/* Player body (only visible in 3rd person mode) */}
+    <group ref={meshRef} position={[position.x, position.y, position.z]} scale={[sizeScale, sizeScale, sizeScale]}>
+      {/* Player body - scales with level */}
       <mesh position={[0, PLAYER_HEIGHT / 2, 0]}>
         <boxGeometry args={[PLAYER_WIDTH, PLAYER_HEIGHT * 0.6, PLAYER_WIDTH]} />
-        <meshStandardMaterial color="#3370d4" />
+        <meshStandardMaterial color={bodyColor} />
       </mesh>
       
-      {/* Player head */}
-      <mesh position={[0, PLAYER_HEIGHT * 0.8, 0]}>
-        <boxGeometry args={[PLAYER_WIDTH * 0.8, PLAYER_HEIGHT * 0.25, PLAYER_WIDTH * 0.8]} />
-        <meshStandardMaterial color="#ffb385" />
-      </mesh>
+      {/* Player head with optional headgear based on combat level */}
+      <group position={[0, PLAYER_HEIGHT * 0.8, 0]}>
+        <mesh>
+          <boxGeometry args={[PLAYER_WIDTH * 0.8, PLAYER_HEIGHT * 0.25, PLAYER_WIDTH * 0.8]} />
+          <meshStandardMaterial color="#ffb385" />
+        </mesh>
+        
+        {/* Helmet for high combat level */}
+        {hasHeadgear && (
+          <mesh position={[0, 0.05, 0]}>
+            <boxGeometry args={[PLAYER_WIDTH * 0.9, PLAYER_HEIGHT * 0.08, PLAYER_WIDTH * 0.9]} />
+            <meshStandardMaterial color="#CCCCFF" metalness={0.8} roughness={0.2} />
+          </mesh>
+        )}
+      </group>
       
-      {/* Player arms */}
-      <mesh position={[PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.5, 0]}>
-        <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.5, PLAYER_WIDTH * 0.3]} />
-        <meshStandardMaterial color="#3370d4" />
-      </mesh>
-      <mesh position={[-PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.5, 0]}>
-        <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.5, PLAYER_WIDTH * 0.3]} />
-        <meshStandardMaterial color="#3370d4" />
-      </mesh>
+      {/* Player arms with mining skill indicators */}
+      <group position={[PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.5, 0]}>
+        <mesh>
+          <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.5, PLAYER_WIDTH * 0.3]} />
+          <meshStandardMaterial color={armColor} />
+        </mesh>
+        
+        {/* Arm guards for high mining level */}
+        {hasArmGuards && (
+          <mesh position={[0, -0.1, 0]}>
+            <boxGeometry args={[PLAYER_WIDTH * 0.4, PLAYER_HEIGHT * 0.2, PLAYER_WIDTH * 0.4]} />
+            <meshStandardMaterial color="#CC4444" metalness={0.6} roughness={0.3} />
+          </mesh>
+        )}
+      </group>
       
-      {/* Player legs */}
-      <mesh position={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.15, 0]}>
-        <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.3, PLAYER_WIDTH * 0.3]} />
-        <meshStandardMaterial color="#0e4690" />
-      </mesh>
-      <mesh position={[-PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.15, 0]}>
-        <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.3, PLAYER_WIDTH * 0.3]} />
-        <meshStandardMaterial color="#0e4690" />
+      <group position={[-PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.5, 0]}>
+        <mesh>
+          <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.5, PLAYER_WIDTH * 0.3]} />
+          <meshStandardMaterial color={armColor} />
+        </mesh>
+        
+        {/* Arm guards for high mining level */}
+        {hasArmGuards && (
+          <mesh position={[0, -0.1, 0]}>
+            <boxGeometry args={[PLAYER_WIDTH * 0.4, PLAYER_HEIGHT * 0.2, PLAYER_WIDTH * 0.4]} />
+            <meshStandardMaterial color="#CC4444" metalness={0.6} roughness={0.3} />
+          </mesh>
+        )}
+      </group>
+      
+      {/* Player legs with woodcutting skill indicators */}
+      <group position={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.15, 0]}>
+        <mesh>
+          <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.3, PLAYER_WIDTH * 0.3]} />
+          <meshStandardMaterial color={legColor} />
+        </mesh>
+        
+        {/* Leg guards for high woodcutting level */}
+        {hasLegGuards && (
+          <mesh position={[0, -0.1, 0]}>
+            <boxGeometry args={[PLAYER_WIDTH * 0.35, PLAYER_HEIGHT * 0.15, PLAYER_WIDTH * 0.35]} />
+            <meshStandardMaterial color="#44CC44" metalness={0.4} roughness={0.4} />
+          </mesh>
+        )}
+      </group>
+      
+      <group position={[-PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.15, 0]}>
+        <mesh>
+          <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.3, PLAYER_WIDTH * 0.3]} />
+          <meshStandardMaterial color={legColor} />
+        </mesh>
+        
+        {/* Leg guards for high woodcutting level */}
+        {hasLegGuards && (
+          <mesh position={[0, -0.1, 0]}>
+            <boxGeometry args={[PLAYER_WIDTH * 0.35, PLAYER_HEIGHT * 0.15, PLAYER_WIDTH * 0.35]} />
+            <meshStandardMaterial color="#44CC44" metalness={0.4} roughness={0.4} />
+          </mesh>
+        )}
+      </group>
+      
+      {/* Special aura for high level players */}
+      {hasAura && (
+        <mesh position={[0, PLAYER_HEIGHT / 2, 0]}>
+          <sphereGeometry args={[PLAYER_WIDTH * 1.2, 16, 16]} />
+          <meshStandardMaterial 
+            color="#ffdd99" 
+            transparent={true} 
+            opacity={0.3} 
+            emissive="#ffaa00"
+            emissiveIntensity={0.5}
+          />
+        </mesh>
+      )}
+      
+      {/* Ground marker glow under player based on highest skill */}
+      <mesh position={[0, -0.4, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[PLAYER_WIDTH * 2, PLAYER_WIDTH * 2]} />
+        <meshBasicMaterial 
+          color={miningLevel > combatLevel ? 
+            (miningLevel > woodcuttingLevel ? "#ff6666" : "#66ff66") : 
+            (combatLevel > woodcuttingLevel ? "#6666ff" : "#66ff66")
+          }
+          transparent={true}
+          opacity={0.3}
+        />
       </mesh>
       
       {/* Player collision box (invisible) */}

@@ -13,7 +13,8 @@ export enum Controls {
   mine = 'mine',
   place = 'place',
   inventory = 'inventory',
-  sprint = 'sprint'
+  sprint = 'sprint',
+  attack = 'attack'
 }
 
 // Weather types
@@ -99,6 +100,10 @@ interface VoxelGameState {
   removeFromInventory: (type: BlockType, count: number) => boolean;
   craftItem: (outputType: BlockType, outputCount: number, ingredients: { type: BlockType, count: number }[]) => void;
   updateCreatures: () => void;
+  
+  // Combat functions
+  damageCreature: (creatureId: string, damage: number) => boolean;
+  attackCreature: (creatureId: string) => boolean;
 }
 
 export const useVoxelGame = create<VoxelGameState>((set, get) => ({
@@ -389,5 +394,77 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
       
       return { creatures: newCreatures };
     });
+  },
+  
+  // Damage a creature by a specific amount
+  damageCreature: (creatureId, damage) => {
+    const state = get();
+    const creature = state.creatures[creatureId];
+    
+    if (!creature) {
+      console.log(`Creature ${creatureId} not found`);
+      return false;
+    }
+    
+    set(state => {
+      const newCreatures = { ...state.creatures };
+      
+      // Apply damage
+      newCreatures[creatureId] = {
+        ...newCreatures[creatureId],
+        health: Math.max(0, creature.health - damage),
+        mood: 'afraid', // Make creature afraid when damaged
+        state: creature.health <= damage ? 'fleeing' : 'idle', // Make creature flee if health is low
+        lastStateChange: Date.now(),
+        animationState: 'hurt'
+      };
+      
+      // Check if creature is defeated
+      if (newCreatures[creatureId].health <= 0) {
+        console.log(`Creature ${creatureId} has been defeated!`);
+        
+        // Drop items based on creature type
+        if (newCreatures[creatureId].type === 'cow' || newCreatures[creatureId].type === 'pig') {
+          state.addToInventory('dirt', 2); // Temporary: using dirt as a stand-in for food
+        } else if (newCreatures[creatureId].type === 'zombie' || newCreatures[creatureId].type === 'skeleton') {
+          state.addToInventory('stone', 1); // Temporary: using stone as a stand-in for bones
+        }
+        
+        // Remove the creature
+        delete newCreatures[creatureId];
+      }
+      
+      return { creatures: newCreatures };
+    });
+    
+    return true;
+  },
+  
+  // Attack the specified creature
+  attackCreature: (creatureId) => {
+    const state = get();
+    const creature = state.creatures[creatureId];
+    
+    if (!creature) {
+      console.log(`Creature ${creatureId} not found for attack`);
+      return false;
+    }
+    
+    // Import the skills store to get strength multiplier
+    const { useSkills } = require('./useSkills');
+    
+    // Calculate damage based on player's strength and combat skill level
+    const baseDamage = 5; // Base damage value
+    const strengthMultiplier = useSkills.getState().strengthMultiplier;
+    const combatLevel = useSkills.getState().skills.combat.level;
+    
+    // Apply strength multiplier and a bonus for combat level
+    const totalDamage = Math.round(baseDamage * strengthMultiplier * (1 + combatLevel * 0.1));
+    
+    // Successfully performed the attack
+    console.log(`Attacked creature ${creatureId} with damage ${totalDamage} (Base: ${baseDamage}, Multiplier: ${strengthMultiplier.toFixed(2)}x)`);
+    
+    // Apply damage
+    return state.damageCreature(creatureId, totalDamage);
   }
 }));

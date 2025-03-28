@@ -84,6 +84,7 @@ function App() {
     { name: Controls.place, keys: ["KeyQ", "Mouse2"] }, // Right mouse click
     { name: Controls.inventory, keys: ["KeyI", "KeyE"] },
     { name: Controls.sprint, keys: ["ShiftLeft"] },
+    { name: Controls.attack, keys: ["KeyF", "Mouse0"] }, // Attack with F or left mouse click
   ];
 
   // Check if world is still loading

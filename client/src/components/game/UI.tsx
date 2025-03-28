@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { useKeyboardControls } from '@react-three/drei';
 import { useVoxelGame, Controls, WeatherType } from '../../lib/stores/useVoxelGame';
 import { useAudio } from '../../lib/stores/useAudio';
+import { useSkills } from '../../lib/stores/useSkills';
 import Inventory from './Inventory';
 import Crafting from './Crafting';
+import SkillsUI from './SkillsUI';
 import { cn } from '../../lib/utils';
 
 export default function UI() {
@@ -139,6 +141,7 @@ export default function UI() {
         <p><strong>E</strong> - Mine block</p>
         <p><strong>Q</strong> - Place block</p>
         <p><strong>I</strong> - Inventory</p>
+        <p><strong>F</strong> - Attack/Fight</p>
       </div>
       
       {/* Sound toggle button */}
@@ -168,6 +171,9 @@ export default function UI() {
       >
         Open Crafting
       </button>
+      
+      {/* Skills UI component */}
+      <SkillsUI />
     </>
   );
 }
