@@ -4,6 +4,45 @@ export type CreatureType =
   'cow' | 'pig' | 'sheep' | 'chicken' | 
   'zombie' | 'skeleton' | 'spider' | 'bee';
 
+// Helper function to add creatures at fixed positions
+function addFixedCreature(
+  creatures: Record<string, any>,
+  type: CreatureType,
+  x: number,
+  y: number,
+  z: number
+) {
+  const creatureId = `creature_fixed_${type}_${Math.random().toString(36).substr(2, 9)}`;
+  const properties = getCreatureProperties(type);
+  
+  // Get animation states
+  const animStates = properties.animationStates || ['idle', 'walk'];
+  const defaultAnimState = animStates[0];
+  
+  // Basic creature with important properties
+  creatures[creatureId] = {
+    id: creatureId,
+    type: type,
+    position: { x, y, z },
+    rotation: { y: Math.random() * Math.PI * 2 },
+    health: properties.maxHealth || (type === 'zombie' || type === 'skeleton' || type === 'spider' ? 20 : 10),
+    maxHealth: properties.maxHealth || (type === 'zombie' || type === 'skeleton' || type === 'spider' ? 20 : 10),
+    state: type === 'zombie' || type === 'skeleton' || type === 'spider' ? 'hunting' : 'idle',
+    lastStateChange: Date.now(),
+    hostility: type === 'zombie' || type === 'skeleton' || type === 'spider' ? 'hostile' : 'passive',
+    
+    // AI properties
+    mood: properties.defaultMood || (type === 'zombie' || type === 'skeleton' || type === 'spider' ? 'aggressive' : 'calm'),
+    
+    // Animation properties
+    animationState: defaultAnimState,
+    animationProgress: 0,
+    animationSpeed: 0.5
+  };
+  
+  console.log(`Added fixed ${type} at ${x},${y},${z}`);
+}
+
 // Spawn creatures in chunks
 export function spawnCreatures(
   chunks: Record<string, boolean>,
@@ -15,6 +54,17 @@ export function spawnCreatures(
   const passiveCreatures: CreatureType[] = ['cow', 'pig', 'sheep', 'chicken', 'bee'];
   const hostileCreatures: CreatureType[] = ['zombie', 'skeleton', 'spider'];
   
+  console.log(`Spawning creatures in ${Object.keys(chunks).length} chunks...`);
+  
+  // Create some guaranteed creatures for testing combat
+  // Add a few creatures at fixed positions near the player's spawn
+  addFixedCreature(creatures, 'cow', 5, 25, 5);
+  addFixedCreature(creatures, 'pig', -5, 25, 5);
+  addFixedCreature(creatures, 'sheep', 5, 25, -5);
+  addFixedCreature(creatures, 'zombie', -5, 25, -5);
+  addFixedCreature(creatures, 'skeleton', 10, 25, 10);
+  addFixedCreature(creatures, 'spider', -10, 25, -10);
+  
   // For each chunk
   Object.keys(chunks).forEach(chunkKey => {
     const [chunkX, chunkZ] = chunkKey.split(',').map(Number);
@@ -23,19 +73,20 @@ export function spawnCreatures(
     const worldX = chunkX * 16;
     const worldZ = chunkZ * 16;
     
-    // Spawn passive creatures
-    const passiveCount = Math.floor(Math.random() * 3); // 0-2 passive mobs per chunk
+    // Spawn passive creatures - INCREASED SPAWN RATE
+    const passiveCount = Math.floor(Math.random() * 4) + 1; // 1-4 passive mobs per chunk
     
     for (let i = 0; i < passiveCount; i++) {
       // Random position within chunk
-      const posX = worldX + Math.floor(Math.random() * 16);
-      const posZ = worldZ + Math.floor(Math.random() * 16);
+      let posX = worldX + Math.floor(Math.random() * 16);
+      let posZ = worldZ + Math.floor(Math.random() * 16);
       
       // Find suitable Y coordinate (ground level)
       let posY = -1;
       
-      // Search for ground from top to bottom (maximum 50 blocks above bedrock)
-      for (let y = 50; y > 0; y--) {
+      // Search for ground from top to bottom with higher max height
+      // Check more blocks to find a valid position
+      for (let y = 100; y > 0; y--) {
         const blockKey = `${posX},${y},${posZ}`;
         const blockBelow = `${posX},${y-1},${posZ}`;
         
@@ -47,7 +98,25 @@ export function spawnCreatures(
         }
       }
       
-      // Skip if couldn't find valid position
+      // If we couldn't find a position, try a different spot in the chunk
+      if (posY === -1) {
+        // Try another random position
+        posX = worldX + Math.floor(Math.random() * 16);
+        posZ = worldZ + Math.floor(Math.random() * 16);
+        
+        for (let y = 100; y > 0; y--) {
+          const blockKey = `${posX},${y},${posZ}`;
+          const blockBelow = `${posX},${y-1},${posZ}`;
+          
+          if ((!blocks[blockKey] || blocks[blockKey] === 'air') && 
+              blocks[blockBelow] && isBlockSolid(blocks[blockBelow])) {
+            posY = y;
+            break;
+          }
+        }
+      }
+      
+      // Skip if still couldn't find valid position
       if (posY === -1) continue;
       
       // Don't spawn in water
@@ -102,20 +171,20 @@ export function spawnCreatures(
       };
     }
     
-    // Spawn hostile creatures (only at night)
-    if (Math.random() < 0.3) { // 30% chance per chunk
-      const hostileCount = Math.floor(Math.random() * 2); // 0-1 hostile mobs per chunk
+    // Spawn hostile creatures (increased spawn rate, not just at night)
+    if (Math.random() < 0.7) { // 70% chance per chunk
+      const hostileCount = Math.floor(Math.random() * 3) + 1; // 1-3 hostile mobs per chunk
       
       for (let i = 0; i < hostileCount; i++) {
         // Random position within chunk
-        const posX = worldX + Math.floor(Math.random() * 16);
-        const posZ = worldZ + Math.floor(Math.random() * 16);
+        let posX = worldX + Math.floor(Math.random() * 16);
+        let posZ = worldZ + Math.floor(Math.random() * 16);
         
         // Find suitable Y coordinate (ground level)
         let posY = -1;
         
-        // Search for ground from top to bottom
-        for (let y = 50; y > 0; y--) {
+        // Search for ground from top to bottom with higher max height
+        for (let y = 100; y > 0; y--) {
           const blockKey = `${posX},${y},${posZ}`;
           const blockBelow = `${posX},${y-1},${posZ}`;
           
@@ -126,7 +195,25 @@ export function spawnCreatures(
           }
         }
         
-        // Skip if couldn't find valid position
+        // If we couldn't find a position, try a different spot in the chunk
+        if (posY === -1) {
+          // Try another random position
+          posX = worldX + Math.floor(Math.random() * 16);
+          posZ = worldZ + Math.floor(Math.random() * 16);
+          
+          for (let y = 100; y > 0; y--) {
+            const blockKey = `${posX},${y},${posZ}`;
+            const blockBelow = `${posX},${y-1},${posZ}`;
+            
+            if ((!blocks[blockKey] || blocks[blockKey] === 'air') && 
+                blocks[blockBelow] && isBlockSolid(blocks[blockBelow])) {
+              posY = y;
+              break;
+            }
+          }
+        }
+        
+        // Skip if still couldn't find valid position
         if (posY === -1) continue;
         
         // Create creature with enhanced properties
@@ -189,6 +276,7 @@ export function spawnCreatures(
 }
 
 // Enhanced creature behavior and AI
+
 export function getCreatureProperties(type: CreatureType) {
   switch (type) {
     case 'cow':
