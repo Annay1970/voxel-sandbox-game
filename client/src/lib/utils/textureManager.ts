@@ -1,375 +1,247 @@
 import * as THREE from 'three';
 import { BlockType } from '../blocks';
 
-// Class to manage block textures
-export class TextureManager {
-  private static instance: TextureManager;
-  private loader: THREE.TextureLoader;
-  private textures: Map<BlockType, THREE.Texture>;
-  private isLoading: boolean = false;
-  private loadPromise: Promise<void> = Promise.resolve();
-
-  private constructor() {
-    this.loader = new THREE.TextureLoader();
-    this.textures = new Map();
-  }
-
-  public static getInstance(): TextureManager {
-    if (!TextureManager.instance) {
-      TextureManager.instance = new TextureManager();
+class TextureManager {
+  private textures: Map<string, THREE.Texture> = new Map();
+  private atlasTexture: THREE.Texture | null = null;
+  private canvas: HTMLCanvasElement | null = null;
+  private ctx: CanvasRenderingContext2D | null = null;
+  
+  // Array of block types that need textures
+  private textureTypes: BlockType[] = [
+    'grass', 'dirt', 'stone', 'sand', 'wood', 'leaves', 'water',
+    'log', 'craftingTable', 'coal', 'torch'
+  ];
+  
+  // Colors for procedural texture generation
+  private blockColors: Record<BlockType, string> = {
+    'air': 'transparent',
+    'grass': '#4CAF50',
+    'dirt': '#795548',
+    'stone': '#9E9E9E',
+    'sand': '#FDD835',
+    'wood': '#8D6E63',
+    'leaves': '#81C784',
+    'water': '#2196F3',
+    'log': '#5D4037',
+    'stick': '#A1887F',
+    'craftingTable': '#6D4C41',
+    'woodenPickaxe': '#A1887F',
+    'stonePickaxe': '#78909C',
+    'woodenAxe': '#A1887F',
+    'woodenShovel': '#A1887F',
+    'coal': '#263238',
+    'torch': '#FFB300'
+  };
+  
+  constructor() {
+    // Create canvas for procedural texture generation
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = 64;
+    this.canvas.height = 64;
+    this.ctx = this.canvas.getContext('2d');
+    
+    if (!this.ctx) {
+      console.error('Failed to get 2D context for texture generation');
     }
-    return TextureManager.instance;
   }
-
-  public async loadTextures(): Promise<void> {
-    if (this.isLoading) return this.loadPromise;
+  
+  // Load actual textures from server
+  async loadTextures(): Promise<void> {
+    const textureLoader = new THREE.TextureLoader();
     
-    this.isLoading = true;
-    
-    // Create a new promise for loading
-    this.loadPromise = new Promise(async (resolve) => {
-      console.log('Loading block textures...');
-      
-      // Try to load textures from files first
-      const textureFiles: Record<BlockType, string> = {
-        'air': '',  // Air has no texture
-        'grass': '/textures/grass.png',
-        'dirt': '/textures/dirt.png',
-        'stone': '/textures/stone.png',
-        'sand': '/textures/sand.png',
-        'wood': '/textures/wood.png',
-        'leaves': '/textures/leaves.png',
-        'water': '/textures/water.png',
-        'log': '/textures/log.png',
-        'stick': '/textures/stick.png',
-        'craftingTable': '/textures/crafting_table.png',
-        'woodenPickaxe': '/textures/wooden_pickaxe.png',
-        'stonePickaxe': '/textures/stone_pickaxe.png',
-        'woodenAxe': '/textures/wooden_axe.png',
-        'woodenShovel': '/textures/wooden_shovel.png',
-        'coal': '/textures/coal.png',
-        'torch': '/textures/torch.png'
-      };
-      
-      // Load all textures (or create fallbacks)
-      const blockTypes = Object.keys(textureFiles) as BlockType[];
-      
-      for (const type of blockTypes) {
-        // Skip air (no texture)
-        if (type === 'air') continue;
-        
-        const texturePath = textureFiles[type];
-        
-        try {
-          if (texturePath) {
-            // Try to load the texture file
-            const texture = await this.loadTexture(texturePath);
-            this.textures.set(type, texture);
-            console.log(`Loaded texture for ${type}`);
-          } else {
-            // Create a procedural texture
-            const texture = this.createProceduralTexture(type);
-            this.textures.set(type, texture);
-            console.log(`Created procedural texture for ${type}`);
-          }
-        } catch (error) {
-          console.warn(`Failed to load texture for ${type}, creating procedural texture`);
-          // Create a fallback procedural texture
-          const texture = this.createProceduralTexture(type);
-          this.textures.set(type, texture);
-        }
+    const loadPromises = this.textureTypes.map(async (blockType) => {
+      try {
+        // Try to load actual texture
+        const texture = await this.loadTexture(textureLoader, blockType);
+        this.textures.set(blockType, texture);
+        console.log(`Loaded texture for ${blockType}`);
+      } catch (error) {
+        // If actual texture fails, generate procedural one
+        console.warn(`Failed to load texture for ${blockType}, using procedural texture`);
+        const proceduralTexture = this.generateProceduralTexture(blockType);
+        this.textures.set(blockType, proceduralTexture);
       }
-      
-      console.log('All block textures loaded!');
-      this.isLoading = false;
-      resolve();
     });
     
-    return this.loadPromise;
+    // Wait for all textures to load
+    await Promise.all(loadPromises);
+    console.log('All textures loaded');
   }
-
-  private loadTexture(path: string): Promise<THREE.Texture> {
+  
+  private loadTexture(loader: THREE.TextureLoader, blockType: BlockType): Promise<THREE.Texture> {
     return new Promise((resolve, reject) => {
-      this.loader.load(
-        path,
-        texture => {
-          texture.magFilter = THREE.NearestFilter;  // Pixelated look (Minecraft-style)
-          texture.minFilter = THREE.NearestFilter;
+      loader.load(
+        `/textures/${blockType}.png`, // Try to load from expected path
+        (texture) => {
+          // Configure the texture properly
           texture.wrapS = THREE.RepeatWrapping;
           texture.wrapT = THREE.RepeatWrapping;
+          texture.magFilter = THREE.NearestFilter; // Pixelated look
+          texture.minFilter = THREE.NearestFilter;
           resolve(texture);
         },
-        undefined,
-        error => reject(error)
+        undefined, // onProgress is optional
+        (error) => {
+          console.warn(`Error loading texture for ${blockType}:`, error);
+          reject(error);
+        }
       );
     });
   }
-
-  private createProceduralTexture(type: BlockType): THREE.Texture {
-    // Create a canvas to draw the texture
-    const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx) {
-      throw new Error('Could not get canvas 2D context');
+  
+  // Generate a procedural texture for a block type
+  private generateProceduralTexture(blockType: BlockType): THREE.Texture {
+    if (!this.ctx || !this.canvas) {
+      throw new Error('Canvas context not available for texture generation');
     }
     
-    // Define colors for each block type
-    const colors: Record<BlockType, string> = {
-      'air': 'rgba(255, 255, 255, 0)',
-      'grass': '#2b7a22',
-      'dirt': '#8B4513',
-      'stone': '#888888',
-      'sand': '#e0c080',
-      'wood': '#966F33',
-      'leaves': '#2e5e20',
-      'water': '#2080e0',
-      'log': '#6e4b28',
-      'stick': '#8B6914',
-      'craftingTable': '#7A5230',
-      'woodenPickaxe': '#A47449',
-      'stonePickaxe': '#707070',
-      'woodenAxe': '#A47449',
-      'woodenShovel': '#A47449',
-      'coal': '#222222',
-      'torch': '#FFA500'
-    };
+    const color = this.blockColors[blockType] || '#FFFFFF';
     
-    // Set base color
-    ctx.fillStyle = colors[type] || '#FF00FF';
-    ctx.fillRect(0, 0, 64, 64);
+    // Clear canvas
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     
-    // Add texture details based on block type
-    switch (type) {
+    // Fill with base color
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    // Add some texture details based on block type
+    switch (blockType) {
       case 'grass':
-        // Add grass blades
-        ctx.fillStyle = '#3c8c30';
-        for (let i = 0; i < 20; i++) {
-          const x = Math.random() * 64;
-          const y = Math.random() * 20;
-          ctx.fillRect(x, y, 2, 4);
-        }
-        // Dirt edge on bottom
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(0, 48, 64, 16);
-        break;
-        
-      case 'dirt':
-        // Add texture spots
-        ctx.fillStyle = '#6B3305';
-        for (let i = 0; i < 40; i++) {
-          const x = Math.random() * 64;
-          const y = Math.random() * 64;
-          const size = 2 + Math.random() * 4;
-          ctx.fillRect(x, y, size, size);
+        // Add some darker green dots for texture
+        this.ctx.fillStyle = '#388E3C';
+        for (let i = 0; i < 100; i++) {
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
+          const size = 1 + Math.random() * 3;
+          this.ctx.fillRect(x, y, size, size);
         }
         break;
         
       case 'stone':
-        // Add cracks and variations
-        ctx.fillStyle = '#777777';
-        for (let i = 0; i < 20; i++) {
-          const x = Math.random() * 64;
-          const y = Math.random() * 64;
-          const size = 3 + Math.random() * 6;
-          ctx.fillRect(x, y, size, size);
+        // Add some lighter and darker spots for stone texture
+        for (let i = 0; i < 200; i++) {
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
+          const size = 1 + Math.random() * 2;
+          this.ctx.fillStyle = Math.random() > 0.5 ? '#757575' : '#BDBDBD';
+          this.ctx.fillRect(x, y, size, size);
         }
-        ctx.fillStyle = '#999999';
-        for (let i = 0; i < 10; i++) {
-          const x = Math.random() * 64;
-          const y = Math.random() * 64;
-          const size = 2 + Math.random() * 3;
-          ctx.fillRect(x, y, size, size);
+        break;
+        
+      case 'dirt':
+        // Add some darker spots
+        this.ctx.fillStyle = '#5D4037';
+        for (let i = 0; i < 150; i++) {
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
+          const size = 1 + Math.random() * 3;
+          this.ctx.fillRect(x, y, size, size);
         }
         break;
         
       case 'sand':
-        // Add small grains
-        ctx.fillStyle = '#d6b978';
-        for (let i = 0; i < 80; i++) {
-          const x = Math.random() * 64;
-          const y = Math.random() * 64;
+        // Add some darker spots for sand texture
+        this.ctx.fillStyle = '#F9A825';
+        for (let i = 0; i < 100; i++) {
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
           const size = 1 + Math.random() * 2;
-          ctx.fillRect(x, y, size, size);
+          this.ctx.fillRect(x, y, size, size);
         }
         break;
         
       case 'wood':
+      case 'log':
         // Add wood grain
-        ctx.fillStyle = '#7A5230';
+        this.ctx.fillStyle = '#6D4C41';
         for (let i = 0; i < 10; i++) {
-          ctx.fillRect(0, i * 7, 64, 3);
+          this.ctx.fillRect(5 + i * 6, 0, 2, this.canvas.height);
         }
         break;
         
       case 'leaves':
-        // Add leaf details
-        ctx.fillStyle = '#1e4010';
-        for (let i = 0; i < 50; i++) {
-          const x = Math.random() * 64;
-          const y = Math.random() * 64;
-          const size = 2 + Math.random() * 6;
-          ctx.fillRect(x, y, size, size);
-        }
-        // Add some berries/flowers
-        ctx.fillStyle = '#cc0000';
-        for (let i = 0; i < 5; i++) {
-          const x = Math.random() * 64;
-          const y = Math.random() * 64;
-          const size = 2 + Math.random() * 2;
-          ctx.fillRect(x, y, size, size);
+        // Add some texture to leaves
+        this.ctx.fillStyle = '#558B2F';
+        for (let i = 0; i < 100; i++) {
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
+          const size = 1 + Math.random() * 3;
+          this.ctx.fillRect(x, y, size, size);
         }
         break;
         
       case 'water':
-        // Add water ripples
-        ctx.fillStyle = '#1070c0';
+        // Add ripple effect to water
+        this.ctx.fillStyle = '#1976D2';
         for (let i = 0; i < 5; i++) {
-          const y = 10 + i * 10;
-          ctx.fillRect(0, y, 64, 3);
+          this.ctx.fillRect(0, 10 + i * 12, this.canvas.width, 4);
         }
         break;
         
-      case 'log':
-        // Create tree rings
-        ctx.fillStyle = '#5D3920';
-        ctx.fillRect(0, 0, 64, 64);
-        
-        ctx.fillStyle = '#8B6914';
-        ctx.beginPath();
-        ctx.arc(32, 32, 20, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#6e4b28';
-        ctx.beginPath();
-        ctx.arc(32, 32, 15, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#8B6914';
-        ctx.beginPath();
-        ctx.arc(32, 32, 10, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#6e4b28';
-        ctx.beginPath();
-        ctx.arc(32, 32, 5, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-        
-      case 'craftingTable':
-        // Create crafting table with grid
-        ctx.fillStyle = '#7A5230';
-        ctx.fillRect(0, 0, 64, 64);
-        
-        // Draw grid lines
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2;
-        
-        // Horizontal lines
-        ctx.beginPath();
-        ctx.moveTo(0, 21);
-        ctx.lineTo(64, 21);
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.moveTo(0, 42);
-        ctx.lineTo(64, 42);
-        ctx.stroke();
-        
-        // Vertical lines
-        ctx.beginPath();
-        ctx.moveTo(21, 0);
-        ctx.lineTo(21, 64);
-        ctx.stroke();
-        
-        ctx.beginPath();
-        ctx.moveTo(42, 0);
-        ctx.lineTo(42, 64);
-        ctx.stroke();
-        break;
-        
-      case 'coal':
-        // Add shiny spots
-        ctx.fillStyle = '#333333';
-        for (let i = 0; i < 20; i++) {
-          const x = Math.random() * 64;
-          const y = Math.random() * 64;
-          const size = 2 + Math.random() * 4;
-          ctx.fillRect(x, y, size, size);
-        }
-        break;
-        
-      case 'torch':
-        // Create torch with flame
-        // Stick
-        ctx.fillStyle = '#8B6914';
-        ctx.fillRect(24, 16, 16, 48);
-        
-        // Flame
-        ctx.fillStyle = '#FFA500'; // Orange
-        ctx.beginPath();
-        ctx.arc(32, 12, 16, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#FFFF00'; // Yellow core
-        ctx.beginPath();
-        ctx.arc(32, 12, 8, 0, Math.PI * 2);
-        ctx.fill();
-        break;
-        
-      // Add more cases for other block types
-      
       default:
-        // Create a grid pattern for unknown blocks
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 2;
-        
-        // Draw grid
-        for (let i = 0; i < 64; i += 16) {
-          ctx.beginPath();
-          ctx.moveTo(0, i);
-          ctx.lineTo(64, i);
-          ctx.stroke();
-          
-          ctx.beginPath();
-          ctx.moveTo(i, 0);
-          ctx.lineTo(i, 64);
-          ctx.stroke();
+        // Add some simple noise texture for all other blocks
+        const darkColor = this.adjustColor(color, -20);
+        this.ctx.fillStyle = darkColor;
+        for (let i = 0; i < 100; i++) {
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
+          const size = 1 + Math.random() * 2;
+          this.ctx.fillRect(x, y, size, size);
         }
-        
-        // Draw question mark
-        ctx.fillStyle = '#000000';
-        ctx.font = '30px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('?', 32, 32);
         break;
     }
     
-    // Create texture from canvas
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = THREE.NearestFilter;  // Pixelated look (Minecraft-style)
-    texture.minFilter = THREE.NearestFilter;
+    // Add a border to make blocks more visible
+    this.ctx.strokeStyle = this.adjustColor(color, -30);
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(0, 0, this.canvas.width, this.canvas.height);
+    
+    // Create a THREE.js texture from the canvas
+    const texture = new THREE.CanvasTexture(this.canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
+    texture.magFilter = THREE.NearestFilter; // Pixelated look
+    texture.minFilter = THREE.NearestFilter;
     
     return texture;
   }
-
-  public getTexture(type: BlockType): THREE.Texture | undefined {
-    return this.textures.get(type);
+  
+  // Helper to adjust color brightness
+  private adjustColor(color: string, amount: number): string {
+    // Convert hex to RGB
+    let r = parseInt(color.substring(1, 3), 16);
+    let g = parseInt(color.substring(3, 5), 16);
+    let b = parseInt(color.substring(5, 7), 16);
+    
+    // Adjust brightness
+    r = Math.max(0, Math.min(255, r + amount));
+    g = Math.max(0, Math.min(255, g + amount));
+    b = Math.max(0, Math.min(255, b + amount));
+    
+    // Convert back to hex
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   }
-
-  public areTexturesLoaded(): boolean {
-    return !this.isLoading;
-  }
-
-  public getLoadPromise(): Promise<void> {
-    return this.loadPromise;
+  
+  // Get a texture for a block type
+  getTexture(blockType: BlockType): THREE.Texture | null {
+    // Return stored texture if available
+    if (this.textures.has(blockType)) {
+      return this.textures.get(blockType)!;
+    }
+    
+    // If not available, generate a procedural texture and store it
+    console.warn(`No cached texture for ${blockType}, generating procedural texture`);
+    try {
+      const proceduralTexture = this.generateProceduralTexture(blockType);
+      this.textures.set(blockType, proceduralTexture);
+      return proceduralTexture;
+    } catch (error) {
+      console.error(`Failed to generate procedural texture for ${blockType}:`, error);
+      return null;
+    }
   }
 }
 
-// Singleton instance
-export const textureManager = TextureManager.getInstance();
+// Create a singleton instance
+export const textureManager = new TextureManager();

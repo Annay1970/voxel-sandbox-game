@@ -1,695 +1,518 @@
-import { useRef, useEffect } from "react";
-import { useFrame } from "@react-three/fiber";
-import { useKeyboardControls } from "@react-three/drei";
-import * as THREE from "three";
-import { Group } from "three";
-import { useVoxelGame, Controls, Creature } from "../../lib/stores/useVoxelGame";
-import { useSkills } from "../../lib/stores/useSkills";
-import { useAudio } from "../../lib/stores/useAudio";
-import { isBlockSolid } from "../../lib/blocks";
+import { useRef, useEffect, useState } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
+import { PointerLockControls, useKeyboardControls } from '@react-three/drei';
+import * as THREE from 'three';
+import { BlockType } from '../../lib/blocks';
+import { useVoxelGame } from '../../lib/stores/useVoxelGame';
+import { useSkills } from '../../lib/stores/useSkills';
 
-const GRAVITY = 0.08;
-const JUMP_FORCE = 0.4;
-const PLAYER_HEIGHT = 1.8;
-const PLAYER_SPEED = 0.15;
-const SPRINT_MULTIPLIER = 1.6;
-const PLAYER_WIDTH = 0.6;
+// Controls mapping
+enum Controls {
+  forward = 'forward',
+  back = 'back',
+  left = 'left',
+  right = 'right',
+  jump = 'jump',
+  sprint = 'sprint',
+  attack = 'attack',
+  place = 'place'
+}
 
 export default function Player() {
-  const position = useVoxelGame(state => state.playerPosition);
-  const setPosition = useVoxelGame(state => state.setPlayerPosition);
-  const velocity = useVoxelGame(state => state.playerVelocity);
-  const setVelocity = useVoxelGame(state => state.setPlayerVelocity);
-  const isOnGround = useVoxelGame(state => state.playerIsOnGround);
-  const setIsOnGround = useVoxelGame(state => state.setPlayerIsOnGround);
+  // References
+  const playerRef = useRef<THREE.Group>(null);
+  const controlsRef = useRef<any>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
+  
+  // Store player position in state to reduce re-renders
+  const [position, setPosition] = useState<[number, number, number]>([0, 30, 0]);
+  
+  // Get game state from the store
   const blocks = useVoxelGame(state => state.blocks);
-  const selectedBlock = useVoxelGame(state => state.selectedBlock);
   const placeBlock = useVoxelGame(state => state.placeBlock);
   const removeBlock = useVoxelGame(state => state.removeBlock);
-  const creatures = useVoxelGame(state => state.creatures);
-  const attackCreature = useVoxelGame(state => state.attackCreature);
+  const setSelectedBlock = useVoxelGame(state => state.setSelectedBlock);
+  const inventory = useVoxelGame(state => state.inventory);
+  const selectedInventorySlot = useVoxelGame(state => state.selectedInventorySlot);
   
-  // Audio effects for combat
-  const playHitSound = useAudio(state => state.playHit);
+  // Get character stats from skills
+  const characterSpeed = useSkills(state => state.characterSpeed);
+  const addXp = useSkills(state => state.addXp);
   
-  const meshRef = useRef<THREE.Group>(null);
-  const cameraRef = useRef(new THREE.Vector3());
+  // Get the three.js camera
+  const { camera } = useThree();
   
-  // Get control states without causing re-renders
-  const [, getControls] = useKeyboardControls<Controls>();
-
-  // Add minimal debugging only when needed
+  // Store camera reference
+  useEffect(() => {
+    cameraRef.current = camera as THREE.PerspectiveCamera;
+  }, [camera]);
+  
+  // Set up keyboard controls
+  const forward = useKeyboardControls<Controls>(state => state.forward);
+  const back = useKeyboardControls<Controls>(state => state.back);
+  const left = useKeyboardControls<Controls>(state => state.left);
+  const right = useKeyboardControls<Controls>(state => state.right);
+  const jump = useKeyboardControls<Controls>(state => state.jump);
+  const sprint = useKeyboardControls<Controls>(state => state.sprint);
+  const attack = useKeyboardControls<Controls>(state => state.attack);
+  const place = useKeyboardControls<Controls>(state => state.place);
+  
+  // Movement parameters
+  const speed = 0.15 * characterSpeed; // Base movement speed
+  const sprintMultiplier = 1.5; // Speed multiplier when sprinting
+  const jumpForce = 0.2; // Initial upward velocity when jumping
+  const gravity = 0.01; // Downward acceleration
+  
+  // Physics state
+  const [velocity, setVelocity] = useState<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
+  const [grounded, setGrounded] = useState<boolean>(false);
+  
+  // Interaction cooldowns
+  const [attackCooldown, setAttackCooldown] = useState<boolean>(false);
+  const [placeCooldown, setPlaceCooldown] = useState<boolean>(false);
+  
+  // Get player eye height
+  const playerHeight = 1.6; // Player is 1.6 blocks tall
+  const eyeHeight = playerHeight * 0.9; // Eyes are slightly below the top of the head
+  
+  // Animation flags
+  const [swingingTool, setSwingingTool] = useState(false);
+  
+  // Player dimensions for collision detection
+  const playerWidth = 0.6; // Player is 0.6 blocks wide (3 pixels in Minecraft)
+  const playerDepth = 0.6; // Player is 0.6 blocks deep
+  
+  // Get block at position
+  const getBlockAt = (x: number, y: number, z: number): BlockType => {
+    const blockKey = `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
+    return blocks[blockKey] || 'air';
+  };
+  
+  // Check collision with blocks
+  const checkCollision = (position: THREE.Vector3): boolean => {
+    // Check all blocks that could collide with the player
+    const playerMinX = position.x - playerWidth / 2;
+    const playerMaxX = position.x + playerWidth / 2;
+    const playerMinY = position.y;
+    const playerMaxY = position.y + playerHeight;
+    const playerMinZ = position.z - playerDepth / 2;
+    const playerMaxZ = position.z + playerDepth / 2;
+    
+    // Check all potentially colliding blocks
+    for (let x = Math.floor(playerMinX); x <= Math.floor(playerMaxX); x++) {
+      for (let y = Math.floor(playerMinY); y <= Math.floor(playerMaxY); y++) {
+        for (let z = Math.floor(playerMinZ); z <= Math.floor(playerMaxZ); z++) {
+          const blockType = getBlockAt(x, y, z);
+          
+          // Skip non-solid blocks
+          if (blockType === 'air' || blockType === 'water') {
+            continue;
+          }
+          
+          // Simplified AABB collision check
+          // Each block is a 1x1x1 cube, so we just need to check if the player's AABB intersects
+          const blockMinX = x;
+          const blockMaxX = x + 1;
+          const blockMinY = y;
+          const blockMaxY = y + 1;
+          const blockMinZ = z;
+          const blockMaxZ = z + 1;
+          
+          if (
+            playerMaxX > blockMinX && playerMinX < blockMaxX &&
+            playerMaxY > blockMinY && playerMinY < blockMaxY &&
+            playerMaxZ > blockMinZ && playerMinZ < blockMaxZ
+          ) {
+            return true; // Collision detected
+          }
+        }
+      }
+    }
+    
+    return false; // No collision
+  };
+  
+  // Process interactions with the world (attacking, placing blocks)
+  useEffect(() => {
+    const handleMouseDown = (e: MouseEvent) => {
+      if (!controlsRef.current?.isLocked) return;
+      
+      // Left click to break blocks
+      if (e.button === 0) {
+        handleAttack();
+      }
+      // Right click to place blocks
+      else if (e.button === 2) {
+        handlePlace();
+      }
+    };
+    
+    // Set up controls for looking around
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!controlsRef.current?.isLocked) return;
+      
+      // Raycast to update selected block
+      updateRaycast();
+    };
+    
+    // Raycast in the direction the player is looking
+    const updateRaycast = () => {
+      if (!cameraRef.current) return;
+      
+      const raycaster = raycasterRef.current;
+      const camera = cameraRef.current;
+      
+      // Origin is camera position
+      raycaster.set(
+        camera.position, 
+        new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize()
+      );
+      
+      // Maximum interaction distance (5 blocks)
+      raycaster.far = 5;
+      
+      // Check for intersections with blocks
+      const [px, py, pz] = position;
+      const rayOrigin = new THREE.Vector3(px, py + eyeHeight, pz);
+      
+      // Calculate all block positions within reach
+      const nearbyBlocks: THREE.Object3D[] = [];
+      for (let x = Math.floor(px - 5); x <= Math.floor(px + 5); x++) {
+        for (let y = Math.floor(py - 5); y <= Math.floor(py + 5); y++) {
+          for (let z = Math.floor(pz - 5); z <= Math.floor(pz + 5); z++) {
+            const blockKey = `${x},${y},${z}`;
+            const blockType = blocks[blockKey];
+            
+            // Skip air blocks for performance
+            if (!blockType || blockType === 'air') {
+              continue;
+            }
+            
+            // Create a temporary object to represent this block
+            const blockObj = new THREE.Mesh(
+              new THREE.BoxGeometry(1, 1, 1),
+              new THREE.MeshBasicMaterial()
+            );
+            blockObj.position.set(x + 0.5, y + 0.5, z + 0.5);
+            blockObj.userData = { x, y, z, type: blockType };
+            nearbyBlocks.push(blockObj);
+          }
+        }
+      }
+      
+      // Find the closest intersection
+      const direction = new THREE.Vector3(0, 0, -1)
+        .applyQuaternion(camera.quaternion)
+        .normalize();
+      
+      raycaster.set(rayOrigin, direction);
+      const intersects = raycaster.intersectObjects(nearbyBlocks);
+      
+      // Clean up temporary objects
+      nearbyBlocks.length = 0;
+      
+      if (intersects.length > 0) {
+        const closest = intersects[0];
+        const blockData = closest.object.userData;
+        
+        // Update the selected block
+        setSelectedBlock([blockData.x, blockData.y, blockData.z]);
+      } else {
+        // No block selected
+        setSelectedBlock(null);
+      }
+    };
+    
+    // Handle block breaking action
+    const handleAttack = () => {
+      if (attackCooldown) return;
+      
+      // Set cooldown
+      setAttackCooldown(true);
+      setTimeout(() => setAttackCooldown(false), 250); // 250ms cooldown
+      
+      // Show attack animation
+      setSwingingTool(true);
+      setTimeout(() => setSwingingTool(false), 200);
+      
+      // Get the currently selected block
+      const selectedBlock = useVoxelGame.getState().selectedBlock;
+      if (!selectedBlock) return;
+      
+      const [x, y, z] = selectedBlock;
+      
+      // Try to remove the block
+      const blockKey = `${x},${y},${z}`;
+      const blockType = blocks[blockKey];
+      
+      if (blockType && blockType !== 'air') {
+        // Remove the block
+        removeBlock(x, y, z);
+        
+        // Grant mining XP
+        if (blockType === 'stone' || blockType === 'coal') {
+          addXp('mining', 5);
+        } else if (blockType === 'dirt' || blockType === 'grass' || blockType === 'sand') {
+          addXp('farming', 2);
+        } else if (blockType === 'wood' || blockType === 'log' || blockType === 'leaves') {
+          addXp('woodcutting', 5);
+        }
+        
+        console.log(`Removed ${blockType} block at ${x},${y},${z}`);
+      }
+    };
+    
+    // Handle block placement action
+    const handlePlace = () => {
+      if (placeCooldown) return;
+      
+      // Set cooldown
+      setPlaceCooldown(true);
+      setTimeout(() => setPlaceCooldown(false), 250); // 250ms cooldown
+      
+      // Show placement animation
+      setSwingingTool(true);
+      setTimeout(() => setSwingingTool(false), 200);
+      
+      // Get the currently selected block
+      const selectedBlock = useVoxelGame.getState().selectedBlock;
+      if (!selectedBlock) return;
+      
+      const [x, y, z] = selectedBlock;
+      
+      // Get the block to place from inventory
+      const inventorySlot = useVoxelGame.getState().selectedInventorySlot;
+      const inventoryItem = useVoxelGame.getState().inventory[inventorySlot];
+      
+      if (!inventoryItem || inventoryItem.count <= 0) {
+        console.log("No block selected in inventory");
+        return;
+      }
+      
+      // Find placement position
+      const blockType = getBlockAt(x, y, z);
+      if (blockType === 'air') return; // Can't place against air
+      
+      // Get placement face based on intersection normal
+      // For simplicity, always place on the "top" face for now
+      const placeX = x;
+      const placeY = y + 1;
+      const placeZ = z;
+      
+      // Check if the place position is already occupied
+      if (getBlockAt(placeX, placeY, placeZ) !== 'air') {
+        console.log("Cannot place block - position occupied");
+        return;
+      }
+      
+      // Place the block
+      placeBlock(placeX, placeY, placeZ, inventoryItem.type as BlockType);
+      
+      // Grant building XP
+      addXp('building', 2);
+      
+      console.log(`Placed ${inventoryItem.type} block at ${placeX},${placeY},${placeZ}`);
+    };
+    
+    // Add event listeners
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mousemove', handleMouseMove);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [position, attackCooldown, placeCooldown, blocks, removeBlock, placeBlock, setSelectedBlock, addXp]);
+  
+  // Set up keyboard events for inventory selection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only log debug info when F3 is pressed
-      if (e.key === 'F3') {
-        const controls = getControls();
-        console.log('Control state:', JSON.stringify(controls));
-        console.log('Player position:', JSON.stringify(position));
-        console.log('Player velocity:', JSON.stringify(velocity));
-        console.log('Is on ground:', isOnGround);
-        console.log('Selected block:', selectedBlock);
+      // Number keys 1-9 select inventory slots
+      if (e.key >= '1' && e.key <= '9') {
+        const slot = parseInt(e.key) - 1;
+        useVoxelGame.getState().setSelectedInventorySlot(slot);
+      }
+      
+      // F key for attacking (in addition to left click)
+      if (e.key === 'f' || e.key === 'F') {
+        if (!attackCooldown) {
+          // This simulates a left mouse click
+          const event = new MouseEvent('mousedown', { button: 0 });
+          document.dispatchEvent(event);
+        }
       }
     };
     
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [getControls, position, velocity, isOnGround, selectedBlock]);
-
-  // Ray for block interaction
-  const ray = useRef(new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(), 0, 5));
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [attackCooldown]);
   
-  // Player movement and physics
-  // Mouse movement tracking
-  const deltaX = useRef(0);
-  const deltaY = useRef(0);
-  const cameraXRotation = useRef(0); // Vertical rotation (pitch)
-  const cameraYRotation = useRef(0); // Horizontal rotation (yaw)
+  // Physics and movement update
+  useFrame(() => {
+    if (!playerRef.current) return;
     
-  // Mouse event handler
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      // Only update if pointer is locked
-      if (document.pointerLockElement) {
-        deltaX.current += e.movementX;
-        deltaY.current += e.movementY;
-      }
-    };
+    // Get current position
+    const [px, py, pz] = position;
+    const currentPosition = new THREE.Vector3(px, py, pz);
     
-    // Request pointer lock on canvas click
-    const handleCanvasClick = () => {
-      const canvas = document.querySelector('canvas');
-      if (canvas) {
-        canvas.requestPointerLock();
-      }
-    };
+    // Calculate new velocity based on input
+    let xVel = 0;
+    let zVel = 0;
     
-    window.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('click', handleCanvasClick);
-    
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('click', handleCanvasClick);
-    };
-  }, []);
-    
-  useFrame(({ camera }) => {
-    if (!meshRef.current) return;
-    
-    const controls = getControls();
-    
-    // Update camera rotation based on mouse movement (Minecraft-style)
-    if (document.pointerLockElement) {
-      // Update horizontal and vertical rotation with Minecraft-like sensitivity
-      cameraYRotation.current += deltaX.current * 0.003; // Horizontal (yaw)
-      cameraXRotation.current -= deltaY.current * 0.003; // Vertical (pitch)
+    // Apply movement based on camera direction
+    if (forward || back || left || right) {
+      // Get camera direction
+      const cameraDirection = new THREE.Vector3();
+      cameraRef.current?.getWorldDirection(cameraDirection);
       
-      // Limit vertical look angle to Minecraft-like range
-      cameraXRotation.current = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, cameraXRotation.current));
+      // Flatten to XZ plane
+      cameraDirection.y = 0;
+      cameraDirection.normalize();
       
-      // Reset deltas
-      deltaX.current = 0;
-      deltaY.current = 0;
+      // Calculate move direction
+      if (forward) {
+        xVel += cameraDirection.x;
+        zVel += cameraDirection.z;
+      }
+      if (back) {
+        xVel -= cameraDirection.x;
+        zVel -= cameraDirection.z;
+      }
+      
+      // Calculate right vector (perpendicular to camera direction)
+      const rightVector = new THREE.Vector3(
+        cameraDirection.z,
+        0,
+        -cameraDirection.x
+      );
+      
+      if (right) {
+        xVel += rightVector.x;
+        zVel += rightVector.z;
+      }
+      if (left) {
+        xVel -= rightVector.x;
+        zVel -= rightVector.z;
+      }
+      
+      // Normalize movement vector if moving diagonally
+      const length = Math.sqrt(xVel * xVel + zVel * zVel);
+      if (length > 0) {
+        xVel /= length;
+        zVel /= length;
+      }
     }
     
-    // Calculate movement direction
-    let moveX = 0;
-    let moveZ = 0;
-    
-    if (controls.forward) moveZ -= 1;
-    if (controls.backward) moveZ += 1;
-    if (controls.left) moveX -= 1;
-    if (controls.right) moveX += 1;
-    
-    // Normalize diagonal movement (Minecraft doesn't actually normalize, but it's smoother)
-    if (moveX !== 0 && moveZ !== 0) {
-      moveX *= 0.7071; // 1/sqrt(2)
-      moveZ *= 0.7071;
-    }
-    
-    // Get character speed from skills system
-    const characterSpeed = useSkills(state => state.characterSpeed);
-    
-    // Apply sprint multiplier and character skill speed
-    const speedMultiplier = (controls.sprint ? SPRINT_MULTIPLIER : 1) * characterSpeed;
-    
-    // Calculate movement in camera direction
-    const direction = new THREE.Vector3(moveX, 0, moveZ)
-      .normalize()
-      .multiplyScalar(PLAYER_SPEED * speedMultiplier);
-    
-    // Use our tracked camera rotation instead of extracting from matrix
-    const yRotation = cameraYRotation.current;
-    
-    // Apply camera rotation to movement
-    const rotatedDirection = new THREE.Vector3(
-      direction.x * Math.cos(yRotation) + direction.z * Math.sin(yRotation),
-      0,
-      direction.z * Math.cos(yRotation) - direction.x * Math.sin(yRotation)
-    );
-    
-    // Apply movement to velocity
-    const newVelocity = {...velocity};
-    newVelocity.x = rotatedDirection.x;
-    newVelocity.z = rotatedDirection.z;
-    
-    // Apply gravity
-    if (!isOnGround) {
-      newVelocity.y -= GRAVITY;
-    }
-    
-    // Apply jumping
-    if (controls.jump && isOnGround) {
-      newVelocity.y = JUMP_FORCE;
-      setIsOnGround(false);
-      console.log("Player jumped");
-    }
+    // Apply speed to movement
+    const moveSpeed = sprint ? speed * sprintMultiplier : speed;
+    xVel *= moveSpeed;
+    zVel *= moveSpeed;
     
     // Update velocity
-    setVelocity(newVelocity);
+    let newVel = new THREE.Vector3(
+      xVel,
+      velocity.y,
+      zVel
+    );
     
-    // Check for collisions and update position
-    const newPosition = {
-      x: position.x + newVelocity.x,
-      y: position.y + newVelocity.y,
-      z: position.z + newVelocity.z
-    };
-    
-    // Simple collision detection with blocks
-    const playerBox = {
-      minX: newPosition.x - PLAYER_WIDTH / 2,
-      maxX: newPosition.x + PLAYER_WIDTH / 2,
-      minY: newPosition.y,
-      maxY: newPosition.y + PLAYER_HEIGHT,
-      minZ: newPosition.z - PLAYER_WIDTH / 2,
-      maxZ: newPosition.z + PLAYER_WIDTH / 2
-    };
-    
-    // Check for collisions with blocks
-    let collisionX = false;
-    let collisionY = false;
-    let collisionZ = false;
-    
-    // Get blocks in player vicinity
-    const checkRadius = 2;
-    const blockKeys = Object.keys(blocks);
-    
-    for (const key of blockKeys) {
-      const [bx, by, bz] = key.split(',').map(Number);
-      
-      // Skip blocks that are too far
-      if (
-        Math.abs(bx - position.x) > checkRadius ||
-        Math.abs(by - position.y) > checkRadius ||
-        Math.abs(bz - position.z) > checkRadius
-      ) {
-        continue;
-      }
-      
-      // Skip non-solid blocks
-      if (!isBlockSolid(blocks[key])) {
-        continue;
-      }
-      
-      // Block bounds
-      const blockBox = {
-        minX: bx - 0.5,
-        maxX: bx + 0.5,
-        minY: by - 0.5,
-        maxY: by + 0.5,
-        minZ: bz - 0.5,
-        maxZ: bz + 0.5
-      };
-      
-      // Check X collision
-      if (
-        playerBox.maxY > blockBox.minY &&
-        playerBox.minY < blockBox.maxY &&
-        playerBox.maxZ > blockBox.minZ &&
-        playerBox.minZ < blockBox.maxZ &&
-        playerBox.maxX > blockBox.minX &&
-        playerBox.minX < blockBox.maxX
-      ) {
-        const fromRight = Math.abs(playerBox.maxX - blockBox.minX);
-        const fromLeft = Math.abs(playerBox.minX - blockBox.maxX);
-        
-        if (fromRight < fromLeft) {
-          newPosition.x = blockBox.minX - PLAYER_WIDTH / 2;
-        } else {
-          newPosition.x = blockBox.maxX + PLAYER_WIDTH / 2;
-        }
-        
-        collisionX = true;
-        newVelocity.x = 0;
-      }
-      
-      // Check Z collision
-      if (
-        playerBox.maxY > blockBox.minY &&
-        playerBox.minY < blockBox.maxY &&
-        playerBox.maxX > blockBox.minX &&
-        playerBox.minX < blockBox.maxX &&
-        playerBox.maxZ > blockBox.minZ &&
-        playerBox.minZ < blockBox.maxZ
-      ) {
-        const fromFront = Math.abs(playerBox.maxZ - blockBox.minZ);
-        const fromBack = Math.abs(playerBox.minZ - blockBox.maxZ);
-        
-        if (fromFront < fromBack) {
-          newPosition.z = blockBox.minZ - PLAYER_WIDTH / 2;
-        } else {
-          newPosition.z = blockBox.maxZ + PLAYER_WIDTH / 2;
-        }
-        
-        collisionZ = true;
-        newVelocity.z = 0;
-      }
-      
-      // Check Y collision (ground/ceiling)
-      if (
-        playerBox.maxX > blockBox.minX &&
-        playerBox.minX < blockBox.maxX &&
-        playerBox.maxZ > blockBox.minZ &&
-        playerBox.minZ < blockBox.maxZ &&
-        playerBox.maxY > blockBox.minY &&
-        playerBox.minY < blockBox.maxY
-      ) {
-        // Coming from above (ground)
-        if (newVelocity.y < 0 && position.y > by) {
-          newPosition.y = blockBox.maxY;
-          newVelocity.y = 0;
-          setIsOnGround(true);
-        } 
-        // Coming from below (ceiling)
-        else if (newVelocity.y > 0) {
-          newPosition.y = blockBox.minY - PLAYER_HEIGHT;
-          newVelocity.y = 0;
-        }
-        
-        collisionY = true;
-      }
+    // Apply gravity if not grounded
+    if (!grounded) {
+      newVel.y -= gravity;
+    } else if (jump) {
+      // Jump if grounded and jump key pressed
+      newVel.y = jumpForce;
+      setGrounded(false);
+    } else {
+      // Make sure y velocity is 0 when grounded
+      newVel.y = 0;
     }
     
-    // Check if player is still on ground
-    if (!collisionY && isOnGround) {
-      // Cast a short ray downward to check if there's still ground
-      ray.current.set(
-        new THREE.Vector3(position.x, position.y - 0.1, position.z),
-        new THREE.Vector3(0, -1, 0)
+    // Calculate new position
+    const newPosition = currentPosition.clone().add(newVel);
+    
+    // Check for collisions in each axis separately for better movement
+    // X-axis movement
+    const xCollision = checkCollision(
+      new THREE.Vector3(newPosition.x, currentPosition.y, currentPosition.z)
+    );
+    if (xCollision) {
+      newPosition.x = currentPosition.x;
+      newVel.x = 0;
+    }
+    
+    // Z-axis movement
+    const zCollision = checkCollision(
+      new THREE.Vector3(newPosition.x, currentPosition.y, newPosition.z)
+    );
+    if (zCollision) {
+      newPosition.z = currentPosition.z;
+      newVel.z = 0;
+    }
+    
+    // Y-axis movement
+    const yCollision = checkCollision(
+      new THREE.Vector3(newPosition.x, newPosition.y, newPosition.z)
+    );
+    if (yCollision) {
+      if (newVel.y < 0) {
+        // Colliding while moving down means we hit the ground
+        setGrounded(true);
+        
+        // Move to surface of the block
+        newPosition.y = Math.ceil(currentPosition.y);
+      } else {
+        // Colliding while moving up means we hit the ceiling
+        newPosition.y = currentPosition.y;
+      }
+      newVel.y = 0;
+    } else if (newVel.y <= 0) {
+      // Check if still grounded by checking for a block below
+      const groundCheck = new THREE.Vector3(
+        newPosition.x,
+        newPosition.y - 0.05, // Check just below feet
+        newPosition.z
       );
-      
-      let stillOnGround = false;
-      for (const key of blockKeys) {
-        const [bx, by, bz] = key.split(',').map(Number);
-        
-        // Skip blocks that are too far or non-solid
-        if (
-          Math.abs(bx - position.x) > 1 ||
-          Math.abs(by - position.y) > 1 ||
-          Math.abs(bz - position.z) > 1 ||
-          !isBlockSolid(blocks[key])
-        ) {
-          continue;
-        }
-        
-        // Simple ground check
-        if (
-          position.x > bx - 0.5 - PLAYER_WIDTH / 2 &&
-          position.x < bx + 0.5 + PLAYER_WIDTH / 2 &&
-          position.z > bz - 0.5 - PLAYER_WIDTH / 2 &&
-          position.z < bz + 0.5 + PLAYER_WIDTH / 2 &&
-          position.y - 0.1 < by + 0.5 &&
-          position.y > by
-        ) {
-          stillOnGround = true;
-          break;
-        }
-      }
-      
-      if (!stillOnGround) {
-        setIsOnGround(false);
-      }
+      const stillGrounded = checkCollision(groundCheck);
+      setGrounded(stillGrounded);
     }
     
-    // Update velocity with collision results
-    setVelocity(newVelocity);
+    // Update position and velocity
+    setPosition([newPosition.x, newPosition.y, newPosition.z]);
+    setVelocity(newVel);
     
-    // Update position
-    setPosition(newPosition);
+    // Update camera and player position
+    if (cameraRef.current) {
+      // Position camera at player's eye level
+      cameraRef.current.position.set(
+        newPosition.x,
+        newPosition.y + eyeHeight,
+        newPosition.z
+      );
+    }
     
-    // Update mesh position
-    meshRef.current.position.set(newPosition.x, newPosition.y, newPosition.z);
-    
-    // Set true first-person position (Minecraft-style)
-    cameraRef.current.set(
+    // Update player mesh position
+    playerRef.current.position.set(
       newPosition.x,
-      newPosition.y + PLAYER_HEIGHT - 0.2, // Eye level (slightly below player height)
+      newPosition.y,
       newPosition.z
     );
-
-    // Set camera to exactly match player's head position (first-person view)
-    camera.position.copy(cameraRef.current);
-    
-    // Apply rotations (pitch and yaw) to camera directly
-    camera.rotation.order = 'YXZ'; // This order matches Minecraft's camera rotation
-    camera.rotation.y = -cameraYRotation.current; // Yaw (horizontal)
-    camera.rotation.x = cameraXRotation.current; // Pitch (vertical)
-    
-    // Block interaction (mine/place)
-    if (controls.mine || controls.place) {
-      // Set ray origin to player camera position
-      // Get ray direction from camera direction
-      const direction = new THREE.Vector3(0, 0, -1);  // Forward vector
-      direction.applyQuaternion(camera.quaternion);   // Apply camera rotation
-      
-      ray.current.set(
-        cameraRef.current,
-        direction
-      );
-      
-      // Iterate through nearby blocks to check for ray intersection
-      let closestBlockDist = Infinity;
-      let closestBlockPos = null;
-      let closestBlockNormal = null;
-      
-      for (const key of blockKeys) {
-        const [bx, by, bz] = key.split(',').map(Number);
-        
-        // Skip blocks that are too far
-        if (
-          Math.abs(bx - position.x) > 5 ||
-          Math.abs(by - position.y) > 5 ||
-          Math.abs(bz - position.z) > 5 ||
-          !isBlockSolid(blocks[key])
-        ) {
-          continue;
-        }
-        
-        // Create a box for the block
-        const blockBox = new THREE.Box3(
-          new THREE.Vector3(bx - 0.5, by - 0.5, bz - 0.5),
-          new THREE.Vector3(bx + 0.5, by + 0.5, bz + 0.5)
-        );
-        
-        // Check for intersection
-        const intersection = ray.current.ray.intersectBox(blockBox, new THREE.Vector3());
-        
-        if (intersection) {
-          const distance = intersection.distanceTo(ray.current.ray.origin);
-          
-          if (distance < closestBlockDist) {
-            closestBlockDist = distance;
-            closestBlockPos = { x: bx, y: by, z: bz };
-            
-            // Calculate normal based on intersection point
-            const normal = { x: 0, y: 0, z: 0 };
-            const eps = 0.001;
-            
-            if (Math.abs(intersection.x - (bx - 0.5)) < eps) normal.x = -1;
-            else if (Math.abs(intersection.x - (bx + 0.5)) < eps) normal.x = 1;
-            else if (Math.abs(intersection.y - (by - 0.5)) < eps) normal.y = -1;
-            else if (Math.abs(intersection.y - (by + 0.5)) < eps) normal.y = 1;
-            else if (Math.abs(intersection.z - (bz - 0.5)) < eps) normal.z = -1;
-            else if (Math.abs(intersection.z - (bz + 0.5)) < eps) normal.z = 1;
-            
-            closestBlockNormal = normal;
-          }
-        }
-      }
-      
-      // Get skill actions for updating skills
-      const addXp = useSkills(state => state.addXp);
-      
-      // Handle block interaction
-      if (closestBlockPos) {
-        if (controls.mine) {
-          // Determine block type for appropriate skill gain
-          const blockType = blocks[`${closestBlockPos.x},${closestBlockPos.y},${closestBlockPos.z}`];
-          
-          // Remove the block
-          removeBlock(closestBlockPos.x, closestBlockPos.y, closestBlockPos.z);
-          console.log(`Removed block at ${closestBlockPos.x},${closestBlockPos.y},${closestBlockPos.z}`);
-          
-          // Award XP based on block type
-          if (blockType === 'stone' || blockType === 'coal') {
-            // Mining skill for stone-type blocks
-            addXp('mining', 10);
-            console.log('Gained mining XP!');
-          } else if (blockType === 'wood' || blockType === 'log' || blockType === 'leaves') {
-            // Woodcutting skill for wood-type blocks
-            addXp('woodcutting', 10);
-            console.log('Gained woodcutting XP!');
-          } else if (blockType === 'grass' || blockType === 'dirt') {
-            // Farming skill for earth-type blocks
-            addXp('farming', 5);
-            console.log('Gained farming XP!');
-          }
-        } else if (controls.place && closestBlockNormal) {
-          // Place a block adjacent to the hit face
-          const newBlockPos = {
-            x: closestBlockPos.x + closestBlockNormal.x,
-            y: closestBlockPos.y + closestBlockNormal.y,
-            z: closestBlockPos.z + closestBlockNormal.z
-          };
-          
-          // Don't place a block if the player is inside it
-          const blockPlayerCollision = (
-            newBlockPos.x > playerBox.minX && newBlockPos.x < playerBox.maxX &&
-            newBlockPos.y > playerBox.minY && newBlockPos.y < playerBox.maxY &&
-            newBlockPos.z > playerBox.minZ && newBlockPos.z < playerBox.maxZ
-          );
-          
-          if (!blockPlayerCollision) {
-            placeBlock(newBlockPos.x, newBlockPos.y, newBlockPos.z, selectedBlock);
-            console.log(`Placed block at ${newBlockPos.x},${newBlockPos.y},${newBlockPos.z}`);
-            
-            // Award building XP for placing blocks
-            addXp('building', 5);
-            console.log('Gained building XP!');
-          }
-        }
-      }
-    }
-    
-    // Combat functionality
-    if (controls.attack) {
-      // Set ray origin to player camera position for attacking
-      // Get ray direction from camera direction
-      const direction = new THREE.Vector3(0, 0, -1);  // Forward vector
-      direction.applyQuaternion(camera.quaternion);   // Apply camera rotation
-      
-      ray.current.set(
-        cameraRef.current,
-        direction
-      );
-      
-      // Detect creatures in attack range
-      const creatureIds = Object.keys(creatures);
-      let closestCreatureDist = Infinity;
-      let closestCreatureId = null;
-      
-      for (const creatureId of creatureIds) {
-        const creature = creatures[creatureId];
-        
-        // Skip creatures that are too far (basic distance check)
-        const distanceToCreature = Math.sqrt(
-          Math.pow(position.x - creature.position.x, 2) +
-          Math.pow(position.y - creature.position.y, 2) +
-          Math.pow(position.z - creature.position.z, 2)
-        );
-        
-        if (distanceToCreature > 5) continue; // Skip if too far
-        
-        // Create a simple bounding box for the creature
-        const creatureBox = new THREE.Box3(
-          new THREE.Vector3(
-            creature.position.x - 0.5,
-            creature.position.y - 0.5,
-            creature.position.z - 0.5
-          ),
-          new THREE.Vector3(
-            creature.position.x + 0.5,
-            creature.position.y + 1.0, // Taller than wide
-            creature.position.z + 0.5
-          )
-        );
-        
-        // Check for ray intersection with creature
-        const intersection = ray.current.ray.intersectBox(creatureBox, new THREE.Vector3());
-        
-        if (intersection) {
-          const distance = intersection.distanceTo(ray.current.ray.origin);
-          
-          if (distance < closestCreatureDist) {
-            closestCreatureDist = distance;
-            closestCreatureId = creatureId;
-          }
-        }
-      }
-      
-      // Attack the closest creature if one was found
-      if (closestCreatureId) {
-        console.log(`Attacking creature ${closestCreatureId}`);
-        
-        // Attack creature and get success result
-        const attackSuccess = attackCreature(closestCreatureId);
-        
-        if (attackSuccess) {
-          // Play hit sound on successful attack
-          playHitSound();
-          
-          // Grant combat XP when successfully attacking
-          const addXp = useSkills(state => state.addXp);
-          addXp('combat', 15);
-          console.log('Gained combat XP!');
-        }
-      }
-    }
   });
   
-  // Get character growth values from skill system
-  const characterSize = useSkills(state => state.characterSize);
-  const characterSpeed = useSkills(state => state.characterSpeed);
-
-  // Apply character growth modifications
-  const sizeScale = characterSize; // Grows with skill level
-  
-  // Visual indicator effects for player skills
-  const miningLevel = useSkills(state => state.skills.mining.level);
-  const combatLevel = useSkills(state => state.skills.combat.level);
-  const woodcuttingLevel = useSkills(state => state.skills.woodcutting.level);
-  
-  // Custom colors based on skill levels (representing equipment/strength)
-  const bodyColor = combatLevel > 5 ? '#4444FF' : combatLevel > 2 ? '#3370d4' : '#666699';
-  const armColor = miningLevel > 5 ? '#FF2222' : miningLevel > 2 ? '#3370d4' : '#666699';
-  const legColor = woodcuttingLevel > 5 ? '#22FF22' : woodcuttingLevel > 2 ? '#0e4690' : '#666699';
-  
-  // Visual effects based on skill levels
-  const hasHeadgear = combatLevel >= 10;
-  const hasArmGuards = miningLevel >= 10;
-  const hasLegGuards = woodcuttingLevel >= 10;
-  
-  // Aura particles for higher level players
-  const hasAura = miningLevel + combatLevel + woodcuttingLevel >= 15;
-  
   return (
-    <group ref={meshRef} position={[position.x, position.y, position.z]} scale={[sizeScale, sizeScale, sizeScale]}>
-      {/* Player body - scales with level */}
-      <mesh position={[0, PLAYER_HEIGHT / 2, 0]}>
-        <boxGeometry args={[PLAYER_WIDTH, PLAYER_HEIGHT * 0.6, PLAYER_WIDTH]} />
-        <meshStandardMaterial color={bodyColor} />
-      </mesh>
+    <>
+      {/* First-person controls */}
+      <PointerLockControls ref={controlsRef} />
       
-      {/* Player head with optional headgear based on combat level */}
-      <group position={[0, PLAYER_HEIGHT * 0.8, 0]}>
-        <mesh>
-          <boxGeometry args={[PLAYER_WIDTH * 0.8, PLAYER_HEIGHT * 0.25, PLAYER_WIDTH * 0.8]} />
-          <meshStandardMaterial color="#ffb385" />
+      {/* Player model - invisible in first person */}
+      <group ref={playerRef} position={[position[0], position[1], position[2]]}>
+        {/* Player body - only visible to others or in third-person */}
+        <mesh visible={false}>
+          <boxGeometry args={[playerWidth, playerHeight, playerDepth]} />
+          <meshStandardMaterial color="#2196F3" />
         </mesh>
-        
-        {/* Helmet for high combat level */}
-        {hasHeadgear && (
-          <mesh position={[0, 0.05, 0]}>
-            <boxGeometry args={[PLAYER_WIDTH * 0.9, PLAYER_HEIGHT * 0.08, PLAYER_WIDTH * 0.9]} />
-            <meshStandardMaterial color="#CCCCFF" metalness={0.8} roughness={0.2} />
-          </mesh>
-        )}
       </group>
-      
-      {/* Player arms with mining skill indicators */}
-      <group position={[PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.5, 0]}>
-        <mesh>
-          <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.5, PLAYER_WIDTH * 0.3]} />
-          <meshStandardMaterial color={armColor} />
-        </mesh>
-        
-        {/* Arm guards for high mining level */}
-        {hasArmGuards && (
-          <mesh position={[0, -0.1, 0]}>
-            <boxGeometry args={[PLAYER_WIDTH * 0.4, PLAYER_HEIGHT * 0.2, PLAYER_WIDTH * 0.4]} />
-            <meshStandardMaterial color="#CC4444" metalness={0.6} roughness={0.3} />
-          </mesh>
-        )}
-      </group>
-      
-      <group position={[-PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.5, 0]}>
-        <mesh>
-          <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.5, PLAYER_WIDTH * 0.3]} />
-          <meshStandardMaterial color={armColor} />
-        </mesh>
-        
-        {/* Arm guards for high mining level */}
-        {hasArmGuards && (
-          <mesh position={[0, -0.1, 0]}>
-            <boxGeometry args={[PLAYER_WIDTH * 0.4, PLAYER_HEIGHT * 0.2, PLAYER_WIDTH * 0.4]} />
-            <meshStandardMaterial color="#CC4444" metalness={0.6} roughness={0.3} />
-          </mesh>
-        )}
-      </group>
-      
-      {/* Player legs with woodcutting skill indicators */}
-      <group position={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.15, 0]}>
-        <mesh>
-          <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.3, PLAYER_WIDTH * 0.3]} />
-          <meshStandardMaterial color={legColor} />
-        </mesh>
-        
-        {/* Leg guards for high woodcutting level */}
-        {hasLegGuards && (
-          <mesh position={[0, -0.1, 0]}>
-            <boxGeometry args={[PLAYER_WIDTH * 0.35, PLAYER_HEIGHT * 0.15, PLAYER_WIDTH * 0.35]} />
-            <meshStandardMaterial color="#44CC44" metalness={0.4} roughness={0.4} />
-          </mesh>
-        )}
-      </group>
-      
-      <group position={[-PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.15, 0]}>
-        <mesh>
-          <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.3, PLAYER_WIDTH * 0.3]} />
-          <meshStandardMaterial color={legColor} />
-        </mesh>
-        
-        {/* Leg guards for high woodcutting level */}
-        {hasLegGuards && (
-          <mesh position={[0, -0.1, 0]}>
-            <boxGeometry args={[PLAYER_WIDTH * 0.35, PLAYER_HEIGHT * 0.15, PLAYER_WIDTH * 0.35]} />
-            <meshStandardMaterial color="#44CC44" metalness={0.4} roughness={0.4} />
-          </mesh>
-        )}
-      </group>
-      
-      {/* Special aura for high level players */}
-      {hasAura && (
-        <mesh position={[0, PLAYER_HEIGHT / 2, 0]}>
-          <sphereGeometry args={[PLAYER_WIDTH * 1.2, 16, 16]} />
-          <meshStandardMaterial 
-            color="#ffdd99" 
-            transparent={true} 
-            opacity={0.3} 
-            emissive="#ffaa00"
-            emissiveIntensity={0.5}
-          />
-        </mesh>
-      )}
-      
-      {/* Ground marker glow under player based on highest skill */}
-      <mesh position={[0, -0.4, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[PLAYER_WIDTH * 2, PLAYER_WIDTH * 2]} />
-        <meshBasicMaterial 
-          color={miningLevel > combatLevel ? 
-            (miningLevel > woodcuttingLevel ? "#ff6666" : "#66ff66") : 
-            (combatLevel > woodcuttingLevel ? "#6666ff" : "#66ff66")
-          }
-          transparent={true}
-          opacity={0.3}
-        />
-      </mesh>
-      
-      {/* Player collision box (invisible) */}
-      <mesh position={[0, PLAYER_HEIGHT / 2, 0]} visible={false}>
-        <boxGeometry args={[PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH]} />
-        <meshStandardMaterial color="#00AAFF" transparent opacity={0} />
-      </mesh>
-    </group>
+    </>
   );
 }

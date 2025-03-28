@@ -75,7 +75,8 @@ interface VoxelGameState {
   
   // Inventory
   inventory: InventoryItem[];
-  selectedBlock: BlockType;
+  selectedBlock: [number, number, number] | null; // Currently selected/highlighted block [x,y,z]
+  selectedInventorySlot: number; // Currently selected inventory slot (0-8)
   
   // Environment
   timeOfDay: number; // 0-1, where 0 is midnight, 0.5 is noon
@@ -93,7 +94,8 @@ interface VoxelGameState {
   addBlock: (x: number, y: number, z: number, type: BlockType) => void;
   removeBlock: (x: number, y: number, z: number) => void;
   placeBlock: (x: number, y: number, z: number, type: BlockType) => void;
-  setSelectedBlock: (type: BlockType) => void;
+  setSelectedBlock: (position: [number, number, number] | null) => void;
+  setSelectedInventorySlot: (slot: number) => void;
   incrementTime: () => void;
   setWeather: (weather: WeatherType) => void;
   addToInventory: (type: BlockType, count: number) => void;
@@ -126,7 +128,8 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     { type: 'log', count: 8 },
     { type: 'sand', count: 16 }
   ],
-  selectedBlock: 'dirt',
+  selectedBlock: null, // No block selected initially
+  selectedInventorySlot: 0, // First slot selected by default
   
   // Initial environment
   timeOfDay: 0.3, // Start in morning
@@ -219,7 +222,9 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     });
   },
   
-  setSelectedBlock: (type) => set({ selectedBlock: type }),
+  setSelectedBlock: (position) => set({ selectedBlock: position }),
+  
+  setSelectedInventorySlot: (slot) => set({ selectedInventorySlot: slot }),
   
   incrementTime: () => {
     set((state) => {

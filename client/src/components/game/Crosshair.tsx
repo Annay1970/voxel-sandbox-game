@@ -13,84 +13,60 @@ export function Crosshair({
   thickness = 2,
   gap = 4
 }: CrosshairProps) {
-  // Create CSS for the crosshair lines
-  const lineStyle: React.CSSProperties = {
-    position: 'absolute',
-    backgroundColor: color,
-  };
-  
-  // Create center dot style
-  const dotStyle: React.CSSProperties = {
-    position: 'absolute',
-    width: thickness,
-    height: thickness,
-    backgroundColor: color,
-    left: '50%',
-    top: '50%',
-    transform: 'translate(-50%, -50%)',
-    borderRadius: '50%',
-  };
-  
-  // Horizontal line style
-  const horizontalStyle: React.CSSProperties = {
-    ...lineStyle,
-    width: size,
-    height: thickness,
-    left: `calc(50% - ${size / 2}px)`,
-    top: '50%',
-    transform: 'translateY(-50%)',
-  };
-  
-  // Break the horizontal line into two parts with a gap
-  const leftHorizontalStyle: React.CSSProperties = {
-    ...horizontalStyle,
-    width: (size - gap) / 2,
-  };
-  
-  const rightHorizontalStyle: React.CSSProperties = {
-    ...horizontalStyle,
-    width: (size - gap) / 2,
-    left: `calc(50% + ${gap / 2}px)`,
-  };
-  
-  // Vertical line style
-  const verticalStyle: React.CSSProperties = {
-    ...lineStyle,
-    width: thickness,
-    height: size,
-    top: `calc(50% - ${size / 2}px)`,
-    left: '50%',
-    transform: 'translateX(-50%)',
-  };
-  
-  // Break the vertical line into two parts with a gap
-  const topVerticalStyle: React.CSSProperties = {
-    ...verticalStyle,
-    height: (size - gap) / 2,
-  };
-  
-  const bottomVerticalStyle: React.CSSProperties = {
-    ...verticalStyle,
-    height: (size - gap) / 2,
-    top: `calc(50% + ${gap / 2}px)`,
-  };
+  const halfSize = size / 2;
+  const halfThickness = thickness / 2;
   
   return (
-    <div style={{ 
-      position: 'absolute', 
-      width: '100%', 
-      height: '100%', 
-      pointerEvents: 'none',
-      zIndex: 1000,
-    }}>
-      {/* Render the horizontal and vertical lines with gaps */}
-      <div style={leftHorizontalStyle} />
-      <div style={rightHorizontalStyle} />
-      <div style={topVerticalStyle} />
-      <div style={bottomVerticalStyle} />
+    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+      {/* Horizontal line */}
+      <div 
+        className="absolute bg-current"
+        style={{
+          width: halfSize - gap,
+          height: thickness,
+          right: `calc(50% + ${gap/2}px)`,
+          backgroundColor: color
+        }}
+      />
+      <div 
+        className="absolute bg-current"
+        style={{
+          width: halfSize - gap,
+          height: thickness,
+          left: `calc(50% + ${gap/2}px)`,
+          backgroundColor: color
+        }}
+      />
       
-      {/* Center dot */}
-      <div style={dotStyle} />
+      {/* Vertical line */}
+      <div 
+        className="absolute bg-current"
+        style={{
+          width: thickness,
+          height: halfSize - gap,
+          bottom: `calc(50% + ${gap/2}px)`,
+          backgroundColor: color
+        }}
+      />
+      <div 
+        className="absolute bg-current"
+        style={{
+          width: thickness,
+          height: halfSize - gap,
+          top: `calc(50% + ${gap/2}px)`,
+          backgroundColor: color
+        }}
+      />
+      
+      {/* Center dot (optional) */}
+      <div 
+        className="absolute rounded-full bg-current"
+        style={{
+          width: thickness * 1.5,
+          height: thickness * 1.5,
+          backgroundColor: color
+        }}
+      />
     </div>
   );
 }

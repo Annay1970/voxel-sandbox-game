@@ -1,196 +1,193 @@
-import { useState, useEffect } from 'react';
-import { useKeyboardControls } from '@react-three/drei';
-import { useVoxelGame, Controls, WeatherType } from '../../lib/stores/useVoxelGame';
-import { useAudio } from '../../lib/stores/useAudio';
-import { useSkills } from '../../lib/stores/useSkills';
-import Inventory from './Inventory';
-import Crafting from './Crafting';
-import SkillsUI from './SkillsUI';
+import React, { useEffect, useState } from 'react';
+import { BlockType } from '../../lib/blocks';
+import { WeatherType } from '../../lib/stores/useVoxelGame';
+import { useVoxelGame } from '../../lib/stores/useVoxelGame';
+import { useSkills, SkillType } from '../../lib/stores/useSkills';
 import Crosshair from './Crosshair';
-import { cn } from '../../lib/utils';
 
 export default function UI() {
-  const [inventoryOpen, setInventoryOpen] = useState(false);
-  const [craftingOpen, setCraftingOpen] = useState(false);
-  
-  const playerPosition = useVoxelGame(state => state.playerPosition);
+  // Voxel game state
   const selectedBlock = useVoxelGame(state => state.selectedBlock);
   const inventory = useVoxelGame(state => state.inventory);
+  const selectedInventorySlot = useVoxelGame(state => state.selectedInventorySlot);
+  const blocks = useVoxelGame(state => state.blocks);
   const timeOfDay = useVoxelGame(state => state.timeOfDay);
   const weather = useVoxelGame(state => state.weather);
-  const playerHealth = useVoxelGame(state => state.playerHealth);
-  const playerHunger = useVoxelGame(state => state.playerHunger);
   
-  const { toggleMute, isMuted } = useAudio();
+  // Skills state
+  const skills = useSkills(state => state.skills);
+  const getProgressPercent = useSkills(state => state.getProgressPercent);
   
-  // Listen for inventory key
-  const inventoryPressed = useKeyboardControls<Controls>(state => state.inventory);
+  // Debug state
+  const [showDebug, setShowDebug] = useState(false);
+  const [fps, setFps] = useState(0);
   
+  // Selected block info
+  const selectedBlockType = selectedBlock ? 
+    blocks[`${selectedBlock[0]},${selectedBlock[1]},${selectedBlock[2]}`] || 'air' 
+    : null;
+  
+  // Calculate time of day string
+  const getTimeString = () => {
+    const hours = Math.floor(timeOfDay * 24);
+    const minutes = Math.floor((timeOfDay * 24 * 60) % 60);
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
+  
+  // Debug mode toggle (F3 key)
   useEffect(() => {
-    if (inventoryPressed && !craftingOpen) {
-      setInventoryOpen(prev => !prev);
-    }
-  }, [inventoryPressed, craftingOpen]);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F3') {
+        setShowDebug(prev => !prev);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   
-  // Get selected block item from inventory
-  const selectedItem = inventory.find(item => item.type === selectedBlock);
-  
-  // Format time of day as hours
-  const gameHour = Math.floor(timeOfDay * 24);
-  const formattedTime = `${gameHour.toString().padStart(2, '0')}:00`;
-  
-  // Get weather icon
-  const weatherIcon = getWeatherIcon(weather);
-  
-  // Format player coordinates
-  const formattedCoords = `${Math.floor(playerPosition.x)}, ${Math.floor(playerPosition.y)}, ${Math.floor(playerPosition.z)}`;
-  
-  // Calculate hotbar width based on inventory size
-  const totalSlots = Math.min(9, inventory.length);
+  // FPS counter
+  useEffect(() => {
+    let frameCount = 0;
+    let lastTime = performance.now();
+    
+    const updateFps = () => {
+      const now = performance.now();
+      frameCount++;
+      
+      if (now - lastTime >= 1000) {
+        setFps(frameCount);
+        frameCount = 0;
+        lastTime = now;
+      }
+      
+      requestAnimationFrame(updateFps);
+    };
+    
+    const animationId = requestAnimationFrame(updateFps);
+    return () => cancelAnimationFrame(animationId);
+  }, []);
   
   return (
-    <>
-      {/* Main HUD (always visible) */}
-      <div className="fixed inset-0 pointer-events-none flex flex-col">
-        {/* Top HUD with time, weather, coordinates */}
-        <div className="p-4 flex justify-between pointer-events-auto">
-          <div className="bg-gray-800 bg-opacity-70 text-white px-3 py-1 rounded-md flex items-center">
-            <span className="mr-2">{formattedTime}</span>
-            <span className="text-lg">{weatherIcon}</span>
-          </div>
-          
-          <div className="bg-gray-800 bg-opacity-70 text-white px-3 py-1 rounded-md">
-            {formattedCoords}
-          </div>
-        </div>
-        
-        {/* Center crosshair - Minecraft style */}
-        <div className="flex-grow">
-          <Crosshair size={16} color="white" thickness={2} gap={4} />
-        </div>
-        
-        {/* Bottom HUD with hotbar, health */}
-        <div className="p-4">
-          {/* Health and hunger meters */}
-          <div className="flex justify-center mb-2 gap-4">
-            <div className="bg-gray-800 bg-opacity-70 p-2 rounded-md flex items-center gap-1">
-              <span className="text-red-500">❤</span>
-              <div className="w-32 h-4 bg-gray-700 rounded-full overflow-hidden">
+    <div className="fixed inset-0 pointer-events-none">
+      {/* Crosshair */}
+      <Crosshair />
+      
+      {/* Inventory bar */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-1">
+        {inventory.map((item, index) => (
+          <div 
+            key={index}
+            className={`w-14 h-14 flex items-center justify-center rounded ${
+              index === selectedInventorySlot ? 'bg-white' : 'bg-gray-800'
+            } border-2 ${
+              index === selectedInventorySlot ? 'border-yellow-400' : 'border-gray-700'
+            }`}
+          >
+            {item && item.count > 0 ? (
+              <>
                 <div 
-                  className="h-full bg-red-600 transition-all duration-300" 
-                  style={{ width: `${playerHealth}%` }}
-                ></div>
-              </div>
-            </div>
-            
-            <div className="bg-gray-800 bg-opacity-70 p-2 rounded-md flex items-center gap-1">
-              <span className="text-yellow-500">🍖</span>
-              <div className="w-32 h-4 bg-gray-700 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-yellow-600 transition-all duration-300" 
-                  style={{ width: `${playerHunger}%` }}
-                ></div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Hotbar - Minecraft style */}
-          <div className="flex justify-center">
-            <div className="bg-gray-800 bg-opacity-80 p-2 border-2 border-gray-700 rounded flex pointer-events-auto">
-              {inventory.slice(0, 9).map((item, index) => (
-                <div 
-                  key={`hotbar-${index}`}
-                  className={cn(
-                    "w-16 h-16 bg-gray-700 m-1 flex flex-col items-center justify-center cursor-pointer relative border border-black",
-                    selectedBlock === item.type ? "border-4 border-white" : ""
-                  )}
-                  onClick={() => useVoxelGame.getState().setSelectedBlock(item.type)}
-                >
-                  <div className="w-12 h-12 flex items-center justify-center" style={{
-                    backgroundColor: getBlockColor(item.type)
-                  }}>
-                    {/* Display a block-like cube instead of just the letter */}
-                    <div className="w-full h-full relative">
-                      <div className="absolute inset-0 flex items-center justify-center font-bold text-white text-shadow">
-                        {item.type.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="absolute top-0 left-0 w-full h-full bg-white opacity-10"></div>
-                      <div className="absolute bottom-0 right-0 w-full h-full bg-black opacity-10"></div>
-                    </div>
-                  </div>
-                  <span className="text-white text-xs mt-1 font-bold absolute bottom-0 right-1">{item.count}</span>
+                  className="w-10 h-10 rounded" 
+                  style={{ backgroundColor: getBlockColor(item.type) }}
+                />
+                <div className="absolute bottom-0 right-1 text-white text-xs">
+                  {item.count}
                 </div>
-              ))}
-              
-              {/* Fill empty slots up to 9 */}
-              {Array.from({ length: Math.max(0, 9 - inventory.length) }).map((_, index) => (
-                <div 
-                  key={`empty-${index}`}
-                  className="w-16 h-16 bg-gray-700 border border-black m-1"
-                ></div>
-              ))}
+              </>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      
+      {/* Selected block info */}
+      {selectedBlock && selectedBlockType && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-gray-800 bg-opacity-75 text-white p-2 rounded">
+          {selectedBlockType !== 'air' ? (
+            <div className="flex items-center gap-2">
+              <div 
+                className="w-4 h-4 rounded" 
+                style={{ backgroundColor: getBlockColor(selectedBlockType) }}
+              />
+              <span className="capitalize">{selectedBlockType}</span>
+              <span className="text-xs text-gray-300">
+                {selectedBlock[0]}, {selectedBlock[1]}, {selectedBlock[2]}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      )}
+      
+      {/* Time and weather */}
+      <div className="absolute top-4 right-4 bg-gray-800 bg-opacity-75 text-white p-2 rounded flex items-center gap-2">
+        <span>{getTimeString()}</span>
+        <span>{getWeatherIcon(weather)}</span>
+      </div>
+      
+      {/* Skills display */}
+      <div className="absolute left-4 top-1/2 transform -translate-y-1/2 space-y-2">
+        {Object.entries(skills).map(([skillType, skill]) => (
+          <div 
+            key={skillType} 
+            className="bg-gray-800 bg-opacity-75 text-white p-2 rounded"
+          >
+            <div className="flex justify-between items-center">
+              <span className="capitalize">{skillType}</span>
+              <span>Level {skill.level}</span>
+            </div>
+            <div className="w-32 h-2 bg-gray-700 rounded-full overflow-hidden mt-1">
+              <div 
+                className="h-full rounded-full" 
+                style={{ 
+                  width: `${getProgressPercent(skillType as SkillType)}%`,
+                  backgroundColor: skillType === 'mining' ? '#F9A825' :
+                                  skillType === 'woodcutting' ? '#8D6E63' :
+                                  skillType === 'farming' ? '#4CAF50' :
+                                  skillType === 'combat' ? '#F44336' :
+                                  skillType === 'building' ? '#2196F3' :
+                                  '#9C27B0'
+                }}
+              />
             </div>
           </div>
+        ))}
+      </div>
+      
+      {/* Debug overlay */}
+      {showDebug && (
+        <div className="absolute top-20 left-4 bg-gray-900 bg-opacity-90 text-white p-3 rounded text-xs font-mono">
+          <h3 className="font-bold mb-2">Debug Info (F3)</h3>
+          <div>FPS: {fps}</div>
+          <div>Block Count: {Object.keys(blocks).length}</div>
+          <div>Player Pos: {selectedBlock ? `${selectedBlock[0]}, ${selectedBlock[1]}, ${selectedBlock[2]}` : 'Unknown'}</div>
+          <div>Time: {getTimeString()}</div>
+          <div>Weather: {weather}</div>
+          <div>Inventory Slot: {selectedInventorySlot + 1}/9</div>
         </div>
-      </div>
-      
-      {/* Controls info */}
-      <div className="fixed left-4 bottom-24 bg-gray-800 bg-opacity-70 text-white p-3 rounded-md text-sm max-w-xs">
-        <p><strong>WASD</strong> - Move</p>
-        <p><strong>Space</strong> - Jump</p>
-        <p><strong>Shift</strong> - Sprint</p>
-        <p><strong>E</strong> - Mine block</p>
-        <p><strong>Q</strong> - Place block</p>
-        <p><strong>I</strong> - Inventory</p>
-        <p><strong>F</strong> - Attack/Fight</p>
-      </div>
-      
-      {/* Sound toggle button */}
-      <button
-        className="fixed top-4 right-4 bg-gray-800 bg-opacity-70 text-white p-2 rounded-md pointer-events-auto"
-        onClick={toggleMute}
-      >
-        {isMuted ? '🔇' : '🔊'}
-      </button>
-      
-      {/* Inventory modal */}
-      <Inventory 
-        isOpen={inventoryOpen} 
-        onClose={() => setInventoryOpen(false)} 
-      />
-      
-      {/* Crafting modal */}
-      <Crafting 
-        isOpen={craftingOpen}
-        onClose={() => setCraftingOpen(false)}
-      />
-      
-      {/* Debug button to open crafting */}
-      <button
-        className="fixed right-4 bottom-24 bg-gray-800 bg-opacity-70 text-white px-3 py-2 rounded-md pointer-events-auto"
-        onClick={() => setCraftingOpen(true)}
-      >
-        Open Crafting
-      </button>
-      
-      {/* Skills UI component */}
-      <SkillsUI />
-    </>
+      )}
+    </div>
   );
 }
 
-// Helper function to get a color for block type
+// Helper function to get block color for display
 function getBlockColor(type: string): string {
   switch (type) {
-    case 'grass': return '#7cac5d';
-    case 'dirt': return '#9b7653';
-    case 'stone': return '#aaaaaa';
-    case 'sand': return '#e5b962';
-    case 'wood': return '#8c6e4b';
-    case 'log': return '#6e4b2c';
-    case 'leaves': return '#2ecc71';
-    case 'water': return '#3498db';
-    default: return '#ffffff';
+    case 'grass': return '#4CAF50';
+    case 'dirt': return '#795548';
+    case 'stone': return '#9E9E9E';
+    case 'sand': return '#FDD835';
+    case 'wood': return '#8D6E63';
+    case 'leaves': return '#81C784';
+    case 'water': return '#2196F3';
+    case 'log': return '#5D4037';
+    case 'stick': return '#A1887F';
+    case 'craftingTable': return '#6D4C41';
+    case 'woodenPickaxe': return '#A1887F';
+    case 'stonePickaxe': return '#78909C';
+    case 'woodenAxe': return '#A1887F';
+    case 'woodenShovel': return '#A1887F';
+    case 'coal': return '#263238';
+    case 'torch': return '#FFB300';
+    default: return '#FFFFFF';
   }
 }
 
@@ -200,7 +197,6 @@ function getWeatherIcon(weather: WeatherType): string {
     case 'clear': return '☀️';
     case 'cloudy': return '☁️';
     case 'rain': return '🌧️';
-    case 'snow': return '❄️';
     default: return '☀️';
   }
 }

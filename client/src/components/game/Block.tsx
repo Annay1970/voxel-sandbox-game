@@ -1,7 +1,8 @@
+import { useRef, useEffect, useState } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useTexture } from '@react-three/drei';
-import { BlockType, isBlockSolid } from '../../lib/blocks';
-import { useEffect, useState } from 'react';
+import { BlockType, isBlockTransparent } from '../../lib/blocks';
+import { useVoxelGame } from '../../lib/stores/useVoxelGame';
 import { textureManager } from '../../lib/utils/textureManager';
 
 interface BlockProps {
@@ -11,92 +12,136 @@ interface BlockProps {
 }
 
 export default function Block({ position, type, texture }: BlockProps) {
-  // Skip rendering air blocks
-  if (type === 'air') return null;
-  
-  // State to hold the texture
+  const meshRef = useRef<THREE.Mesh>(null);
   const [blockTexture, setBlockTexture] = useState<THREE.Texture | null>(null);
+  const [color, setColor] = useState<string>('#FFFFFF');
+  const selectedBlock = useVoxelGame(state => state.selectedBlock);
+  const [isSelected, setIsSelected] = useState(false);
   
-  // Determine opacity based on block type
-  let opacity = 1;
-  let isEmissive = false;
-  let emissiveColor = '#000000';
-  let emissiveIntensity = 0;
+  // Block dimensions
+  const size = 1;
+
+  // Use effect to load or get texture
+  useEffect(() => {
+    // Use provided texture if available
+    if (texture) {
+      setBlockTexture(texture);
+      return;
+    }
+    
+    // Otherwise get texture from manager
+    const blockTexture = textureManager.getTexture(type);
+    if (blockTexture) {
+      setBlockTexture(blockTexture);
+    }
+    
+    // Set a fallback color for each block type
+    switch (type) {
+      case 'grass': setColor('#4CAF50'); break;
+      case 'dirt': setColor('#795548'); break;
+      case 'stone': setColor('#9E9E9E'); break;
+      case 'sand': setColor('#FDD835'); break;
+      case 'wood': setColor('#8D6E63'); break;
+      case 'leaves': setColor('#81C784'); break;
+      case 'water': setColor('#2196F3'); break;
+      case 'log': setColor('#5D4037'); break;
+      case 'coal': setColor('#263238'); break;
+      case 'torch': setColor('#FFB300'); break;
+      default: setColor('#FFFFFF');
+    }
+  }, [type, texture]);
   
-  if (type === 'water') {
-    opacity = 0.7;
-  } else if (type === 'leaves') {
-    opacity = 0.9;
-  } else if (type === 'torch') {
-    isEmissive = true;
-    emissiveColor = '#ffcc00';
-    emissiveIntensity = 0.5;
+  // Handle selection highlighting
+  useEffect(() => {
+    if (!selectedBlock) {
+      setIsSelected(false);
+      return;
+    }
+    
+    const [sx, sy, sz] = selectedBlock;
+    const [px, py, pz] = position;
+    setIsSelected(sx === px && sy === py && sz === pz);
+  }, [selectedBlock, position]);
+  
+  // Skip rendering for air blocks
+  if (type === 'air') {
+    return null;
   }
   
-  // Determine if block needs to be transparent
-  const isTransparent = opacity < 1;
+  // Special rendering for water
+  if (type === 'water') {
+    return (
+      <mesh position={position} receiveShadow castShadow>
+        <boxGeometry args={[size, size * 0.9, size]} /> {/* Water is slightly shorter */}
+        <meshStandardMaterial 
+          color="#2196F3" 
+          transparent={true}
+          opacity={0.7}
+          roughness={0.1}
+          metalness={0.3}
+          map={blockTexture || undefined}
+        />
+      </mesh>
+    );
+  }
   
-  // Fallback colors (used if texture loading fails)
-  const fallbackColors: Record<BlockType, string> = {
-    'water': '#0088ff',
-    'leaves': '#00ff00',
-    'grass': '#44ff44',
-    'stone': '#aaaaaa',
-    'sand': '#ffff00',
-    'dirt': '#aa5522',
-    'wood': '#cc8844',
-    'log': '#885522',
-    'craftingTable': '#cc9966',
-    'torch': '#ffaa00',
-    'air': '#ffffff',
-    'stick': '#885522',
-    'woodenPickaxe': '#885522',
-    'stonePickaxe': '#777777',
-    'woodenAxe': '#885522',
-    'woodenShovel': '#885522',
-    'coal': '#333333'
-  };
+  // Special rendering for torch
+  if (type === 'torch') {
+    return (
+      <group position={position}>
+        {/* Torch stick */}
+        <mesh position={[0, -0.3, 0]} castShadow>
+          <boxGeometry args={[0.1, 0.7, 0.1]} />
+          <meshStandardMaterial color="#8D6E63" map={blockTexture || undefined} />
+        </mesh>
+        
+        {/* Torch fire */}
+        <mesh position={[0, 0.2, 0]} castShadow>
+          <boxGeometry args={[0.2, 0.2, 0.2]} />
+          <meshStandardMaterial 
+            color="#FFEB3B" 
+            emissive="#FF9800"
+            emissiveIntensity={1}
+          />
+          
+          {/* Point light for torch */}
+          <pointLight
+            position={[0, 0, 0]}
+            distance={7}
+            intensity={1}
+            color="#FF9800"
+          />
+        </mesh>
+      </group>
+    );
+  }
   
-  // Load the texture for this block
-  useEffect(() => {
-    const loadBlockTexture = async () => {
-      // Make sure textures are loaded
-      await textureManager.loadTextures();
-      
-      // Get the texture from the manager
-      const tex = textureManager.getTexture(type);
-      if (tex) {
-        setBlockTexture(tex);
-      }
-    };
-    
-    loadBlockTexture();
-  }, [type]);
+  // Special rendering for leaves (transparent)
+  if (type === 'leaves') {
+    return (
+      <mesh position={position} ref={meshRef} receiveShadow castShadow>
+        <boxGeometry args={[size, size, size]} />
+        <meshStandardMaterial 
+          color={color}
+          transparent={true}
+          opacity={0.9}
+          map={blockTexture || undefined}
+        />
+      </mesh>
+    );
+  }
   
-  // Use texture if available, otherwise use color
-  const material = blockTexture ? (
-    <meshStandardMaterial
-      map={blockTexture}
-      transparent={isTransparent}
-      opacity={opacity}
-      emissive={isEmissive ? emissiveColor : undefined}
-      emissiveIntensity={emissiveIntensity}
-    />
-  ) : (
-    <meshLambertMaterial 
-      color={fallbackColors[type] || '#ff00ff'}
-      transparent={isTransparent}
-      opacity={opacity}
-      emissive={isEmissive ? emissiveColor : undefined}
-      emissiveIntensity={emissiveIntensity}
-    />
-  );
-  
-  // Create the block mesh
+  // Regular block rendering
   return (
-    <mesh position={position} castShadow receiveShadow>
-      <boxGeometry args={[1, 1, 1]} />
-      {material}
+    <mesh position={position} ref={meshRef} receiveShadow castShadow>
+      <boxGeometry args={[size, size, size]} />
+      <meshStandardMaterial 
+        color={isSelected ? '#FFFFFF' : color} 
+        emissive={isSelected ? '#FFEB3B' : undefined}
+        emissiveIntensity={isSelected ? 0.5 : 0}
+        transparent={isBlockTransparent(type)}
+        map={blockTexture || undefined}
+      />
     </mesh>
   );
 }
