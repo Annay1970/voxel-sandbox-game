@@ -244,7 +244,7 @@ export function useErrorTracking(componentName?: string) {
 }
 
 // Trigger UI error display
-function triggerErrorUI(error: Error, recentErrors: ErrorEntry[]): void {
+export function triggerErrorUI(error: Error, recentErrors: ErrorEntry[]): void {
   // Here we'll create an error element and add it to the DOM
   const errorContainer = document.createElement('div');
   errorContainer.id = 'game-error-container';
