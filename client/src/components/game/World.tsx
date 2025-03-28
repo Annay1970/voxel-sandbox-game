@@ -157,7 +157,20 @@ export default function World() {
   
   const isNight = timeOfDay > 0.75 || timeOfDay < 0.25;
   
-  const [debug, setDebug] = useState(true);
+  // Set debug mode to false for normal gameplay
+  const [debug, setDebug] = useState(false);
+
+  // Set up debug mode toggle (press 'F3')
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'F3') {
+        setDebug(prevDebug => !prevDebug);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <group ref={worldRef}>
@@ -165,18 +178,10 @@ export default function World() {
       <Sky {...skyProps} />
       {isNight && <Stars radius={100} depth={50} count={1000} factor={4} />}
       
-      {/* Debug controls */}
+      {/* Debug controls (press F3 to toggle) */}
       {debug && <OrbitControls />}
       
-      {/* Create a large ground plane */}
-      <mesh 
-        rotation={[-Math.PI / 2, 0, 0]} 
-        position={[0, -0.5, 0]}
-        receiveShadow
-      >
-        <planeGeometry args={[1000, 1000]} />
-        <meshStandardMaterial color="#228B22" />
-      </mesh>
+      {/* We don't need the flat ground plane when we have voxel terrain */}
       
       {/* Render chunks */}
       {visibleChunks.map(chunk => (
@@ -195,11 +200,18 @@ export default function World() {
           type={creature.type}
           position={creature.position}
           rotation={creature.rotation}
+          state={creature.state}
+          mood={creature.mood}
+          animationState={creature.animationState}
+          animationSpeed={creature.animationSpeed}
+          animationProgress={creature.animationProgress}
+          flockId={creature.flockId}
+          leader={creature.leader}
         />
       ))}
       
-      {/* Player */}
-      {!debug && <Player />}
+      {/* Player - enable in normal mode */}
+      {<Player />}
     </group>
   );
 }

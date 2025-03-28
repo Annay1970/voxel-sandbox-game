@@ -2,6 +2,7 @@ import { useRef, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useKeyboardControls } from "@react-three/drei";
 import * as THREE from "three";
+import { Group } from "three";
 import { useVoxelGame, Controls } from "../../lib/stores/useVoxelGame";
 import { isBlockSolid } from "../../lib/blocks";
 
@@ -24,24 +25,28 @@ export default function Player() {
   const placeBlock = useVoxelGame(state => state.placeBlock);
   const removeBlock = useVoxelGame(state => state.removeBlock);
   
-  const meshRef = useRef<THREE.Mesh>(null);
+  const meshRef = useRef<THREE.Group>(null);
   const cameraRef = useRef(new THREE.Vector3());
   
   // Get control states without causing re-renders
   const [, getControls] = useKeyboardControls<Controls>();
 
-  // Add debugging to check if controls are working
+  // Add minimal debugging only when needed
   useEffect(() => {
-    const interval = setInterval(() => {
-      const controls = getControls();
-      console.log('Control state:', JSON.stringify(controls));
-      console.log('Player position:', JSON.stringify(position));
-      console.log('Player velocity:', JSON.stringify(velocity));
-      console.log('Is on ground:', isOnGround);
-      console.log('Selected block:', selectedBlock);
-    }, 5000); // Reduced frequency to avoid flooding console
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only log debug info when F3 is pressed
+      if (e.key === 'F3') {
+        const controls = getControls();
+        console.log('Control state:', JSON.stringify(controls));
+        console.log('Player position:', JSON.stringify(position));
+        console.log('Player velocity:', JSON.stringify(velocity));
+        console.log('Is on ground:', isOnGround);
+        console.log('Selected block:', selectedBlock);
+      }
+    };
     
-    return () => clearInterval(interval);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [getControls, position, velocity, isOnGround, selectedBlock]);
 
   // Ray for block interaction
@@ -443,9 +448,44 @@ export default function Player() {
   });
   
   return (
-    <mesh ref={meshRef} position={[position.x, position.y, position.z]}>
-      <boxGeometry args={[PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH]} />
-      <meshStandardMaterial color="#00AAFF" opacity={0.2} transparent />
-    </mesh>
+    <group ref={meshRef} position={[position.x, position.y, position.z]}>
+      {/* Player body (only visible in 3rd person mode) */}
+      <mesh position={[0, PLAYER_HEIGHT / 2, 0]}>
+        <boxGeometry args={[PLAYER_WIDTH, PLAYER_HEIGHT * 0.6, PLAYER_WIDTH]} />
+        <meshStandardMaterial color="#3370d4" />
+      </mesh>
+      
+      {/* Player head */}
+      <mesh position={[0, PLAYER_HEIGHT * 0.8, 0]}>
+        <boxGeometry args={[PLAYER_WIDTH * 0.8, PLAYER_HEIGHT * 0.25, PLAYER_WIDTH * 0.8]} />
+        <meshStandardMaterial color="#ffb385" />
+      </mesh>
+      
+      {/* Player arms */}
+      <mesh position={[PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.5, 0]}>
+        <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.5, PLAYER_WIDTH * 0.3]} />
+        <meshStandardMaterial color="#3370d4" />
+      </mesh>
+      <mesh position={[-PLAYER_WIDTH * 0.7, PLAYER_HEIGHT * 0.5, 0]}>
+        <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.5, PLAYER_WIDTH * 0.3]} />
+        <meshStandardMaterial color="#3370d4" />
+      </mesh>
+      
+      {/* Player legs */}
+      <mesh position={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.15, 0]}>
+        <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.3, PLAYER_WIDTH * 0.3]} />
+        <meshStandardMaterial color="#0e4690" />
+      </mesh>
+      <mesh position={[-PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.15, 0]}>
+        <boxGeometry args={[PLAYER_WIDTH * 0.3, PLAYER_HEIGHT * 0.3, PLAYER_WIDTH * 0.3]} />
+        <meshStandardMaterial color="#0e4690" />
+      </mesh>
+      
+      {/* Player collision box (invisible) */}
+      <mesh position={[0, PLAYER_HEIGHT / 2, 0]} visible={false}>
+        <boxGeometry args={[PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_WIDTH]} />
+        <meshStandardMaterial color="#00AAFF" transparent opacity={0} />
+      </mesh>
+    </group>
   );
 }

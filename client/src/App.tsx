@@ -1,103 +1,29 @@
-import { Canvas, useFrame } from "@react-three/fiber";
-import { Suspense, useState, useRef } from "react";
-import { KeyboardControls, OrbitControls, useKeyboardControls } from "@react-three/drei";
+import { Canvas } from "@react-three/fiber";
+import { Suspense, useEffect } from "react";
+import { KeyboardControls } from "@react-three/drei";
 import "@fontsource/inter";
-import { Controls } from "./lib/stores/useVoxelGame";
-import * as THREE from "three";
+import { Controls, useVoxelGame } from "./lib/stores/useVoxelGame";
+import { useAudio } from "./lib/stores/useAudio";
+import { generateTerrain } from "./lib/terrain";
+import World from "./components/game/World";
+import UI from "./components/game/UI";
 
-// Simple Player component with basic movement
-const Player = () => {
-  const [position, setPosition] = useState({ x: 0, y: 1, z: 0 });
-  const playerRef = useRef<THREE.Mesh>(null);
-  
-  // Access keyboard controls
-  const [subscribeKeys, getKeys] = useKeyboardControls<Controls>();
-  
-  // Update player position in animation frame
-  useFrame((state: any, delta: number) => {
-    if (!playerRef.current) return;
-    
-    // Get current key states
-    const { forward, backward, left, right, jump } = getKeys();
-    
-    // Simple movement logic
-    const moveSpeed = 5 * delta;
-    let newPosition = { ...position };
-    
-    if (forward) newPosition.z -= moveSpeed;
-    if (backward) newPosition.z += moveSpeed;
-    if (left) newPosition.x -= moveSpeed;
-    if (right) newPosition.x += moveSpeed;
-    if (jump) newPosition.y += moveSpeed * 2;
-    
-    // Apply gravity
-    if (newPosition.y > 1) {
-      newPosition.y -= 9.8 * delta;
-    } else {
-      newPosition.y = 1;
-    }
-    
-    // Update position
-    setPosition(newPosition);
-    
-    // Apply to mesh
-    playerRef.current.position.set(newPosition.x, newPosition.y, newPosition.z);
-    
-    // Update camera to follow player
-    state.camera.position.set(
-      newPosition.x, 
-      newPosition.y + 3, 
-      newPosition.z + 5
-    );
-    state.camera.lookAt(newPosition.x, newPosition.y, newPosition.z);
-  });
-  
+// Loading screen while world generates
+const LoadingScreen = () => {
   return (
-    <mesh ref={playerRef} position={[position.x, position.y, position.z]} castShadow>
-      <boxGeometry args={[1, 2, 1]} />
-      <meshStandardMaterial color="red" />
-    </mesh>
+    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50 text-white">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold mb-4">Generating World...</h1>
+        <div className="w-64 h-2 bg-gray-700 rounded-full overflow-hidden">
+          <div className="h-full bg-green-500 animate-pulse" style={{ width: '90%' }}></div>
+        </div>
+      </div>
+    </div>
   );
 };
 
-// Simplified World component for debugging
-const SimplifiedWorld = () => {
-  return (
-    <>
-      {/* Simple ground plane */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]} receiveShadow>
-        <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#228B22" />
-      </mesh>
-      
-      {/* Simple lighting */}
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[10, 10, 5]} intensity={0.8} castShadow />
-      
-      {/* Basic environment objects */}
-      <mesh position={[5, 1, -5]} castShadow>
-        <boxGeometry args={[2, 2, 2]} />
-        <meshStandardMaterial color="blue" />
-      </mesh>
-      
-      <mesh position={[-5, 1, 5]} castShadow>
-        <boxGeometry args={[2, 2, 2]} />
-        <meshStandardMaterial color="green" />
-      </mesh>
-      
-      <mesh position={[-5, 1, -5]} castShadow>
-        <boxGeometry args={[2, 2, 2]} />
-        <meshStandardMaterial color="yellow" />
-      </mesh>
-      
-      {/* Player character */}
-      <Player />
-    </>
-  );
-};
-
-// Simple loading fallback
-const SimplifiedLoadingFallback = () => {
+// Simple loading fallback for 3D components
+const LoadingFallback = () => {
   return (
     <mesh position={[0, 0, 0]}>
       <boxGeometry args={[1, 1, 1]} />
@@ -106,39 +32,71 @@ const SimplifiedLoadingFallback = () => {
   );
 };
 
-// Simplified UI
-const SimplifiedUI = () => {
-  return (
-    <div className="fixed top-4 left-4 text-white bg-black bg-opacity-50 p-2 rounded">
-      <h2>Voxel Game (Debug Mode)</h2>
-      <p>WASD - Move | Space - Jump</p>
-      <p>Camera automatically follows player</p>
-    </div>
-  );
-};
-
-// Clean & simplified App component
 function App() {
-  // Simplified keyboard controls
+  // Game state from store
+  const setChunks = useVoxelGame(state => state.setChunks);
+  const setBlocks = useVoxelGame(state => state.setBlocks);
+  const chunks = useVoxelGame(state => state.chunks);
+  
+  // Set up audio
+  const setBackgroundMusic = useAudio(state => state.setBackgroundMusic);
+  const setHitSound = useAudio(state => state.setHitSound);
+  const setSuccessSound = useAudio(state => state.setSuccessSound);
+
+  // Initial world generation
+  useEffect(() => {
+    // Only generate if we don't already have chunks
+    if (Object.keys(chunks).length === 0) {
+      console.log("Initializing world generation...");
+      
+      // Generate initial terrain
+      const { generatedChunks, generatedBlocks } = generateTerrain();
+      
+      // Set chunks and blocks in the game store
+      setChunks(generatedChunks);
+      setBlocks(generatedBlocks);
+      
+      // Load game sounds
+      const bgMusic = new Audio('/sounds/background.mp3');
+      bgMusic.loop = true;
+      bgMusic.volume = 0.4;
+      setBackgroundMusic(bgMusic);
+      
+      const hitSfx = new Audio('/sounds/hit.mp3');
+      hitSfx.volume = 0.6;
+      setHitSound(hitSfx);
+      
+      const successSfx = new Audio('/sounds/success.mp3');
+      successSfx.volume = 0.7;
+      setSuccessSound(successSfx);
+    }
+  }, [setChunks, setBlocks, chunks, setBackgroundMusic, setHitSound, setSuccessSound]);
+
+  // Define keyboard controls
   const keyMap = [
     { name: Controls.forward, keys: ["KeyW", "ArrowUp"] },
     { name: Controls.backward, keys: ["KeyS", "ArrowDown"] },
     { name: Controls.left, keys: ["KeyA", "ArrowLeft"] },
     { name: Controls.right, keys: ["KeyD", "ArrowRight"] },
     { name: Controls.jump, keys: ["Space"] },
-    { name: Controls.mine, keys: ["KeyE"] },
-    { name: Controls.place, keys: ["KeyQ"] },
-    { name: Controls.inventory, keys: ["KeyI"] },
+    { name: Controls.mine, keys: ["KeyE", "Mouse0"] }, // Left mouse click
+    { name: Controls.place, keys: ["KeyQ", "Mouse2"] }, // Right mouse click
+    { name: Controls.inventory, keys: ["KeyI", "KeyE"] },
     { name: Controls.sprint, keys: ["ShiftLeft"] },
   ];
 
+  // Check if world is still loading
+  const isLoading = Object.keys(chunks).length === 0;
+
   return (
     <div className="w-full h-full">
+      {isLoading && <LoadingScreen />}
+      
       <KeyboardControls map={keyMap}>
         <Canvas
           shadows
           camera={{
-            position: [5, 5, 5], 
+            position: [0, 15, 15], // Starting camera position
             fov: 70,
             near: 0.1,
             far: 1000
@@ -148,16 +106,20 @@ function App() {
             powerPreference: "high-performance",
             alpha: false
           }}
-          dpr={1} // Fixed DPR for reliability
+          dpr={[1, 1.5]} // Responsive DPR for better performance
         >
+          {/* Sky-colored background */}
           <color attach="background" args={["#87CEEB"]} />
           <fog attach="fog" args={["#87CEEB", 30, 100]} />
           
-          <Suspense fallback={<SimplifiedLoadingFallback />}>
-            <SimplifiedWorld />
+          {/* Render the voxel world */}
+          <Suspense fallback={<LoadingFallback />}>
+            <World />
           </Suspense>
         </Canvas>
-        <SimplifiedUI />
+        
+        {/* Game UI overlay */}
+        <UI />
       </KeyboardControls>
     </div>
   );
