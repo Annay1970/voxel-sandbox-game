@@ -25,17 +25,38 @@ export interface InventoryItem {
   count: number;
 }
 
-// Creature
+// Enhanced Creature
 export interface Creature {
   id: string;
   type: CreatureType;
   position: { x: number; y: number; z: number };
   rotation: { y: number };
   health: number;
+  maxHealth: number;
   targetPosition?: { x: number; y: number; z: number };
-  state: 'idle' | 'wandering' | 'attacking' | 'fleeing';
+  
+  // Enhanced states and behaviors
+  state: 'idle' | 'wandering' | 'attacking' | 'fleeing' | 'grazing' | 'sleeping' | 'hunting' | 'following' | 'defending';
   lastStateChange: number;
   hostility: 'passive' | 'neutral' | 'hostile';
+  
+  // AI properties
+  mood: 'calm' | 'alert' | 'aggressive' | 'afraid' | 'playful';
+  hunger: number; // 0-100
+  tiredness: number; // 0-100
+  flockId?: string; // For group behaviors
+  leader?: boolean; // Is this creature a leader of its group
+  memories: {
+    lastPlayerContact?: number;
+    lastAttackedBy?: string;
+    favoriteLocations?: { x: number; y: number; z: number }[];
+    knownThreats?: string[];
+  };
+  
+  // Animation properties
+  animationState: 'idle' | 'walk' | 'run' | 'attack' | 'hurt' | 'eat' | 'sleep';
+  animationProgress: number;
+  animationSpeed: number;
 }
 
 // Game state interface
