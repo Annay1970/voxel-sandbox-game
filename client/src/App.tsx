@@ -98,8 +98,8 @@ function App() {
         <Canvas
           shadows
           camera={{
-            position: [0, 85, 0], // Position directly above player to look down
-            fov: 75,
+            position: [0, 2, 0], // Initial camera at ground level (will be controlled by Player component)
+            fov: 75, // Minecraft-like FOV
             near: 0.1,
             far: 2000
           }}
@@ -111,15 +111,31 @@ function App() {
             depth: true,
             logarithmicDepthBuffer: true
           }}
-          dpr={1} // Fixed DPR for more stable performance
+          dpr={window.devicePixelRatio > 1 ? 1.5 : 1} // Balance between quality and performance
           style={{ background: "#87CEEB" }} // Set background via CSS too
-          onCreated={({ gl, scene }) => {
+          onCreated={({ gl, scene, camera }) => {
             gl.setClearColor(new THREE.Color('#87CEEB')); // Set WebGL clear color
             console.log("WebGL renderer created successfully");
             
-            // DEBUG: Force a white background to confirm Canvas is working
-            scene.background = new THREE.Color('#FFFFFF');
-            console.log("Scene background set to white for debugging");
+            // Set the sky color for the scene background
+            scene.background = new THREE.Color('#87CEEB');
+            
+            // Enable shadow mapping with better quality settings
+            gl.shadowMap.enabled = true;
+            gl.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            // Set up camera for first-person view
+            camera.lookAt(0, 2, -1); // Look slightly forward
+            
+            // Add event listener to handle WebGL context loss and recovery
+            gl.domElement.addEventListener('webglcontextlost', (event) => {
+              event.preventDefault();
+              console.warn('WebGL context lost. Trying to restore...');
+            });
+            
+            gl.domElement.addEventListener('webglcontextrestored', () => {
+              console.log('WebGL context restored successfully');
+            });
             
             // Log WebGL capabilities to help debug
             console.log("WebGL capabilities:", {
@@ -137,16 +153,38 @@ function App() {
             {/* The World component contains everything */}
             <World />
             
-            {/* Make sure we can see something: Just a box */}
-            <mesh position={[0, 60, 0]}>
-              <boxGeometry args={[10, 10, 10]} />
-              <meshBasicMaterial color="red" /> 
+            {/* Starting point marker (debug) */}
+            <mesh position={[5, 1, 5]} scale={0.5}>
+              <boxGeometry args={[1, 1, 1]} />
+              <meshStandardMaterial color="red" emissive="red" emissiveIntensity={0.5} /> 
+            </mesh>
+
+            {/* Initial player starting point (debug) */}
+            <mesh position={[0, 0.5, 0]} scale={0.5}>
+              <sphereGeometry args={[1, 16, 16]} />
+              <meshStandardMaterial color="blue" emissive="blue" emissiveIntensity={0.5} /> 
             </mesh>
             
-            {/* Add very bright light sources */}
-            <ambientLight intensity={2.0} />
-            <directionalLight position={[10, 100, 10]} intensity={2.0} />
-            <pointLight position={[0, 60, 0]} intensity={5.0} color="#ffffff" />
+            {/* More realistic lighting for outdoor scene */}
+            <ambientLight intensity={0.5} /> {/* Soft ambient light */}
+            <directionalLight
+              position={[100, 100, 0]}
+              intensity={1.0}
+              castShadow
+              shadow-mapSize-width={2048}
+              shadow-mapSize-height={2048}
+              shadow-camera-far={500}
+              shadow-camera-left={-100}
+              shadow-camera-right={100}
+              shadow-camera-top={100}
+              shadow-camera-bottom={-100}
+            />
+            {/* Day cycle directional light acting as the sun */}
+            <directionalLight
+              position={[-50, 100, -50]}
+              intensity={0.7}
+              color="#ffedd5"
+            />
           </Suspense>
         </Canvas>
         

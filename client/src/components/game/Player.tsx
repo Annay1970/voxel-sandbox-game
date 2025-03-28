@@ -340,41 +340,31 @@ export default function Player() {
     // Update mesh position
     meshRef.current.position.set(newPosition.x, newPosition.y, newPosition.z);
     
-    // Position camera behind player
+    // Set true first-person position (Minecraft-style)
     cameraRef.current.set(
       newPosition.x,
-      newPosition.y + PLAYER_HEIGHT - 0.2,
+      newPosition.y + PLAYER_HEIGHT - 0.2, // Eye level (slightly below player height)
       newPosition.z
     );
+
+    // Set camera to exactly match player's head position (first-person view)
+    camera.position.copy(cameraRef.current);
     
-    // Set camera to first-person view (Minecraft-like)
-    camera.position.lerp(
-      new THREE.Vector3(
-        newPosition.x,
-        newPosition.y + PLAYER_HEIGHT - 0.2, // Eye level
-        newPosition.z
-      ),
-      0.1
-    );
-    
-    // Look in direction player is facing
-    const lookTarget = new THREE.Vector3(
-      newPosition.x - Math.sin(yRotation),
-      newPosition.y + PLAYER_HEIGHT - 0.2 + Math.sin(cameraXRotation.current),
-      newPosition.z - Math.cos(yRotation)
-    );
-    camera.lookAt(lookTarget);
+    // Apply rotations (pitch and yaw) to camera directly
+    camera.rotation.order = 'YXZ'; // This order matches Minecraft's camera rotation
+    camera.rotation.y = -cameraYRotation.current; // Yaw (horizontal)
+    camera.rotation.x = cameraXRotation.current; // Pitch (vertical)
     
     // Block interaction (mine/place)
     if (controls.mine || controls.place) {
       // Set ray origin to player camera position
+      // Get ray direction from camera direction
+      const direction = new THREE.Vector3(0, 0, -1);  // Forward vector
+      direction.applyQuaternion(camera.quaternion);   // Apply camera rotation
+      
       ray.current.set(
         cameraRef.current,
-        new THREE.Vector3(
-          -Math.sin(yRotation),
-          Math.sin(cameraXRotation.current) * 0.5,
-          -Math.cos(yRotation)
-        ).normalize()
+        direction
       );
       
       // Iterate through nearby blocks to check for ray intersection
@@ -484,13 +474,13 @@ export default function Player() {
     // Combat functionality
     if (controls.attack) {
       // Set ray origin to player camera position for attacking
+      // Get ray direction from camera direction
+      const direction = new THREE.Vector3(0, 0, -1);  // Forward vector
+      direction.applyQuaternion(camera.quaternion);   // Apply camera rotation
+      
       ray.current.set(
         cameraRef.current,
-        new THREE.Vector3(
-          -Math.sin(yRotation),
-          Math.sin(cameraXRotation.current) * 0.5,
-          -Math.cos(yRotation)
-        ).normalize()
+        direction
       );
       
       // Detect creatures in attack range

@@ -6,6 +6,7 @@ import { useSkills } from '../../lib/stores/useSkills';
 import Inventory from './Inventory';
 import Crafting from './Crafting';
 import SkillsUI from './SkillsUI';
+import Crosshair from './Crosshair';
 import { cn } from '../../lib/utils';
 
 export default function UI() {
@@ -63,9 +64,9 @@ export default function UI() {
           </div>
         </div>
         
-        {/* Center crosshair */}
-        <div className="flex-grow flex items-center justify-center">
-          <div className="text-white text-2xl opacity-70">+</div>
+        {/* Center crosshair - Minecraft style */}
+        <div className="flex-grow">
+          <Crosshair size={16} color="white" thickness={2} gap={4} />
         </div>
         
         {/* Bottom HUD with hotbar, health */}

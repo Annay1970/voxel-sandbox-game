@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { useTexture } from '@react-three/drei';
 import { BlockType, isBlockSolid } from '../../lib/blocks';
+import { useEffect, useState } from 'react';
+import { textureManager } from '../../lib/utils/textureManager';
 
 interface BlockProps {
   position: [number, number, number];
@@ -12,59 +14,89 @@ export default function Block({ position, type, texture }: BlockProps) {
   // Skip rendering air blocks
   if (type === 'air') return null;
   
-  // Determine opacity and color based on block type - using bright, distinct colors
-  let opacity = 1;
-  let color = '#ff00ff'; // Default bright magenta to easily spot problems
+  // State to hold the texture
+  const [blockTexture, setBlockTexture] = useState<THREE.Texture | null>(null);
   
-  switch (type) {
-    case 'water':
-      opacity = 0.7;
-      color = '#0088ff'; // Brighter blue for water
-      break;
-    case 'leaves':
-      opacity = 0.9;
-      color = '#00ff00'; // Bright green for leaves
-      break;
-    case 'grass':
-      color = '#44ff44'; // Bright green for grass
-      break;
-    case 'stone':
-      color = '#aaaaaa'; // Lighter gray for stone
-      break;
-    case 'sand':
-      color = '#ffff00'; // Yellow for sand
-      break;
-    case 'dirt':
-      color = '#aa5522'; // Brown for dirt
-      break;
-    case 'wood':
-      color = '#cc8844'; // Light brown for planks
-      break;
-    case 'log':
-      color = '#885522'; // Dark brown for log
-      break;
-    case 'craftingTable':
-      color = '#cc9966'; // Light brown for crafting table
-      break;
-    case 'torch':
-      color = '#ffaa00'; // Orange for torch
-      break;
+  // Determine opacity based on block type
+  let opacity = 1;
+  let isEmissive = false;
+  let emissiveColor = '#000000';
+  let emissiveIntensity = 0;
+  
+  if (type === 'water') {
+    opacity = 0.7;
+  } else if (type === 'leaves') {
+    opacity = 0.9;
+  } else if (type === 'torch') {
+    isEmissive = true;
+    emissiveColor = '#ffcc00';
+    emissiveIntensity = 0.5;
   }
   
   // Determine if block needs to be transparent
   const isTransparent = opacity < 1;
   
-  // Create a simpler material for better performance and compatibility
+  // Fallback colors (used if texture loading fails)
+  const fallbackColors: Record<BlockType, string> = {
+    'water': '#0088ff',
+    'leaves': '#00ff00',
+    'grass': '#44ff44',
+    'stone': '#aaaaaa',
+    'sand': '#ffff00',
+    'dirt': '#aa5522',
+    'wood': '#cc8844',
+    'log': '#885522',
+    'craftingTable': '#cc9966',
+    'torch': '#ffaa00',
+    'air': '#ffffff',
+    'stick': '#885522',
+    'woodenPickaxe': '#885522',
+    'stonePickaxe': '#777777',
+    'woodenAxe': '#885522',
+    'woodenShovel': '#885522',
+    'coal': '#333333'
+  };
+  
+  // Load the texture for this block
+  useEffect(() => {
+    const loadBlockTexture = async () => {
+      // Make sure textures are loaded
+      await textureManager.loadTextures();
+      
+      // Get the texture from the manager
+      const tex = textureManager.getTexture(type);
+      if (tex) {
+        setBlockTexture(tex);
+      }
+    };
+    
+    loadBlockTexture();
+  }, [type]);
+  
+  // Use texture if available, otherwise use color
+  const material = blockTexture ? (
+    <meshStandardMaterial
+      map={blockTexture}
+      transparent={isTransparent}
+      opacity={opacity}
+      emissive={isEmissive ? emissiveColor : undefined}
+      emissiveIntensity={emissiveIntensity}
+    />
+  ) : (
+    <meshLambertMaterial 
+      color={fallbackColors[type] || '#ff00ff'}
+      transparent={isTransparent}
+      opacity={opacity}
+      emissive={isEmissive ? emissiveColor : undefined}
+      emissiveIntensity={emissiveIntensity}
+    />
+  );
+  
+  // Create the block mesh
   return (
     <mesh position={position} castShadow receiveShadow>
       <boxGeometry args={[1, 1, 1]} />
-      <meshLambertMaterial 
-        color={color}
-        transparent={isTransparent}
-        opacity={opacity}
-        emissive={type === 'torch' ? '#ffcc00' : '#000000'}
-        emissiveIntensity={type === 'torch' ? 0.5 : 0}
-      />
+      {material}
     </mesh>
   );
 }

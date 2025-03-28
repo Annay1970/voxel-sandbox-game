@@ -8,6 +8,7 @@ import Chunk from "./Chunk";
 import Creature from "./Creature";
 import { generateTerrain } from "../../lib/terrain";
 import { useErrorTracking, updatePerformanceMetrics } from "../../lib/utils/errorTracker";
+import { textureManager } from "../../lib/utils/textureManager";
 
 export default function World() {
   const { scene, gl } = useThree();
@@ -79,19 +80,33 @@ export default function World() {
     }
   });
 
-  // Generate initial world
+  // Generate initial world and load textures
   useEffect(() => {
     if (generatedRef.current) return;
     
     console.log("Generating world...");
-    const { generatedChunks, generatedBlocks } = generateTerrain();
     
-    setChunks(generatedChunks);
-    setBlocks(generatedBlocks);
-    
-    generatedRef.current = true;
-    console.log("World generation complete");
-  }, [setChunks, setBlocks]);
+    // Load textures first
+    (async () => {
+      console.log("Loading block textures...");
+      try {
+        await textureManager.loadTextures();
+        console.log("Texture loading complete");
+      } catch (error) {
+        console.error("Error loading textures:", error);
+        trackError(new Error('Texture loading failed'), { cause: error });
+      }
+      
+      // Then generate world after textures are ready
+      const { generatedChunks, generatedBlocks } = generateTerrain();
+      
+      setChunks(generatedChunks);
+      setBlocks(generatedBlocks);
+      
+      generatedRef.current = true;
+      console.log(`World generation complete: ${Object.keys(generatedBlocks).length} blocks created`);
+    })();
+  }, [setChunks, setBlocks, trackError]);
   
   // Set up ambient and directional light
   useEffect(() => {

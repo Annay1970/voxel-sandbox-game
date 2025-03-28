@@ -1,0 +1,4 @@
+Since we can't generate actual texture images directly with code, 
+we need to create placeholder textures. Instead, we'll use the canvas-generated 
+textures from our TextureManager class which will create grid-style textures 
+when the actual texture files aren't found.
