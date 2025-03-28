@@ -1,6 +1,7 @@
 import { Canvas } from "@react-three/fiber";
 import { Suspense, useEffect } from "react";
 import { KeyboardControls } from "@react-three/drei";
+import * as THREE from "three";
 import "@fontsource/inter";
 import { Controls, useVoxelGame } from "./lib/stores/useVoxelGame";
 import { useAudio } from "./lib/stores/useAudio";
@@ -96,21 +97,31 @@ function App() {
         <Canvas
           shadows
           camera={{
-            position: [0, 15, 15], // Starting camera position
-            fov: 70,
+            position: [0, 30, 30], // Higher starting camera position to see terrain
+            fov: 75,
             near: 0.1,
-            far: 1000
+            far: 2000
           }}
           gl={{
             antialias: true,
             powerPreference: "high-performance",
-            alpha: false
+            alpha: false,
+            stencil: false, // Disable stencil for better performance
+            depth: true,     // Enable depth for proper 3D
+            logarithmicDepthBuffer: true // Better for voxel worlds
           }}
           dpr={[1, 1.5]} // Responsive DPR for better performance
+          onCreated={({ gl }) => {
+            gl.setClearColor(new THREE.Color('#87CEEB')); // Set clear color to blue sky
+            console.log("WebGL renderer created successfully");
+          }}
         >
           {/* Sky-colored background */}
           <color attach="background" args={["#87CEEB"]} />
-          <fog attach="fog" args={["#87CEEB", 30, 100]} />
+          <fog attach="fog" args={["#87CEEB", 60, 200]} /> {/* Increased fog distances */}
+          
+          <ambientLight intensity={0.8} /> {/* Global light so everything is visible */}
+          <directionalLight position={[10, 20, 10]} intensity={1.0} castShadow /> {/* Sun-like light */}
           
           {/* Render the voxel world */}
           <Suspense fallback={<LoadingFallback />}>

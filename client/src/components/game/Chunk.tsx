@@ -36,34 +36,16 @@ export default function Chunk({ chunkX, chunkZ, blocks }: ChunkProps) {
     return result;
   }, [blocks, minX, minZ, maxX, maxZ]);
   
-  // Load textures
-  const grassTexture = useTexture('/textures/grass.png');
-  const sandTexture = useTexture('/textures/sand.jpg');
-  const woodTexture = useTexture('/textures/wood.jpg');
+  // Use a simpler approach with basic colors rather than textures for now
+  // This is more reliable and will help diagnose the white screen issue
   
-  // Create a texture map for block types
+  // Create a basic color and texture map for block types
   const textureMap = useMemo(() => {
-    const baseMap: Partial<Record<BlockType, THREE.Texture>> = {
-      'grass': grassTexture,
-      'dirt': grassTexture,
-      'stone': grassTexture,
-      'sand': sandTexture,
-      'wood': woodTexture,
-      'leaves': grassTexture,
-      'water': grassTexture,
-      'log': woodTexture,
-      'stick': woodTexture,
-      'craftingTable': woodTexture,
-      'woodenPickaxe': woodTexture, 
-      'stonePickaxe': grassTexture,
-      'woodenAxe': woodTexture,
-      'woodenShovel': woodTexture,
-      'coal': grassTexture,
-      'torch': woodTexture,
-      'air': grassTexture, // Fallback but not actually used
-    };
+    // Empty texture map - we'll rely on the Block component's 
+    // fallback color handling instead of loading textures
+    const baseMap: Partial<Record<BlockType, THREE.Texture>> = {};
     return baseMap as Record<BlockType, THREE.Texture>;
-  }, [grassTexture, sandTexture, woodTexture]);
+  }, []);
   
   // Use instanced mesh for better performance with many blocks
   const instances = useMemo(() => {

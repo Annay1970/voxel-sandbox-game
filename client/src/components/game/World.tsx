@@ -144,15 +144,18 @@ export default function World() {
   
   // Calculate sky and lighting based on time of day
   const skyProps = {
+    distance: 450000, // Increase sky distance for better visibility
     sunPosition: new THREE.Vector3(
       Math.cos(timeOfDay * Math.PI * 2) * 100,
       Math.sin(timeOfDay * Math.PI * 2) * 100,
       0
     ),
     mieCoefficient: timeOfDay > 0.75 || timeOfDay < 0.25 ? 0.005 : 0.03,
-    mieDirectionalG: 0.7,
+    mieDirectionalG: 0.8,
     rayleigh: 0.5,
-    turbidity: weather === 'rain' ? 10 : weather === 'cloudy' ? 5 : 2
+    turbidity: weather === 'rain' ? 10 : weather === 'cloudy' ? 5 : 2,
+    inclination: 0.5,
+    azimuth: 0.25
   };
   
   const isNight = timeOfDay > 0.75 || timeOfDay < 0.25;
