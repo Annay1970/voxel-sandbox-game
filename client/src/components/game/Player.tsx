@@ -643,8 +643,26 @@ export default function Player() {
     <>
       {/* Controls based on camera mode */}
       {cameraMode === 'first' ? (
-        // First-person controls
-        <PointerLockControls ref={controlsRef} />
+        // First-person controls - auto-lock on click
+        <PointerLockControls 
+          ref={controlsRef} 
+          onUpdate={() => {
+            // Force enable pointer lock when component mounts
+            if (controlsRef.current && !controlsRef.current.isLocked) {
+              console.log("Attempting to lock controls on mount");
+              // Add a click event to the canvas to help mobile browsers
+              const canvas = document.querySelector('canvas');
+              if (canvas) {
+                canvas.addEventListener('click', () => {
+                  if (controlsRef.current && !controlsRef.current.isLocked) {
+                    console.log("Canvas clicked, locking pointer");
+                    controlsRef.current.lock();
+                  }
+                }, { once: true });
+              }
+            }
+          }}
+        />
       ) : (
         // Third-person orbit controls
         <OrbitControls 

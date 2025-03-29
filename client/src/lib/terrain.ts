@@ -25,7 +25,7 @@ export function generateTerrain() {
   const CAVE_FREQUENCY = 0.03; // Controls how often caves appear
   
   // Data structures to store generated world
-  const chunks: Record<string, boolean> = {};
+  const chunks: Record<string, { x: number, z: number }> = {};
   const blocks: Record<string, BlockType> = {};
   
   // Generate chunks around origin
@@ -35,7 +35,7 @@ export function generateTerrain() {
     for (let cz = -chunkRadius; cz <= chunkRadius; cz++) {
       // Register chunk
       const chunkKey = `${cx},${cz}`;
-      chunks[chunkKey] = true;
+      chunks[chunkKey] = { x: cx, z: cz };
       
       // Generate all blocks in this chunk
       for (let x = 0; x < CHUNK_SIZE; x++) {
@@ -190,7 +190,9 @@ export function generateTerrain() {
     console.error("Failed to generate terrain:", error);
     
     // Create a minimal fallback terrain (flat platform) to prevent game from crashing
-    const fallbackChunks: Record<string, boolean> = { '0,0': true };
+    const fallbackChunks: Record<string, { x: number, z: number }> = { 
+      '0,0': { x: 0, z: 0 } 
+    };
     const fallbackBlocks: Record<string, BlockType> = {};
     
     // Create a small 16x16 flat platform at y=20

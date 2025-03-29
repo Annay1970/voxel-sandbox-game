@@ -52,7 +52,8 @@ function App() {
       const { generatedChunks, generatedBlocks } = generateTerrain();
       
       // Set chunks and blocks in the game store
-      setChunks(generatedChunks);
+      // Cast to ensure type compatibility
+      setChunks(generatedChunks as Record<string, { x: number, z: number }>);
       setBlocks(generatedBlocks);
       
       // Load game sounds
