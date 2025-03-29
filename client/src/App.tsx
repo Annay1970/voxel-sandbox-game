@@ -76,13 +76,11 @@ function App() {
   // Define keyboard controls
   const keyMap = [
     { name: Controls.forward, keys: ["KeyW", "ArrowUp"] },
-    { name: Controls.backward, keys: ["KeyS", "ArrowDown"] },
+    { name: Controls.back, keys: ["KeyS", "ArrowDown"] },
     { name: Controls.left, keys: ["KeyA", "ArrowLeft"] },
     { name: Controls.right, keys: ["KeyD", "ArrowRight"] },
     { name: Controls.jump, keys: ["Space"] },
-    { name: Controls.mine, keys: ["KeyE", "Mouse0"] }, // Left mouse click
     { name: Controls.place, keys: ["KeyQ", "Mouse2"] }, // Right mouse click
-    { name: Controls.inventory, keys: ["KeyI", "KeyE"] },
     { name: Controls.sprint, keys: ["ShiftLeft"] },
     { name: Controls.attack, keys: ["KeyF", "Mouse0"] }, // Attack with F or left mouse click
   ];

@@ -1,475 +1,520 @@
-import { create } from "zustand";
-import { generateTerrain } from "../terrain";
-import { spawnCreatures, CreatureType } from "../creatures";
-import { BlockType, isBlockSolid } from "../blocks";
+import { create } from 'zustand';
+import { BlockType } from '../blocks';
 
-// Controls enum
+// Define controls for keyboard/gamepad input
 export enum Controls {
   forward = 'forward',
-  backward = 'backward',
+  back = 'back',
   left = 'left',
   right = 'right',
   jump = 'jump',
-  mine = 'mine',
-  place = 'place',
-  inventory = 'inventory',
   sprint = 'sprint',
-  attack = 'attack'
+  attack = 'attack',
+  place = 'place'
 }
 
-// Weather types
-export type WeatherType = 'clear' | 'cloudy' | 'rain' | 'snow';
-
-// Inventory item
 export interface InventoryItem {
   type: BlockType;
   count: number;
 }
 
-// Enhanced Creature
+// Define weather types
+export type WeatherType = 'clear' | 'cloudy' | 'rain' | 'storm';
+
+// Define creature interface based on World.tsx
 export interface Creature {
   id: string;
-  type: CreatureType;
-  position: { x: number; y: number; z: number };
+  type: string;
+  position: { x: number, y: number, z: number };
   rotation: { y: number };
-  health: number;
-  maxHealth: number;
-  targetPosition?: { x: number; y: number; z: number };
-  
-  // Enhanced states and behaviors
-  state: 'idle' | 'wandering' | 'attacking' | 'fleeing' | 'grazing' | 'sleeping' | 'hunting' | 'following' | 'defending';
-  lastStateChange: number;
-  hostility: 'passive' | 'neutral' | 'hostile';
-  
-  // AI properties
-  mood: 'calm' | 'alert' | 'aggressive' | 'afraid' | 'playful';
-  hunger: number; // 0-100
-  tiredness: number; // 0-100
-  flockId?: string; // For group behaviors
-  leader?: boolean; // Is this creature a leader of its group
-  memories: {
-    lastPlayerContact?: number;
-    lastAttackedBy?: string;
-    favoriteLocations?: { x: number; y: number; z: number }[];
-    knownThreats?: string[];
-  };
-  
-  // Animation properties
-  animationState: 'idle' | 'walk' | 'run' | 'attack' | 'hurt' | 'eat' | 'sleep';
-  animationProgress: number;
+  state: string;
+  mood: string;
+  animationState: string;
   animationSpeed: number;
+  animationProgress: number;
+  flockId?: string;
+  leader: boolean;
+  targetPosition?: { x: number, y: number, z: number } | null;
 }
 
-// Game state interface
-interface VoxelGameState {
-  // World
-  chunks: Record<string, boolean>; // "x,z" -> exists
-  blocks: Record<string, BlockType>; // "x,y,z" -> block type
+export interface VoxelGameState {
+  // Block data
+  blocks: Record<string, BlockType>; // Format: "x,y,z" -> BlockType
   
-  // Player
-  playerPosition: { x: number; y: number; z: number };
-  playerVelocity: { x: number; y: number; z: number };
-  playerIsOnGround: boolean;
-  playerHealth: number;
-  playerHunger: number;
-  
-  // Inventory
-  inventory: InventoryItem[];
-  selectedBlock: [number, number, number] | null; // Currently selected/highlighted block [x,y,z]
-  selectedInventorySlot: number; // Currently selected inventory slot (0-8)
-  
-  // Environment
-  timeOfDay: number; // 0-1, where 0 is midnight, 0.5 is noon
-  weather: WeatherType;
+  // Chunk data
+  chunks: Record<string, { x: number, z: number }>;
   
   // Creatures
   creatures: Record<string, Creature>;
   
-  // Actions
-  setPlayerPosition: (position: { x: number; y: number; z: number }) => void;
-  setPlayerVelocity: (velocity: { x: number; y: number; z: number }) => void;
-  setPlayerIsOnGround: (isOnGround: boolean) => void;
-  setChunks: (chunks: Record<string, boolean>) => void;
-  setBlocks: (blocks: Record<string, BlockType>) => void;
-  addBlock: (x: number, y: number, z: number, type: BlockType) => void;
-  removeBlock: (x: number, y: number, z: number) => void;
-  placeBlock: (x: number, y: number, z: number, type: BlockType) => void;
-  setSelectedBlock: (position: [number, number, number] | null) => void;
-  setSelectedInventorySlot: (slot: number) => void;
-  incrementTime: () => void;
-  setWeather: (weather: WeatherType) => void;
-  addToInventory: (type: BlockType, count: number) => void;
-  removeFromInventory: (type: BlockType, count: number) => boolean;
-  craftItem: (outputType: BlockType, outputCount: number, ingredients: { type: BlockType, count: number }[]) => void;
-  updateCreatures: () => void;
+  // Player interaction
+  selectedBlock: [number, number, number] | null; // Currently targeted block
   
-  // Combat functions
-  damageCreature: (creatureId: string, damage: number) => boolean;
-  attackCreature: (creatureId: string) => boolean;
+  // Inventory
+  inventory: InventoryItem[];
+  selectedInventorySlot: number;
+  
+  // World state
+  timeOfDay: number; // 0.0 to 1.0, where 0.0 is midnight, 0.5 is noon
+  weather: WeatherType;
+  
+  // Actions
+  placeBlock: (x: number, y: number, z: number, type: BlockType) => void;
+  removeBlock: (x: number, y: number, z: number) => void;
+  setSelectedBlock: (coords: [number, number, number] | null) => void;
+  setSelectedInventorySlot: (slot: number) => void;
+  addToInventory: (type: BlockType, count: number) => void;
+  removeFromInventory: (type: BlockType, count: number) => void;
+  addBlock: (x: number, y: number, z: number, type: BlockType) => void;
+  
+  // Time and weather
+  incrementTime: () => void;
+  
+  // World generation and management
+  generateChunk: (chunkX: number, chunkZ: number) => void;
+  setChunks: (chunks: Record<string, { x: number, z: number }>) => void;
+  setBlocks: (blocks: Record<string, BlockType>) => void;
+  
+  // Creature management
+  updateCreatures: () => void;
 }
 
 export const useVoxelGame = create<VoxelGameState>((set, get) => ({
-  // Initial world state
-  chunks: {},
+  // Block data
   blocks: {},
   
-  // Initial player state
-  playerPosition: { x: 0, y: 80, z: 0 }, // Start very high to guarantee visibility above terrain
-  playerVelocity: { x: 0, y: 0, z: 0 },
-  playerIsOnGround: false,
-  playerHealth: 100,
-  playerHunger: 100,
+  // Chunk data
+  chunks: {},
   
-  // Initial inventory
-  inventory: [
-    { type: 'dirt', count: 64 },
-    { type: 'stone', count: 32 },
-    { type: 'wood', count: 16 },
-    { type: 'log', count: 8 },
-    { type: 'sand', count: 16 }
-  ],
-  selectedBlock: null, // No block selected initially
-  selectedInventorySlot: 0, // First slot selected by default
-  
-  // Initial environment
-  timeOfDay: 0.3, // Start in morning
-  weather: 'clear',
-  
-  // Initial creatures
-  creatures: {},
-  
-  // Actions
-  setPlayerPosition: (position) => set({ playerPosition: position }),
-  
-  setPlayerVelocity: (velocity) => set({ playerVelocity: velocity }),
-  
-  setPlayerIsOnGround: (isOnGround) => set({ playerIsOnGround: isOnGround }),
-  
-  setChunks: (chunks) => {
-    set({ chunks });
-    // Spawn creatures after chunks are set
-    set((state) => ({
-      creatures: {
-        ...state.creatures,
-        ...spawnCreatures(chunks, state.blocks)
-      }
-    }));
+  // Creatures
+  creatures: {
+    'cow1': {
+      id: 'cow1',
+      type: 'cow',
+      position: { x: 5, y: 5, z: 5 },
+      rotation: { y: 0 },
+      state: 'idle',
+      mood: 'calm',
+      animationState: 'idle',
+      animationSpeed: 1,
+      animationProgress: 0,
+      leader: false
+    },
+    'sheep1': {
+      id: 'sheep1',
+      type: 'sheep',
+      position: { x: 8, y: 5, z: 8 },
+      rotation: { y: 0 },
+      state: 'idle',
+      mood: 'calm',
+      animationState: 'idle',
+      animationSpeed: 1,
+      animationProgress: 0,
+      leader: false
+    },
+    'pig1': {
+      id: 'pig1',
+      type: 'pig',
+      position: { x: 12, y: 5, z: 12 },
+      rotation: { y: 0 },
+      state: 'idle',
+      mood: 'calm',
+      animationState: 'idle',
+      animationSpeed: 1,
+      animationProgress: 0,
+      leader: false
+    },
+    'zombie1': {
+      id: 'zombie1',
+      type: 'zombie',
+      position: { x: -5, y: 5, z: -5 },
+      rotation: { y: 0 },
+      state: 'idle',
+      mood: 'aggressive',
+      animationState: 'idle',
+      animationSpeed: 1,
+      animationProgress: 0,
+      leader: false
+    },
+    'chicken1': {
+      id: 'chicken1',
+      type: 'chicken',
+      position: { x: 15, y: 5, z: 3 },
+      rotation: { y: 0 },
+      state: 'idle',
+      mood: 'calm',
+      animationState: 'idle',
+      animationSpeed: 1,
+      animationProgress: 0,
+      leader: false
+    },
+    'bee1': {
+      id: 'bee1',
+      type: 'bee',
+      position: { x: 10, y: 8, z: 10 },
+      rotation: { y: 0 },
+      state: 'flying',
+      mood: 'calm',
+      animationState: 'flying',
+      animationSpeed: 2,
+      animationProgress: 0,
+      leader: false
+    }
   },
   
-  setBlocks: (blocks) => set({ blocks }),
+  // Player interaction
+  selectedBlock: null,
   
-  addBlock: (x, y, z, type) => {
+  // Inventory - start with some basic blocks
+  inventory: [
+    { type: 'grass', count: 64 },
+    { type: 'dirt', count: 64 },
+    { type: 'stone', count: 64 },
+    { type: 'wood', count: 32 },
+    { type: 'leaves', count: 32 },
+    { type: 'sand', count: 32 },
+    { type: 'water', count: 16 },
+    { type: 'torch', count: 16 },
+    { type: 'log', count: 16 },
+  ],
+  selectedInventorySlot: 0,
+  
+  // World state
+  timeOfDay: 0.5, // Start at noon (0.5)
+  weather: 'clear', // Start with clear weather
+  
+  // Actions
+  placeBlock: (x, y, z, type) => {
     set((state) => {
-      const key = `${x},${y},${z}`;
-      const newBlocks = { ...state.blocks };
-      newBlocks[key] = type;
+      // Check if we have enough of this block type in inventory
+      const inventorySlot = state.selectedInventorySlot;
+      const inventoryItem = state.inventory[inventorySlot];
       
-      // Ensure chunk exists for this block
-      const chunkX = Math.floor(x / 16);
-      const chunkZ = Math.floor(z / 16);
-      const chunkKey = `${chunkX},${chunkZ}`;
-      
-      const newChunks = { ...state.chunks };
-      if (!newChunks[chunkKey]) {
-        newChunks[chunkKey] = true;
+      if (inventoryItem.type !== type || inventoryItem.count <= 0) {
+        console.log("Cannot place block - not enough in inventory");
+        return state;
       }
       
-      return { blocks: newBlocks, chunks: newChunks };
+      // Update inventory
+      const updatedInventory = [...state.inventory];
+      updatedInventory[inventorySlot] = {
+        ...inventoryItem,
+        count: inventoryItem.count - 1,
+      };
+      
+      // Place the block
+      return {
+        blocks: {
+          ...state.blocks,
+          [`${x},${y},${z}`]: type,
+        },
+        inventory: updatedInventory,
+        timeOfDay: state.timeOfDay,
+        weather: state.weather,
+      };
     });
   },
   
   removeBlock: (x, y, z) => {
     set((state) => {
-      const key = `${x},${y},${z}`;
+      const blockKey = `${x},${y},${z}`;
+      const blockType = state.blocks[blockKey];
       
-      // If block doesn't exist or is already air, do nothing
-      if (!state.blocks[key] || state.blocks[key] === 'air') {
-        return {};
+      if (!blockType || blockType === 'air') {
+        return state;
       }
+      
+      // Create a copy of the blocks without the removed one
+      const newBlocks = { ...state.blocks };
+      delete newBlocks[blockKey];
       
       // Add the block to inventory
-      const removedType = state.blocks[key];
-      if (isBlockSolid(removedType)) {
-        // Don't add air or liquids to inventory
-        state.addToInventory(removedType, 1);
+      const updatedInventory = [...state.inventory];
+      
+      // Find if we already have this block type
+      const existingIndex = updatedInventory.findIndex(
+        (item) => item.type === blockType
+      );
+      
+      if (existingIndex >= 0) {
+        // Add to existing stack
+        updatedInventory[existingIndex] = {
+          ...updatedInventory[existingIndex],
+          count: updatedInventory[existingIndex].count + 1,
+        };
+      } else {
+        // Add new inventory slot if there's space
+        if (updatedInventory.length < 36) {
+          updatedInventory.push({ type: blockType, count: 1 });
+        }
       }
       
-      // Update blocks
-      const newBlocks = { ...state.blocks };
-      newBlocks[key] = 'air';
-      
-      return { blocks: newBlocks };
+      return {
+        blocks: newBlocks,
+        inventory: updatedInventory,
+        timeOfDay: state.timeOfDay,
+        weather: state.weather,
+      };
     });
   },
   
-  placeBlock: (x, y, z, type) => {
-    set((state) => {
-      // Check if player has this block in inventory
-      const inventoryItem = state.inventory.find(item => item.type === type);
-      if (!inventoryItem || inventoryItem.count <= 0) {
-        return {};
-      }
-      
-      // Remove from inventory
-      state.removeFromInventory(type, 1);
-      
-      // Add block to world
-      const key = `${x},${y},${z}`;
-      const newBlocks = { ...state.blocks };
-      newBlocks[key] = type;
-      
-      return { blocks: newBlocks };
-    });
+  setSelectedBlock: (coords) => {
+    set({ selectedBlock: coords });
   },
   
-  setSelectedBlock: (position) => set({ selectedBlock: position }),
-  
-  setSelectedInventorySlot: (slot) => set({ selectedInventorySlot: slot }),
-  
-  incrementTime: () => {
-    set((state) => {
-      // Time cycles between 0 and 1 (representing 24 hours)
-      const newTime = (state.timeOfDay + 0.005) % 1;
-      
-      // Randomly change weather (small chance)
-      let newWeather = state.weather;
-      if (Math.random() < 0.01) {
-        const weathers: WeatherType[] = ['clear', 'cloudy', 'rain', 'snow'];
-        newWeather = weathers[Math.floor(Math.random() * weathers.length)];
-      }
-      
-      return { timeOfDay: newTime, weather: newWeather };
-    });
+  setSelectedInventorySlot: (slot) => {
+    set({ selectedInventorySlot: slot });
   },
-  
-  setWeather: (weather) => set({ weather }),
   
   addToInventory: (type, count) => {
     set((state) => {
-      const newInventory = [...state.inventory];
+      const updatedInventory = [...state.inventory];
       
-      // Find if this item already exists in inventory
-      const existingIndex = newInventory.findIndex(item => item.type === type);
+      // Find if we already have this block type
+      const existingIndex = updatedInventory.findIndex(
+        (item) => item.type === type
+      );
       
       if (existingIndex >= 0) {
-        // Update existing item
-        newInventory[existingIndex] = {
-          ...newInventory[existingIndex],
-          count: newInventory[existingIndex].count + count
+        // Add to existing stack
+        updatedInventory[existingIndex] = {
+          ...updatedInventory[existingIndex],
+          count: updatedInventory[existingIndex].count + count,
         };
       } else {
-        // Add new item
-        newInventory.push({ type, count });
+        // Add new inventory slot if there's space
+        if (updatedInventory.length < 36) {
+          updatedInventory.push({ type, count });
+        }
       }
       
-      return { inventory: newInventory };
+      return { 
+        inventory: updatedInventory,
+        timeOfDay: state.timeOfDay,
+        weather: state.weather
+      };
     });
   },
   
   removeFromInventory: (type, count) => {
-    const state = get();
-    const existingIndex = state.inventory.findIndex(item => item.type === type);
-    
-    if (existingIndex === -1 || state.inventory[existingIndex].count < count) {
-      return false; // Not enough items
-    }
-    
     set((state) => {
-      const newInventory = [...state.inventory];
+      const updatedInventory = [...state.inventory];
       
-      newInventory[existingIndex] = {
-        ...newInventory[existingIndex],
-        count: newInventory[existingIndex].count - count
+      // Find if we have this block type
+      const existingIndex = updatedInventory.findIndex(
+        (item) => item.type === type
+      );
+      
+      if (existingIndex >= 0) {
+        // Remove from existing stack
+        const newCount = updatedInventory[existingIndex].count - count;
+        
+        if (newCount <= 0) {
+          // Remove slot if count is 0 or negative
+          updatedInventory.splice(existingIndex, 1);
+        } else {
+          // Update count
+          updatedInventory[existingIndex] = {
+            ...updatedInventory[existingIndex],
+            count: newCount,
+          };
+        }
+      }
+      
+      return { 
+        inventory: updatedInventory,
+        timeOfDay: state.timeOfDay,
+        weather: state.weather
       };
-      
-      // Remove item if count reaches 0
-      if (newInventory[existingIndex].count <= 0) {
-        newInventory.splice(existingIndex, 1);
-      }
-      
-      return { inventory: newInventory };
-    });
-    
-    return true;
-  },
-  
-  craftItem: (outputType, outputCount, ingredients) => {
-    set((state) => {
-      // Check if all ingredients are available
-      const canCraft = ingredients.every(ingredient => {
-        const inventoryItem = state.inventory.find(item => item.type === ingredient.type);
-        return inventoryItem && inventoryItem.count >= ingredient.count;
-      });
-      
-      if (!canCraft) {
-        return {};
-      }
-      
-      // Remove ingredients from inventory
-      ingredients.forEach(ingredient => {
-        state.removeFromInventory(ingredient.type, ingredient.count);
-      });
-      
-      // Add crafted item to inventory
-      state.addToInventory(outputType, outputCount);
-      
-      return {};
     });
   },
   
-  updateCreatures: () => {
+  // World generation
+  generateChunk: (chunkX, chunkZ) => {
     set((state) => {
-      const newCreatures = { ...state.creatures };
-      const currentTime = Date.now();
+      const newBlocks = { ...state.blocks };
       
-      // Update each creature
-      Object.values(newCreatures).forEach(creature => {
-        // Don't update too frequently
-        if (currentTime - creature.lastStateChange < 2000) {
-          return;
-        }
-        
-        // Chance to change state
-        if (Math.random() < 0.3) {
-          // Determine new state based on creature type and hostility
-          if (creature.hostility === 'hostile') {
-            // Hostile creatures attack or wander
-            creature.state = Math.random() < 0.7 ? 'wandering' : 'idle';
-          } else if (creature.hostility === 'neutral') {
-            // Neutral creatures mostly idle/wander
-            creature.state = Math.random() < 0.8 ? 'wandering' : 'idle';
-          } else {
-            // Passive creatures mostly idle
-            creature.state = Math.random() < 0.3 ? 'wandering' : 'idle';
+      // Simple flat chunk generation
+      const chunkSize = 16;
+      const seaLevel = 5;
+      
+      for (let x = 0; x < chunkSize; x++) {
+        for (let z = 0; z < chunkSize; z++) {
+          const worldX = chunkX * chunkSize + x;
+          const worldZ = chunkZ * chunkSize + z;
+          
+          // Simple terrain height
+          const height = 
+            Math.floor(
+              Math.sin(worldX * 0.1) * 2 + 
+              Math.cos(worldZ * 0.1) * 2 + 
+              seaLevel
+            );
+          
+          // Generate ground blocks
+          for (let y = 0; y < 30; y++) {
+            let blockType: BlockType = 'air';
+            
+            if (y < height - 3) {
+              blockType = 'stone';
+            } else if (y < height - 1) {
+              blockType = 'dirt';
+            } else if (y === height - 1) {
+              blockType = 'grass';
+            } else if (y < seaLevel) {
+              blockType = 'water';
+            }
+            
+            if (blockType !== 'air') {
+              newBlocks[`${worldX},${y},${worldZ}`] = blockType;
+            }
           }
           
-          creature.lastStateChange = currentTime;
-          
-          // Set target position for wandering
-          if (creature.state === 'wandering') {
-            const wanderDistance = Math.random() * 5 + 2;
-            const wanderAngle = Math.random() * Math.PI * 2;
+          // Randomly add trees
+          if (
+            Math.random() < 0.02 && // 2% chance
+            height > seaLevel && // Only on land
+            height < 20 // Not too high
+          ) {
+            // Tree trunk
+            const trunkHeight = Math.floor(Math.random() * 3) + 4; // 4-6 blocks tall
+            for (let y = height; y < height + trunkHeight; y++) {
+              newBlocks[`${worldX},${y},${worldZ}`] = 'log';
+            }
             
-            creature.targetPosition = {
-              x: creature.position.x + Math.cos(wanderAngle) * wanderDistance,
-              y: creature.position.y,
-              z: creature.position.z + Math.sin(wanderAngle) * wanderDistance
-            };
-            
-            // Update rotation to face movement direction
-            creature.rotation.y = wanderAngle;
-          }
-        }
-        
-        // Move creature if wandering
-        if (creature.state === 'wandering' && creature.targetPosition) {
-          const speed = 0.05;
-          const dx = creature.targetPosition.x - creature.position.x;
-          const dz = creature.targetPosition.z - creature.position.z;
-          const distance = Math.sqrt(dx * dx + dz * dz);
-          
-          if (distance > 0.1) {
-            // Move towards target
-            creature.position.x += (dx / distance) * speed;
-            creature.position.z += (dz / distance) * speed;
-            
-            // Check if we need to adjust Y position (find ground)
-            let foundGround = false;
-            for (let y = Math.floor(creature.position.y); y > Math.floor(creature.position.y) - 5; y--) {
-              const blockKey = `${Math.floor(creature.position.x)},${y},${Math.floor(creature.position.z)}`;
-              if (state.blocks[blockKey] && isBlockSolid(state.blocks[blockKey])) {
-                creature.position.y = y + 1;
-                foundGround = true;
-                break;
+            // Tree leaves
+            const leafRadius = 2;
+            for (let lx = -leafRadius; lx <= leafRadius; lx++) {
+              for (let lz = -leafRadius; lz <= leafRadius; lz++) {
+                for (let ly = -1; ly <= 1; ly++) {
+                  // Skip corners for a more rounded shape
+                  if (
+                    Math.abs(lx) === leafRadius &&
+                    Math.abs(lz) === leafRadius
+                  )
+                    continue;
+                  
+                  const leafX = worldX + lx;
+                  const leafY = height + trunkHeight + ly;
+                  const leafZ = worldZ + lz;
+                  
+                  // Skip if there's already a block there
+                  const blockKey = `${leafX},${leafY},${leafZ}`;
+                  if (newBlocks[blockKey]) continue;
+                  
+                  newBlocks[blockKey] = 'leaves';
+                }
               }
             }
             
-            // If no ground found, don't move horizontally
-            if (!foundGround) {
-              creature.position.x -= (dx / distance) * speed;
-              creature.position.z -= (dz / distance) * speed;
-            }
-          } else {
-            // Reached target
-            creature.state = 'idle';
-            creature.lastStateChange = currentTime;
+            // Top leaf
+            newBlocks[`${worldX},${height + trunkHeight + 1},${worldZ}`] = 'leaves';
           }
         }
-      });
-      
-      return { creatures: newCreatures };
-    });
-  },
-  
-  // Damage a creature by a specific amount
-  damageCreature: (creatureId, damage) => {
-    const state = get();
-    const creature = state.creatures[creatureId];
-    
-    if (!creature) {
-      console.log(`Creature ${creatureId} not found`);
-      return false;
-    }
-    
-    set(state => {
-      const newCreatures = { ...state.creatures };
-      
-      // Apply damage
-      newCreatures[creatureId] = {
-        ...newCreatures[creatureId],
-        health: Math.max(0, creature.health - damage),
-        mood: 'afraid', // Make creature afraid when damaged
-        state: creature.health <= damage ? 'fleeing' : 'idle', // Make creature flee if health is low
-        lastStateChange: Date.now(),
-        animationState: 'hurt'
-      };
-      
-      // Check if creature is defeated
-      if (newCreatures[creatureId].health <= 0) {
-        console.log(`Creature ${creatureId} has been defeated!`);
-        
-        // Drop items based on creature type
-        if (newCreatures[creatureId].type === 'cow' || newCreatures[creatureId].type === 'pig') {
-          state.addToInventory('dirt', 2); // Temporary: using dirt as a stand-in for food
-        } else if (newCreatures[creatureId].type === 'zombie' || newCreatures[creatureId].type === 'skeleton') {
-          state.addToInventory('stone', 1); // Temporary: using stone as a stand-in for bones
-        }
-        
-        // Remove the creature
-        delete newCreatures[creatureId];
       }
       
-      return { creatures: newCreatures };
+      return { 
+        blocks: newBlocks,
+        timeOfDay: state.timeOfDay,
+        weather: state.weather
+      };
     });
-    
-    return true;
   },
-  
-  // Attack the specified creature
-  attackCreature: (creatureId) => {
-    const state = get();
-    const creature = state.creatures[creatureId];
-    
-    if (!creature) {
-      console.log(`Creature ${creatureId} not found for attack`);
-      return false;
-    }
-    
-    // Import the skills store to get strength multiplier
-    const { useSkills } = require('./useSkills');
-    
-    // Calculate damage based on player's strength and combat skill level
-    const baseDamage = 5; // Base damage value
-    const strengthMultiplier = useSkills.getState().strengthMultiplier;
-    const combatLevel = useSkills.getState().skills.combat.level;
-    
-    // Apply strength multiplier and a bonus for combat level
-    const totalDamage = Math.round(baseDamage * strengthMultiplier * (1 + combatLevel * 0.1));
-    
-    // Successfully performed the attack
-    console.log(`Attacked creature ${creatureId} with damage ${totalDamage} (Base: ${baseDamage}, Multiplier: ${strengthMultiplier.toFixed(2)}x)`);
-    
-    // Apply damage
-    return state.damageCreature(creatureId, totalDamage);
+  // Add a single block
+  addBlock: (x, y, z, type) => {
+    set((state) => {
+      return {
+        ...state,
+        blocks: {
+          ...state.blocks,
+          [`${x},${y},${z}`]: type,
+        }
+      };
+    });
+  },
+
+  // Set blocks in bulk
+  setBlocks: (blocks) => {
+    set((state) => {
+      return {
+        ...state,
+        blocks: blocks
+      };
+    });
+  },
+
+  // Set chunks in bulk
+  setChunks: (chunks) => {
+    set((state) => {
+      return {
+        ...state,
+        chunks: chunks
+      };
+    });
+  },
+
+  // Increment time of day
+  incrementTime: () => {
+    set((state) => {
+      // Increment by a small amount (day/night cycle)
+      const newTimeOfDay = (state.timeOfDay + 0.001) % 1;
+      
+      // Randomly change weather (very low chance)
+      let newWeather = state.weather;
+      if (Math.random() < 0.005) {
+        const weathers: WeatherType[] = ['clear', 'cloudy', 'rain', 'storm'];
+        newWeather = weathers[Math.floor(Math.random() * weathers.length)];
+      }
+      
+      return {
+        ...state,
+        timeOfDay: newTimeOfDay,
+        weather: newWeather
+      };
+    });
+  },
+
+  // Update creatures
+  updateCreatures: () => {
+    set((state) => {
+      const updatedCreatures = { ...state.creatures };
+      
+      // Update each creature
+      Object.values(updatedCreatures).forEach(creature => {
+        // Simple random movement
+        if (Math.random() < 0.1) {
+          const moveX = (Math.random() - 0.5) * 0.2;
+          const moveZ = (Math.random() - 0.5) * 0.2;
+          
+          // Update position
+          creature.position.x += moveX;
+          creature.position.z += moveZ;
+          
+          // Update rotation based on movement direction
+          if (Math.abs(moveX) > 0.01 || Math.abs(moveZ) > 0.01) {
+            creature.rotation.y = Math.atan2(moveX, moveZ);
+          }
+        }
+        
+        // Randomly change mood
+        if (Math.random() < 0.01) {
+          const moods = ['calm', 'playful', 'afraid'];
+          // Zombies are always aggressive
+          if (creature.type === 'zombie' || creature.type === 'skeleton') {
+            creature.mood = 'aggressive';
+          } else {
+            creature.mood = moods[Math.floor(Math.random() * moods.length)];
+          }
+        }
+        
+        // Update animation progress
+        creature.animationProgress = (creature.animationProgress + 0.01 * creature.animationSpeed) % 1;
+      });
+      
+      return {
+        ...state,
+        creatures: updatedCreatures
+      };
+    });
   }
 }));

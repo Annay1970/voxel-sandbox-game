@@ -4,6 +4,7 @@ import { WeatherType } from '../../lib/stores/useVoxelGame';
 import { useVoxelGame } from '../../lib/stores/useVoxelGame';
 import { useSkills, SkillType } from '../../lib/stores/useSkills';
 import Crosshair from './Crosshair';
+import MobileControls from './MobileControls';
 
 export default function UI() {
   // Voxel game state
@@ -72,6 +73,11 @@ export default function UI() {
     <div className="fixed inset-0 pointer-events-none">
       {/* Crosshair */}
       <Crosshair />
+      
+      {/* Mobile Controls - pointer-events-auto allows touch through the UI container */}
+      <div className="pointer-events-auto">
+        <MobileControls />
+      </div>
       
       {/* Inventory bar */}
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-1">
