@@ -98,6 +98,8 @@ export default function Player() {
   
   // Animation flags
   const [swingingTool, setSwingingTool] = useState(false);
+  const [attackAnimProgress, setAttackAnimProgress] = useState(0);
+  const attackAnimRef = useRef<number | null>(null);
   
   // Weather effect flags
   const [isExposedToWeather, setIsExposedToWeather] = useState(false);
@@ -445,6 +447,21 @@ export default function Player() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [attackCooldown, toggleCameraMode]);
   
+  // Handle sword animation
+  useFrame(({ clock }) => {
+    // When attack is triggered, animate the sword
+    if (swingingTool) {
+      setAttackAnimProgress((prev) => {
+        // Normalize animation to run once from 0 to 1 in 200ms
+        const newProgress = Math.min(1, prev + 0.1);
+        return newProgress;
+      });
+    } else {
+      // Reset attack animation when not swinging
+      setAttackAnimProgress(0);
+    }
+  });
+
   // Physics and movement update
   useFrame(() => {
     if (!playerRef.current) return;
@@ -990,9 +1007,48 @@ export default function Player() {
             )}
           </Suspense>
         ) : (
-          // In first-person, only render the player's "arms" and tool if needed
-          // Let's skip this for now to keep it simple
-          null
+          // In first-person, render the player's arm and weapon
+          <group position={[0.4, -0.5, -0.4]} rotation={[0, 0, 0]}>
+            {/* Player's arm in first person view */}
+            <mesh position={[0, -0.1, 0]}>
+              <boxGeometry args={[0.2, 0.6, 0.2]} />
+              <meshStandardMaterial color="#FFD3B4" />
+            </mesh>
+            
+            {/* Sword with animation transform */}
+            <group rotation={[
+              // Use attackAnimProgress for smooth animation
+              swingingTool ? -Math.PI * 0.5 * attackAnimProgress : 0, 
+              swingingTool ? -Math.PI * 0.1 * attackAnimProgress : 0, 
+              0
+            ]}>
+              {/* Sword handle */}
+              <mesh position={[0, -0.5, 0.3]} rotation={[Math.PI / 4, 0, 0]}>
+                <boxGeometry args={[0.1, 0.1, 0.5]} />
+                <meshStandardMaterial color="#8B4513" />
+              </mesh>
+              
+              {/* Sword guard */}
+              <mesh position={[0, -0.5, 0.05]} rotation={[Math.PI / 4, 0, 0]}>
+                <boxGeometry args={[0.25, 0.05, 0.1]} />
+                <meshStandardMaterial color="#FFD700" />
+              </mesh>
+              
+              {/* Sword blade */}
+              <mesh position={[0, -0.5, 0.7]} rotation={[Math.PI / 4, 0, 0]}>
+                <boxGeometry args={[0.1, 0.05, 0.8]} />
+                <meshStandardMaterial color="#B0C4DE" />
+              </mesh>
+              
+              {/* Point light to highlight the sword */}
+              <pointLight
+                position={[0, 0, 0.3]}
+                intensity={0.3}
+                distance={1}
+                color="#FFFFFF"
+              />
+            </group>
+          </group>
         )}
         
         {/* Light source that follows the player (like holding a torch) */}
