@@ -45,6 +45,8 @@ export default function Player() {
   const setSelectedBlock = useVoxelGame(state => state.setSelectedBlock);
   const inventory = useVoxelGame(state => state.inventory);
   const selectedInventorySlot = useVoxelGame(state => state.selectedInventorySlot);
+  // Get weather system to apply effects to player movement and visuals
+  const weatherSystem = useVoxelGame(state => state.weatherSystem);
   
   // Get character stats from skills
   const characterSpeed = useSkills(state => state.characterSpeed);
@@ -95,6 +97,14 @@ export default function Player() {
   
   // Animation flags
   const [swingingTool, setSwingingTool] = useState(false);
+  
+  // Weather effect flags
+  const [isExposedToWeather, setIsExposedToWeather] = useState(false);
+  
+  // Weather particle references for animation
+  const rainParticlesRef = useRef<THREE.Group>(null);
+  const snowParticlesRef = useRef<THREE.Group>(null);
+  const stormParticlesRef = useRef<THREE.Group>(null);
   
   // Player dimensions for collision detection
   const playerWidth = 0.6; // Player is 0.6 blocks wide (3 pixels in Minecraft)
@@ -470,8 +480,20 @@ export default function Player() {
       }
     }
     
-    // Apply speed to movement
-    const moveSpeed = sprint ? speed * sprintMultiplier : speed;
+    // Apply speed to movement, affected by weather conditions
+    let moveSpeed = sprint ? speed * sprintMultiplier : speed;
+    
+    // Apply weather movement modifiers
+    if (weatherSystem) {
+      // Slow down in bad weather (rain, snow, etc.)
+      moveSpeed *= weatherSystem.effects.movementModifier;
+      
+      // Debug weather effects on movement
+      if (weatherSystem.effects.movementModifier < 0.9) {
+        console.log(`Weather slowing movement: ${weatherSystem.currentWeather} (modifier: ${weatherSystem.effects.movementModifier.toFixed(2)})`);
+      }
+    }
+    
     xVel *= moveSpeed;
     zVel *= moveSpeed;
     
@@ -586,6 +608,38 @@ export default function Player() {
     // Play water sounds if in water
     playWaterSounds(isSwimming, isUnderwater);
     
+    // Apply weather effects to player (like getting wet in rain)
+    if (weatherSystem && (weatherSystem.currentWeather === 'rain' || weatherSystem.currentWeather === 'thunderstorm' || weatherSystem.currentWeather === 'snow')) {
+      // Check if player is exposed to weather (not under a block)
+      let isCurrentlyExposed = true;
+      
+      // Check blocks above player for shelter
+      for (let y = Math.floor(newPosition.y + 2); y <= Math.floor(newPosition.y + 20); y++) {
+        const blockAboveKey = `${Math.floor(newPosition.x)},${y},${Math.floor(newPosition.z)}`;
+        const blockAbove = blocks[blockAboveKey];
+        
+        if (blockAbove && blockAbove !== 'air' && blockAbove !== 'leaves') {
+          // Player is sheltered
+          isCurrentlyExposed = false;
+          break;
+        }
+      }
+      
+      // Update state only if it changed to avoid unnecessary re-renders
+      if (isCurrentlyExposed !== isExposedToWeather) {
+        setIsExposedToWeather(isCurrentlyExposed);
+        
+        if (isCurrentlyExposed) {
+          console.log(`Player exposed to ${weatherSystem.currentWeather} weather`);
+        } else {
+          console.log(`Player found shelter from the ${weatherSystem.currentWeather}`);
+        }
+      }
+    } else if (isExposedToWeather) {
+      // Weather cleared up, reset exposure flag
+      setIsExposedToWeather(false);
+    }
+    
     // Update camera and player position
     if (cameraRef.current) {
       // Position camera at player's eye level
@@ -639,6 +693,82 @@ export default function Player() {
     }
   }, [cameraMode]);
   
+  // Animate weather particles
+  useFrame(({ clock }) => {
+    // Only animate particles if player is exposed to weather
+    if (!isExposedToWeather || !weatherSystem) return;
+    
+    const time = clock.getElapsedTime();
+    
+    // Animate rain particles
+    if (rainParticlesRef.current && weatherSystem.currentWeather === 'rain') {
+      // Safely animate each particle
+      rainParticlesRef.current.children.forEach((child, i) => {
+        if (child instanceof THREE.Mesh) {
+          // Move particles downward
+          child.position.y -= 0.2;
+          
+          // If particle is below player, reset to top
+          if (child.position.y < -5) {
+            child.position.y = 5 + Math.random() * 3;
+            child.position.x = (Math.random() - 0.5) * 10;
+            child.position.z = (Math.random() - 0.5) * 10;
+          }
+        }
+      });
+      
+      // Move the entire particle group with the player
+      rainParticlesRef.current!.position.set(position[0], position[1] + 5, position[2]);
+    }
+    
+    // Animate snow particles
+    if (snowParticlesRef.current && weatherSystem.currentWeather === 'snow') {
+      // Safely animate each particle
+      snowParticlesRef.current.children.forEach((child, i) => {
+        if (child instanceof THREE.Mesh) {
+          // Gentle falling with some drift
+          child.position.y -= 0.03;
+          child.position.x += Math.sin(time + i) * 0.01;
+          child.position.z += Math.cos(time + i * 0.5) * 0.01;
+          
+          // If particle is below player, reset to top
+          if (child.position.y < -5) {
+            child.position.y = 5 + Math.random() * 3;
+            child.position.x = (Math.random() - 0.5) * 10;
+            child.position.z = (Math.random() - 0.5) * 10;
+          }
+        }
+      });
+      
+      // Move the entire particle group with the player
+      snowParticlesRef.current!.position.set(position[0], position[1] + 5, position[2]);
+    }
+    
+    // Animate thunderstorm particles
+    if (stormParticlesRef.current && weatherSystem.currentWeather === 'thunderstorm') {
+      const children = stormParticlesRef.current.children;
+      
+      // Safely animate each particle
+      children.forEach((child, i) => {
+        if (child instanceof THREE.Mesh && i < children.length - 1) { // Skip the last child (lightning)
+          // Faster falling with wind gusts
+          child.position.y -= 0.3;
+          child.position.x += Math.sin(time * 2) * 0.05;
+          
+          // If particle is below player, reset to top
+          if (child.position.y < -5) {
+            child.position.y = 5 + Math.random() * 3;
+            child.position.x = (Math.random() - 0.5) * 10;
+            child.position.z = (Math.random() - 0.5) * 10;
+          }
+        }
+      });
+      
+      // Move the entire particle group with the player
+      stormParticlesRef.current!.position.set(position[0], position[1] + 5, position[2]);
+    }
+  });
+  
   return (
     <>
       {/* Controls based on camera mode */}
@@ -672,6 +802,79 @@ export default function Player() {
           enablePan={false}
           makeDefault
         />
+      )}
+      
+      {/* Weather effects that follow the player when exposed */}
+      {isExposedToWeather && weatherSystem && (
+        <group position={[position[0], position[1] + 5, position[2]]}>
+          {weatherSystem.currentWeather === 'rain' && (
+            <group ref={rainParticlesRef}>
+              {/* Rain particles */}
+              {Array.from({ length: 30 }).map((_, i) => (
+                <mesh 
+                  key={`rain-${i}`} 
+                  position={[
+                    (Math.random() - 0.5) * 10,
+                    Math.random() * 5,
+                    (Math.random() - 0.5) * 10
+                  ]}
+                >
+                  <boxGeometry args={[0.05, 0.3, 0.05]} />
+                  <meshBasicMaterial color="#8EB1C7" transparent opacity={0.6} />
+                </mesh>
+              ))}
+            </group>
+          )}
+          
+          {weatherSystem.currentWeather === 'snow' && (
+            <group ref={snowParticlesRef}>
+              {/* Snow particles */}
+              {Array.from({ length: 40 }).map((_, i) => (
+                <mesh 
+                  key={`snow-${i}`} 
+                  position={[
+                    (Math.random() - 0.5) * 10,
+                    Math.random() * 5,
+                    (Math.random() - 0.5) * 10
+                  ]}
+                >
+                  <sphereGeometry args={[0.07, 4, 4]} />
+                  <meshBasicMaterial color="white" transparent opacity={0.8} />
+                </mesh>
+              ))}
+            </group>
+          )}
+          
+          {weatherSystem.currentWeather === 'thunderstorm' && (
+            <group ref={stormParticlesRef}>
+              {/* Heavy rain particles */}
+              {Array.from({ length: 60 }).map((_, i) => (
+                <mesh 
+                  key={`heavy-rain-${i}`} 
+                  position={[
+                    (Math.random() - 0.5) * 10,
+                    Math.random() * 5,
+                    (Math.random() - 0.5) * 10
+                  ]}
+                >
+                  <boxGeometry args={[0.05, 0.4, 0.05]} />
+                  <meshBasicMaterial color="#6E8CA3" transparent opacity={0.7} />
+                </mesh>
+              ))}
+              
+              {/* Occasional lightning flash */}
+              {Math.random() > 0.99 && (
+                <pointLight 
+                  position={[0, 10, 0]} 
+                  intensity={20} 
+                  distance={50} 
+                  color="#E0F7FF"
+                  decay={1}
+                />
+              )}
+            </group>
+          )}
+        </group>
       )}
       
       {/* Player model - always present but only visible in third-person mode */}

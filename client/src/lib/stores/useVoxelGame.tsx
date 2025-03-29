@@ -19,7 +19,23 @@ export interface InventoryItem {
 }
 
 // Define weather types
-export type WeatherType = 'clear' | 'cloudy' | 'rain' | 'storm';
+export type WeatherType = 'clear' | 'cloudy' | 'rain' | 'thunderstorm' | 'fog' | 'snow';
+
+// Define weather system interface
+export interface WeatherSystem {
+  currentWeather: WeatherType;
+  intensity: number; // 0.0 to 1.0
+  transitionProgress: number; // 0.0 to 1.0 (for smooth transitions)
+  transitionTarget: WeatherType | null; // Weather we're transitioning to
+  duration: number; // How long current weather will last (in game time)
+  elapsedTime: number; // How long current weather has been active
+  effects: {
+    visibility: number; // 0.0 to 1.0
+    movementModifier: number; // 0.5 to 1.5 (slower to faster)
+    temperatureModifier: number; // -1.0 to 1.0 (colder to hotter)
+    dangerLevel: number; // 0.0 to 1.0 (lightning strikes, etc.)
+  };
+};
 
 // Define creature interface based on World.tsx
 export interface Creature {
@@ -96,6 +112,7 @@ export interface VoxelGameState {
   // World state
   timeOfDay: number; // 0.0 to 1.0, where 0.0 is midnight, 0.5 is noon
   weather: WeatherType;
+  weatherSystem: WeatherSystem;
   gravity: number;
   seed: number;
   
@@ -308,6 +325,20 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   // World state
   timeOfDay: 0.5, // Start at noon (0.5)
   weather: 'clear', // Start with clear weather
+  weatherSystem: {
+    currentWeather: 'clear',
+    intensity: 0.0,
+    transitionProgress: 0.0,
+    transitionTarget: null,
+    duration: 300, // 5 minutes of game time
+    elapsedTime: 0,
+    effects: {
+      visibility: 1.0, // Full visibility
+      movementModifier: 1.0, // Normal movement
+      temperatureModifier: 0.0, // Neutral temperature
+      dangerLevel: 0.0 // No danger
+    }
+  },
   gravity: 0.05, // Gravity strength
   seed: Math.floor(Math.random() * 1000000), // Random world seed
   
@@ -587,17 +618,107 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
       // Increment by a small amount (day/night cycle)
       const newTimeOfDay = (state.timeOfDay + 0.001) % 1;
       
-      // Randomly change weather (very low chance)
-      let newWeather = state.weather;
-      if (Math.random() < 0.005) {
-        const weathers: WeatherType[] = ['clear', 'cloudy', 'rain', 'storm'];
-        newWeather = weathers[Math.floor(Math.random() * weathers.length)];
+      // Update weather system
+      const weatherSystem = { ...state.weatherSystem };
+      weatherSystem.elapsedTime += 1;
+      
+      // If we're transitioning weather, continue the transition
+      if (weatherSystem.transitionTarget !== null) {
+        weatherSystem.transitionProgress += 0.01;
+        
+        // Once transition completes, set the current weather
+        if (weatherSystem.transitionProgress >= 1.0) {
+          weatherSystem.currentWeather = weatherSystem.transitionTarget;
+          weatherSystem.transitionTarget = null;
+          weatherSystem.transitionProgress = 0;
+          weatherSystem.intensity = Math.random() * 0.5 + 0.5; // 0.5 to 1.0 intensity
+          
+          // Set effects based on the weather type
+          switch (weatherSystem.currentWeather) {
+            case 'clear':
+              weatherSystem.effects = {
+                visibility: 1.0,
+                movementModifier: 1.0,
+                temperatureModifier: 0.2,
+                dangerLevel: 0.0
+              };
+              break;
+            case 'cloudy':
+              weatherSystem.effects = {
+                visibility: 0.8,
+                movementModifier: 1.0,
+                temperatureModifier: -0.1,
+                dangerLevel: 0.0
+              };
+              break;
+            case 'rain':
+              weatherSystem.effects = {
+                visibility: 0.6,
+                movementModifier: 0.8,
+                temperatureModifier: -0.3,
+                dangerLevel: 0.1
+              };
+              break;
+            case 'thunderstorm':
+              weatherSystem.effects = {
+                visibility: 0.4,
+                movementModifier: 0.6,
+                temperatureModifier: -0.4,
+                dangerLevel: 0.7
+              };
+              break;
+            case 'fog':
+              weatherSystem.effects = {
+                visibility: 0.3,
+                movementModifier: 0.7,
+                temperatureModifier: -0.2,
+                dangerLevel: 0.2
+              };
+              break;
+            case 'snow':
+              weatherSystem.effects = {
+                visibility: 0.5,
+                movementModifier: 0.5,
+                temperatureModifier: -0.7,
+                dangerLevel: 0.3
+              };
+              break;
+          }
+          
+          console.log(`Weather transitioned to ${weatherSystem.currentWeather} with intensity ${weatherSystem.intensity.toFixed(2)}`);
+        }
       }
+      // Check if weather should change (if elapsed time exceeds duration)
+      else if (weatherSystem.elapsedTime >= weatherSystem.duration) {
+        // Randomly select a new weather type
+        const availableWeathers: WeatherType[] = ['clear', 'cloudy', 'rain', 'thunderstorm', 'fog', 'snow'];
+        // Filter out the current weather to ensure a change
+        const newWeathers = availableWeathers.filter(w => w !== weatherSystem.currentWeather);
+        const newWeatherTarget = newWeathers[Math.floor(Math.random() * newWeathers.length)];
+        
+        // Start transition to new weather
+        weatherSystem.transitionTarget = newWeatherTarget;
+        weatherSystem.transitionProgress = 0.0;
+        weatherSystem.elapsedTime = 0;
+        weatherSystem.duration = Math.floor(Math.random() * 300) + 300; // 5-10 minutes
+        
+        console.log(`Weather transitioning from ${weatherSystem.currentWeather} to ${newWeatherTarget}`);
+      }
+      // Randomly trigger special events like lightning strikes during thunderstorms
+      else if (weatherSystem.currentWeather === 'thunderstorm' && Math.random() < 0.01) {
+        // Lightning strike event
+        console.log("⚡ Lightning strike! ⚡");
+        // In a real implementation, this would trigger visual effects and possibly damage nearby entities
+      }
+      
+      // Sync the legacy weather property with the new system for backward compatibility
+      const legacyWeather = weatherSystem.transitionTarget || weatherSystem.currentWeather;
       
       return {
         ...state,
         timeOfDay: newTimeOfDay,
-        weather: newWeather
+        weather: legacyWeather,
+        weatherSystem
       };
     });
   },
@@ -605,8 +726,24 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   // Update creatures
   // Weather control
   setWeather: (weather) => {
-    set({ weather });
-    console.log(`Weather changed to ${weather}`);
+    set((state) => {
+      // Update the weather system
+      const weatherSystem = { ...state.weatherSystem };
+      
+      // Start immediate transition to the new weather
+      weatherSystem.transitionTarget = weather;
+      weatherSystem.transitionProgress = 0.0;
+      weatherSystem.elapsedTime = 0;
+      // For manual weather changes, set a longer duration
+      weatherSystem.duration = 600; // 10 minutes of game time
+      
+      console.log(`Weather manually changed to ${weather}, beginning transition`);
+      
+      return {
+        weather,
+        weatherSystem
+      };
+    });
   },
   
   // Creature management functions
