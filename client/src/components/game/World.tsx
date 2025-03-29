@@ -9,6 +9,7 @@ import Creature from "./Creature";
 import { generateTerrain } from "../../lib/terrain";
 import { useErrorTracking, updatePerformanceMetrics } from "../../lib/utils/errorTracker";
 import { textureManager } from "../../lib/utils/textureManager";
+import { BlockType } from "../../lib/blocks";
 
 export default function World() {
   const { scene, gl } = useThree();
@@ -84,7 +85,7 @@ export default function World() {
   useEffect(() => {
     if (generatedRef.current) return;
     
-    console.log("Generating world...");
+    console.log("Initializing world generation...");
     
     // Load textures first
     (async () => {
@@ -98,13 +99,52 @@ export default function World() {
       }
       
       // Then generate world after textures are ready
-      const { generatedChunks, generatedBlocks } = generateTerrain();
-      
-      setChunks(generatedChunks);
-      setBlocks(generatedBlocks);
+      try {
+        const { generatedChunks, generatedBlocks } = generateTerrain();
+        
+        if (!generatedChunks || !generatedBlocks || Object.keys(generatedChunks).length === 0) {
+          console.error("World generation produced empty results, using fallback terrain");
+          
+          // Create a minimal fallback terrain
+          const fallbackChunks: Record<string, { x: number, z: number }> = { '0,0': { x: 0, z: 0 } };
+          const fallbackBlocks: Record<string, BlockType> = {};
+          
+          // Create a 16x16 platform at y=20
+          for (let x = -8; x < 8; x++) {
+            for (let z = -8; z < 8; z++) {
+              fallbackBlocks[`${x},19,${z}`] = 'stone';
+              fallbackBlocks[`${x},20,${z}`] = 'grass';
+            }
+          }
+          
+          setChunks(fallbackChunks);
+          setBlocks(fallbackBlocks);
+        } else {
+          setChunks(generatedChunks);
+          setBlocks(generatedBlocks);
+          console.log(`World generation complete: ${Object.keys(generatedBlocks).length} blocks created`);
+        }
+      } catch (error) {
+        console.error("Failed to generate terrain:", error);
+        
+        // Create emergency flat platform
+        const emergencyChunks: Record<string, { x: number, z: number }> = { '0,0': { x: 0, z: 0 } };
+        const emergencyBlocks: Record<string, BlockType> = {};
+        
+        // Create a 16x16 platform at y=20
+        for (let x = -8; x < 8; x++) {
+          for (let z = -8; z < 8; z++) {
+            emergencyBlocks[`${x},19,${z}`] = 'stone';
+            emergencyBlocks[`${x},20,${z}`] = 'grass';
+          }
+        }
+        
+        setChunks(emergencyChunks);
+        setBlocks(emergencyBlocks);
+        console.log("Generated emergency terrain due to error");
+      }
       
       generatedRef.current = true;
-      console.log(`World generation complete: ${Object.keys(generatedBlocks).length} blocks created`);
     })();
   }, [setChunks, setBlocks, trackError]);
   

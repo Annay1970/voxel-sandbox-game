@@ -801,15 +801,48 @@ export default function Player() {
             // Force enable pointer lock when component mounts
             if (controlsRef.current && !controlsRef.current.isLocked) {
               console.log("Attempting to lock controls on mount");
+              
+              // Try to lock on mount with a small delay
+              setTimeout(() => {
+                if (controlsRef.current && !controlsRef.current.isLocked) {
+                  try {
+                    controlsRef.current.lock();
+                  } catch (error) {
+                    console.error("Failed to auto-lock controls:", error);
+                  }
+                }
+              }, 1000);
+              
               // Add a click event to the canvas to help mobile browsers
               const canvas = document.querySelector('canvas');
               if (canvas) {
+                // Add click listener that persists (not once)
                 canvas.addEventListener('click', () => {
                   if (controlsRef.current && !controlsRef.current.isLocked) {
                     console.log("Canvas clicked, locking pointer");
-                    controlsRef.current.lock();
+                    try {
+                      controlsRef.current.lock();
+                    } catch (error) {
+                      console.error("Failed to lock on click:", error);
+                    }
                   }
-                }, { once: true });
+                });
+                
+                // Also listen for key presses to lock controls
+                window.addEventListener('keydown', (e) => {
+                  if (!controlsRef.current?.isLocked) {
+                    if (e.key === 'w' || e.key === 'a' || e.key === 's' || e.key === 'd' || 
+                        e.key === ' ' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || 
+                        e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                      console.log("Key pressed, locking pointer");
+                      try {
+                        controlsRef.current?.lock();
+                      } catch (error) {
+                        console.error("Failed to lock on keypress:", error);
+                      }
+                    }
+                  }
+                });
               }
             }
           }}
