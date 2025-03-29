@@ -8,7 +8,12 @@ import {
 } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTF } from 'three-stdlib';
-import { BlockType } from '../../lib/blocks';
+import { 
+  BlockType, 
+  getBlockMovementEffect, 
+  isBlockDamaging,
+  isBlockTemperatureReactive
+} from '../../lib/blocks';
 import { useVoxelGame } from '../../lib/stores/useVoxelGame';
 import { useSkills } from '../../lib/stores/useSkills';
 import { useAudio } from '../../lib/stores/useAudio';
@@ -518,8 +523,10 @@ export default function Player() {
       }
     }
     
-    // Apply speed to movement, affected by weather conditions
+    // Apply speed to movement, affected by weather conditions and block effects
     let moveSpeed = sprint ? speed * sprintMultiplier : speed;
+    let isSlippery = false;
+    let isPlayerDamaged = false;
     
     // Apply weather movement modifiers
     if (weatherSystem) {
@@ -529,6 +536,51 @@ export default function Player() {
       // Debug weather effects on movement
       if (weatherSystem.effects.movementModifier < 0.9) {
         console.log(`Weather slowing movement: ${weatherSystem.currentWeather} (modifier: ${weatherSystem.effects.movementModifier.toFixed(2)})`);
+      }
+    }
+    
+    // Apply block effects to movement and player state
+    // Reuse the variables from above to avoid redeclaration errors
+    
+    // Check block player is standing on
+    const standingOnBlockKey = `${Math.floor(currentPosition.x)},${Math.floor(currentPosition.y - 0.1)},${Math.floor(currentPosition.z)}`;
+    const standingOnBlock = blocks[standingOnBlockKey];
+    
+    // Check block at player's feet level
+    const blockAtFeetLevelKey = `${Math.floor(currentPosition.x)},${Math.floor(currentPosition.y)},${Math.floor(currentPosition.z)}`;
+    const blockAtFeetLevel = blocks[blockAtFeetLevelKey];
+    
+    // Apply special block movement effects
+    if (standingOnBlock) {
+      const movementEffect = getBlockMovementEffect(standingOnBlock);
+      moveSpeed *= movementEffect.speedMultiplier;
+      isSlippery = movementEffect.slippery;
+      
+      // Display debug info for special block effects
+      if (movementEffect.speedMultiplier !== 1.0) {
+        console.log(`Block affecting movement: ${standingOnBlock} (speed: ${movementEffect.speedMultiplier.toFixed(2)}, slippery: ${isSlippery})`);
+      }
+    }
+    
+    // Check for damaging blocks
+    if (blockAtFeetLevel && isBlockDamaging(blockAtFeetLevel)) {
+      isPlayerDamaged = true;
+      
+      // Apply damage every second
+      if (!useVoxelGame.getState().player.takingBlockDamage) {
+        useVoxelGame.getState().setPlayerTakingBlockDamage(true);
+        
+        // Apply damage
+        console.log(`Player taking damage from ${blockAtFeetLevel} block`);
+        useVoxelGame.getState().damagePlayer(1);
+        
+        // Play damage sound
+        useAudio.getState().playSound('damageSound', { volume: 0.7 });
+        
+        // Create damage cooldown (1 second)
+        setTimeout(() => {
+          useVoxelGame.getState().setPlayerTakingBlockDamage(false);
+        }, 1000);
       }
     }
     
@@ -605,16 +657,33 @@ export default function Player() {
     
     // Update position and velocity
     setPosition([newPosition.x, newPosition.y, newPosition.z]);
+    
+    // Apply slippery effect - momentum continues even when not pressing keys
+    if (isSlippery && grounded) {
+      // If on ice, keep some momentum even when not actively moving
+      // Only slow down gradually instead of stopping immediately
+      if (Math.abs(xVel) < 0.001 && Math.abs(zVel) < 0.001 && 
+          (Math.abs(velocity.x) > 0.01 || Math.abs(velocity.z) > 0.01)) {
+        
+        // Gradual slowdown instead of immediate stop
+        const friction = 0.95; // Higher = more slippery
+        newVel.x = velocity.x * friction;
+        newVel.z = velocity.z * friction;
+        
+        console.log("Slippery surface - maintaining momentum");
+      }
+    }
+    
     setVelocity(newVel);
     
     // Determine terrain type for sound effects
     let terrainType: 'grass' | 'sand' | 'stone' | 'wood' | 'water' = 'grass';
-    const blockBelowKey = `${Math.floor(newPosition.x)},${Math.floor(newPosition.y - 0.1)},${Math.floor(newPosition.z)}`;
-    const blockBelow = blocks[blockBelowKey];
+    const soundBlockKey = `${Math.floor(newPosition.x)},${Math.floor(newPosition.y - 0.1)},${Math.floor(newPosition.z)}`;
+    const blockUnderFeet = blocks[soundBlockKey];
     
-    if (blockBelow) {
+    if (blockUnderFeet) {
       // Determine terrain type from block below the player
-      switch (blockBelow) {
+      switch (blockUnderFeet) {
         case 'sand': terrainType = 'sand'; break;
         case 'stone': terrainType = 'stone'; break;
         case 'wood': terrainType = 'wood'; break;

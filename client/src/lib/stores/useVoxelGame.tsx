@@ -73,6 +73,7 @@ export interface PlayerState {
   swimming: boolean;
   cameraMode: CameraMode;
   canJump: boolean;
+  takingBlockDamage: boolean; // Flag to track if player is currently taking damage from a block
 }
 
 export interface CraftingRecipe {
@@ -151,6 +152,7 @@ export interface VoxelGameState {
   toggleFlying: () => void;
   toggleInventory: () => void;
   toggleCrafting: () => void;
+  setPlayerTakingBlockDamage: (isTakingDamage: boolean) => void;
   
   // Crafting
   craftItem: (recipeIndex: number) => boolean;
@@ -259,7 +261,8 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     flying: false,
     swimming: false,
     cameraMode: 'first',
-    canJump: true
+    canJump: true,
+    takingBlockDamage: false
   },
   
   // Game UI state
@@ -902,6 +905,18 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
         player: {
           ...state.player,
           health: newHealth
+        }
+      };
+    });
+  },
+  
+  setPlayerTakingBlockDamage: (isTakingDamage) => {
+    set((state) => {
+      return {
+        ...state,
+        player: {
+          ...state.player,
+          takingBlockDamage: isTakingDamage
         }
       };
     });

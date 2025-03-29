@@ -10,7 +10,8 @@ class TextureManager {
   // Array of block types that need textures
   private textureTypes: BlockType[] = [
     'grass', 'dirt', 'stone', 'sand', 'wood', 'leaves', 'water',
-    'log', 'craftingTable', 'coal', 'torch'
+    'log', 'craftingTable', 'coal', 'torch', 'ice', 'lava', 'snow',
+    'cactus', 'glass'
   ];
   
   // Colors for procedural texture generation
@@ -31,7 +32,12 @@ class TextureManager {
     'woodenAxe': '#A1887F',
     'woodenShovel': '#A1887F',
     'coal': '#263238',
-    'torch': '#FFB300'
+    'torch': '#FFB300',
+    'ice': '#A5D6F6',
+    'lava': '#FF5722',
+    'snow': '#FAFAFA',
+    'cactus': '#2E7D32',
+    'glass': '#E0F7FA'
   };
   
   constructor() {
@@ -177,6 +183,100 @@ class TextureManager {
         for (let i = 0; i < 5; i++) {
           this.ctx.fillRect(0, 10 + i * 12, this.canvas.width, 4);
         }
+        break;
+        
+      case 'ice':
+        // Create cracked ice effect
+        this.ctx.fillStyle = '#76B8E0';
+        // Draw crack lines
+        for (let i = 0; i < 8; i++) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(Math.random() * this.canvas.width, Math.random() * this.canvas.height);
+          this.ctx.lineTo(Math.random() * this.canvas.width, Math.random() * this.canvas.height);
+          this.ctx.lineWidth = 1;
+          this.ctx.stroke();
+        }
+        break;
+        
+      case 'lava':
+        // Create bubbling lava effect
+        const gradientLava = this.ctx.createRadialGradient(
+          this.canvas.width/2, this.canvas.height/2, 5,
+          this.canvas.width/2, this.canvas.height/2, this.canvas.width/2
+        );
+        gradientLava.addColorStop(0, '#FFEB3B');
+        gradientLava.addColorStop(1, '#E65100');
+        this.ctx.fillStyle = gradientLava;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Add bubbles
+        this.ctx.fillStyle = '#FFC107';
+        for (let i = 0; i < 15; i++) {
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
+          const size = 2 + Math.random() * 5;
+          this.ctx.beginPath();
+          this.ctx.arc(x, y, size, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+        break;
+        
+      case 'snow':
+        // Create snow texture with small flakes
+        for (let i = 0; i < 100; i++) {
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
+          const size = 1 + Math.random() * 2;
+          this.ctx.fillStyle = Math.random() > 0.7 ? '#E0E0E0' : '#FFFFFF';
+          this.ctx.beginPath();
+          this.ctx.arc(x, y, size, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+        break;
+        
+      case 'cactus':
+        // Create cactus texture
+        // Dark green background
+        this.ctx.fillStyle = '#1B5E20';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Add vertical lines for cactus ribbing
+        this.ctx.fillStyle = '#2E7D32';
+        for (let i = 0; i < 8; i++) {
+          this.ctx.fillRect(i * 8, 0, 3, this.canvas.height);
+        }
+        
+        // Add thorns
+        this.ctx.fillStyle = '#BDBDBD';
+        for (let i = 0; i < 15; i++) {
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
+          this.ctx.fillRect(x, y, 2, 2);
+        }
+        break;
+        
+      case 'glass':
+        // Create glass texture - mostly transparent with subtle highlights
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Set a very light blue tint
+        this.ctx.fillStyle = 'rgba(224, 247, 250, 0.3)';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Add some highlight lines
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        this.ctx.lineWidth = 1;
+        
+        // Horizontal and vertical highlights
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, this.canvas.height / 3);
+        this.ctx.lineTo(this.canvas.width, this.canvas.height / 3);
+        this.ctx.stroke();
+        
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.canvas.width / 3, 0);
+        this.ctx.lineTo(this.canvas.width / 3, this.canvas.height);
+        this.ctx.stroke();
         break;
         
       default:

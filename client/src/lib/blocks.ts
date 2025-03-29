@@ -2,7 +2,8 @@
 export type BlockType = 
   'air' | 'grass' | 'dirt' | 'stone' | 'sand' | 'wood' | 'leaves' | 'water' |
   'log' | 'stick' | 'craftingTable' | 'woodenPickaxe' | 'stonePickaxe' |
-  'woodenAxe' | 'woodenShovel' | 'coal' | 'torch';
+  'woodenAxe' | 'woodenShovel' | 'coal' | 'torch' | 'ice' | 'lava' | 
+  'snow' | 'cactus' | 'glass';
 
 // Block properties
 export interface BlockProperties {
@@ -150,6 +151,67 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     liquid: false,
     hardness: 0.1,
     stackSize: 64
+  },
+  'ice': {
+    solid: true,
+    transparent: true,
+    liquid: false,
+    hardness: 0.5,
+    tool: 'pickaxe',
+    drops: [], // Ice breaks into water when mined
+    stackSize: 64
+    // Special properties:
+    // - Players slide on ice (increased movement speed)
+    // - Can see through ice (transparency)
+    // - Melts into water in hot biomes
+  },
+  'lava': {
+    solid: false,
+    transparent: true,
+    liquid: true,
+    hardness: 100, // Cannot mine lava
+    stackSize: 0
+    // Special properties:
+    // - Damages player on contact
+    // - Emits light (illuminates surrounding area)
+    // - Slowly flows and spreads
+    // - Turns into stone or obsidian when contacting water
+  },
+  'snow': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'shovel',
+    hardness: 0.2,
+    drops: 'snow',
+    stackSize: 64
+    // Special properties:
+    // - Slows player movement slightly
+    // - Makes softer sound when walked on
+    // - Can accumulate in layers during snowfall
+    // - Melts in hot biomes
+  },
+  'cactus': {
+    solid: true,
+    transparent: true,
+    liquid: false,
+    hardness: 0.4,
+    drops: 'cactus',
+    stackSize: 64
+    // Special properties:
+    // - Damages player on contact
+    // - Can only be placed on sand
+    // - Grows over time if on sand
+    // - Destroys items that touch it
+  },
+  'glass': {
+    solid: true,
+    transparent: true,
+    liquid: false,
+    tool: 'pickaxe',
+    hardness: 0.3,
+    drops: [], // Glass doesn't drop anything when broken
+    stackSize: 64
   }
 };
 
@@ -201,4 +263,72 @@ export function getBlockDrops(type: BlockType): { type: BlockType, count: number
   });
   
   return drops;
+}
+
+// Special block property detection functions
+
+/**
+ * Check if a block is damaging to players on contact
+ */
+export function isBlockDamaging(type: BlockType): boolean {
+  return type === 'lava' || type === 'cactus';
+}
+
+/**
+ * Check if a block emits light
+ */
+export function isBlockLightEmitter(type: BlockType): boolean {
+  return type === 'lava' || type === 'torch';
+}
+
+/**
+ * Check if a block affects player movement
+ * Returns an object with movement properties
+ */
+export function getBlockMovementEffect(type: BlockType): { 
+  speedMultiplier: number,
+  slippery: boolean 
+} {
+  switch (type) {
+    case 'ice':
+      return { speedMultiplier: 1.5, slippery: true };
+    case 'snow':
+      return { speedMultiplier: 0.8, slippery: false };
+    case 'water':
+      return { speedMultiplier: 0.5, slippery: false };
+    case 'lava':
+      return { speedMultiplier: 0.25, slippery: false };
+    default:
+      return { speedMultiplier: 1.0, slippery: false };
+  }
+}
+
+/**
+ * Check if a block can be affected by temperature (melting/freezing)
+ */
+export function isBlockTemperatureReactive(type: BlockType): boolean {
+  return type === 'ice' || type === 'snow';
+}
+
+/**
+ * Check if a block is a plant or can grow
+ */
+export function isBlockGrowable(type: BlockType): boolean {
+  return type === 'cactus';
+}
+
+/**
+ * Check if a block has placement restrictions
+ */
+export function getBlockPlacementRestrictions(type: BlockType): { 
+  validSurfaces: BlockType[]
+} {
+  switch (type) {
+    case 'cactus':
+      return { validSurfaces: ['sand'] };
+    case 'torch':
+      return { validSurfaces: ['stone', 'dirt', 'grass', 'wood', 'log', 'sand', 'snow'] };
+    default:
+      return { validSurfaces: [] }; // No restrictions
+  }
 }

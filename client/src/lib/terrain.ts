@@ -73,12 +73,16 @@ export function generateTerrain() {
             const humidity = (humidityNoise + 1) / 2; // 0-1
             
             // Determine biome type
-            let biome: 'plains' | 'desert' | 'forest' | 'mountains' | 'beach';
+            let biome: 'plains' | 'desert' | 'forest' | 'mountains' | 'beach' | 'snow' | 'cactus';
             
             if (height < WATER_LEVEL + 2) {
               biome = 'beach';
-            } else if (temperature > 0.7) {
+            } else if (temperature > 0.8 && humidity < 0.3) {
               biome = 'desert';
+            } else if (temperature < 0.2) {
+              biome = 'snow'; // Add snow biome for cold areas
+            } else if (temperature > 0.7 && humidity < 0.5) {
+              biome = 'cactus'; // Add cactus biome for hot, moderate humidity areas
             } else if (humidity > 0.6) {
               biome = 'forest';
             } else if (height > BASE_HEIGHT + 20) {
@@ -93,7 +97,31 @@ export function generateTerrain() {
             
             // Fill with stone up to near surface
             for (let y = 1; y < height - 3; y++) {
-              blocks[`${worldX},${y},${worldZ}`] = 'stone';
+              // Create rare lava pools in deep regions
+              if (y < 15 && Math.random() < 0.002) { // Very rare lava pools
+                // Generate a small lava pool
+                const lavaRadius = Math.floor(Math.random() * 2) + 2;
+                const lavaHeight = Math.floor(Math.random() * 2) + 2;
+                
+                for (let lx = -lavaRadius; lx <= lavaRadius; lx++) {
+                  for (let lz = -lavaRadius; lz <= lavaRadius; lz++) {
+                    for (let ly = 0; ly < lavaHeight; ly++) {
+                      const dist = Math.sqrt(lx*lx + lz*lz);
+                      if (dist <= lavaRadius) {
+                        const lavaX = worldX + lx;
+                        const lavaY = y + ly;
+                        const lavaZ = worldZ + lz;
+                        blocks[`${lavaX},${lavaY},${lavaZ}`] = 'lava';
+                      }
+                    }
+                  }
+                }
+                
+                // Skip over the lava pool area
+                y += lavaHeight;
+              } else {
+                blocks[`${worldX},${y},${worldZ}`] = 'stone';
+              }
             }
             
             // Surface blocks depend on biome
@@ -123,9 +151,53 @@ export function generateTerrain() {
                 case 'beach':
                   surfaceBlock = 'sand';
                   break;
+                case 'snow':
+                  surfaceBlock = 'snow';
+                  // Add ice lakes in snow biomes
+                  if (Math.random() < 0.1 && height < BASE_HEIGHT + 5) {
+                    // Create small ice lakes
+                    const lakeRadius = Math.floor(Math.random() * 3) + 2;
+                    const lakeDepth = Math.floor(Math.random() * 2) + 1;
+                    
+                    for (let lx = -lakeRadius; lx <= lakeRadius; lx++) {
+                      for (let lz = -lakeRadius; lz <= lakeRadius; lz++) {
+                        const dist = Math.sqrt(lx*lx + lz*lz);
+                        if (dist <= lakeRadius) {
+                          const lakeX = worldX + lx;
+                          const lakeZ = worldZ + lz;
+                          
+                          // Replace surface block with ice
+                          blocks[`${lakeX},${height},${lakeZ}`] = 'ice';
+                          
+                          // Add water underneath ice
+                          for (let d = 1; d <= lakeDepth; d++) {
+                            blocks[`${lakeX},${height-d},${lakeZ}`] = 'water';
+                          }
+                        }
+                      }
+                    }
+                  }
+                  break;
+                case 'cactus':
+                  surfaceBlock = 'sand';
+                  // Add occasional cacti in the cactus biome
+                  if (Math.random() < 0.1) {
+                    const cactusHeight = Math.floor(Math.random() * 3) + 2;
+                    for (let y = height + 1; y <= height + cactusHeight; y++) {
+                      blocks[`${worldX},${y},${worldZ}`] = 'cactus';
+                    }
+                  }
+                  break;
                 case 'mountains':
                   // Higher mountains have stone tops
-                  surfaceBlock = (height > BASE_HEIGHT + 25) ? 'stone' : 'grass';
+                  // Very high mountains get snow caps
+                  if (height > BASE_HEIGHT + 40) {
+                    surfaceBlock = 'snow';
+                  } else if (height > BASE_HEIGHT + 25) {
+                    surfaceBlock = 'stone';
+                  } else {
+                    surfaceBlock = 'grass';
+                  }
                   break;
                 default:
                   surfaceBlock = 'grass';
@@ -237,7 +309,7 @@ function getBlockType(height: number, y: number, biome: string, waterLevel: numb
   
   // Underground
   if (y < height) {
-    if (biome === 'desert' || biome === 'beach') {
+    if (biome === 'desert' || biome === 'beach' || biome === 'cactus') {
       return 'sand';
     }
     return 'dirt';
@@ -245,17 +317,27 @@ function getBlockType(height: number, y: number, biome: string, waterLevel: numb
   
   // Surface
   if (y === height) {
-    if (biome === 'desert' || biome === 'beach') {
+    if (biome === 'desert' || biome === 'beach' || biome === 'cactus') {
       return 'sand';
     }
-    if (biome === 'mountains' && height > 25) {
-      return 'stone';
+    if (biome === 'snow') {
+      return 'snow';
+    }
+    if (biome === 'mountains') {
+      if (height > 40) {
+        return 'snow';
+      } else if (height > 25) {
+        return 'stone';
+      }
     }
     return 'grass';
   }
   
-  // Water
+  // Water - potentially frozen in cold biomes
   if (y <= waterLevel) {
+    if (biome === 'snow' && y === waterLevel) {
+      return 'ice';
+    }
     return 'water';
   }
   
