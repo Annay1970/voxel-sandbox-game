@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { Sky, Stars, OrbitControls } from "@react-three/drei";
@@ -6,6 +6,7 @@ import { useVoxelGame } from "../../lib/stores/useVoxelGame";
 import Player from "./Player";
 import Chunk from "./Chunk";
 import Creature from "./Creature";
+import Rock from "./Rock";
 import { generateTerrain } from "../../lib/terrain";
 import { useErrorTracking, updatePerformanceMetrics } from "../../lib/utils/errorTracker";
 import { textureManager } from "../../lib/utils/textureManager";
@@ -242,6 +243,76 @@ export default function World() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+  
+  // Generate rock decorations across the landscape
+  // We use useMemo to create rocks at fixed positions, ensuring they don't regenerate on every render
+  const rockDecorations = useMemo(() => {
+    console.log("Generating rock decorations");
+    const rocks = [];
+    const rockCount = 15; // Number of rocks to place
+    
+    // Generate rocks with some randomness but deterministically
+    // We use a seed-like approach to position them
+    const seed = 42; // Fixed seed for consistent generation
+    
+    for (let i = 0; i < rockCount; i++) {
+      // Generate pseudo-random positions based on the rock index and seed
+      const rockSeed = seed + i * 7919; // Use a prime number to add variety
+      
+      // Create a simple hash function for position generation
+      const hashX = Math.sin(rockSeed * 0.1) * 10000;
+      const hashZ = Math.cos(rockSeed * 0.1) * 10000;
+      
+      // Generate positions within reasonable range of the world
+      const x = Math.floor((hashX - Math.floor(hashX)) * 64) - 32;
+      const z = Math.floor((hashZ - Math.floor(hashZ)) * 64) - 32;
+      
+      // Determine rock height based on terrain - place on top of blocks
+      let y = 0;
+      let foundSurface = false;
+      
+      // Scan from y=70 down to find the highest solid block
+      for (let checkY = 70; checkY >= 0; checkY--) {
+        const blockKey = `${x},${checkY},${z}`;
+        if (blocks[blockKey] && blocks[blockKey] !== 'air' && blocks[blockKey] !== 'water') {
+          y = checkY + 1; // Place rock on top of this block
+          foundSurface = true;
+          break;
+        }
+      }
+      
+      // Only add rock if we found a surface to place it on
+      if (foundSurface) {
+        // Determine rock variant (0-2) based on position
+        const variant = Math.abs((x * z) % 3);
+        
+        // Randomize rock rotation and scale for variety
+        const rotation: [number, number, number] = [
+          0, 
+          (hashX - Math.floor(hashX)) * Math.PI * 2, // Random rotation 0-2π
+          0
+        ];
+        
+        // Slightly randomize scale
+        const baseScale = 1.0 + (hashZ - Math.floor(hashZ)) * 1.5;
+        const scale: [number, number, number] = [
+          baseScale + (variant * 0.2),
+          baseScale, 
+          baseScale + (variant * 0.2)
+        ];
+        
+        rocks.push({
+          position: [x, y, z] as [number, number, number],
+          rotation,
+          scale,
+          variant
+        });
+      }
+    }
+    
+    console.log(`Generated ${rocks.length} rock decorations`);
+    return rocks;
+  }, [blocks]); // Only recalculate if the blocks change
 
   return (
     <group ref={worldRef}>
@@ -278,6 +349,17 @@ export default function World() {
           animationProgress={creature.animationProgress}
           flockId={creature.flockId}
           leader={creature.leader}
+        />
+      ))}
+      
+      {/* Decorative rocks scattered around the terrain */}
+      {rockDecorations.map((rock, index) => (
+        <Rock 
+          key={`rock-${index}`}
+          position={rock.position}
+          scale={rock.scale}
+          rotation={rock.rotation}
+          variant={rock.variant}
         />
       ))}
       
