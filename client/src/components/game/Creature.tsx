@@ -1,6 +1,12 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, Suspense } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { GLTF } from 'three-stdlib';
+import { useAudio } from '../../lib/stores/useAudio';
+
+// Preload available models
+useGLTF.preload('/models/zombie.glb');
 
 interface CreatureProps {
   type: string;
@@ -30,7 +36,31 @@ export default function Creature({
   leader = false
 }: CreatureProps) {
   const meshRef = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<THREE.Group>(null);
   const [color, setColor] = useState<string>('#ffffff');
+  const [modelLoaded, setModelLoaded] = useState(false);
+  const [modelError, setModelError] = useState(false);
+  
+  // Try to load 3D model for zombie
+  let zombieModel: THREE.Group | null = null;
+  if (type === 'zombie') {
+    try {
+      const { scene } = useGLTF('/models/zombie.glb') as GLTF & {
+        scene: THREE.Group;
+      };
+      zombieModel = scene;
+      
+      if (!modelLoaded) {
+        setModelLoaded(true);
+        console.log("Zombie model loaded successfully");
+      }
+    } catch (error) {
+      if (!modelError) {
+        console.warn("Failed to load zombie model, using fallback:", error);
+        setModelError(true);
+      }
+    }
+  }
   
   // Set up creature appearance based on type
   useEffect(() => {
@@ -64,8 +94,42 @@ export default function Creature({
     }
   }, [type]);
   
-  // Add simple animation
+  // Handle sound effects for creatures
+  useEffect(() => {
+    // Try to play creature sounds when created
+    const audioStore = useAudio.getState();
+    
+    if (audioStore) {
+      try {
+        // Initial idle sound with some randomization to avoid all creatures sounding at once
+        const initialDelay = Math.random() * 2000;
+        setTimeout(() => {
+          audioStore.playCreatureSound(type, 'idle');
+        }, initialDelay);
+        
+        // Periodic sounds for alive creatures
+        const soundInterval = setInterval(() => {
+          // Only make sounds occasionally
+          if (Math.random() < 0.3 && state === 'idle') {
+            audioStore.playCreatureSound(type, 'idle');
+          }
+          
+          // More sounds when aggressive
+          if (mood === 'aggressive' && Math.random() < 0.5) {
+            audioStore.playCreatureSound(type, 'idle');
+          }
+        }, 7000 + Math.random() * 15000); // Random interval between sounds
+        
+        return () => clearInterval(soundInterval);
+      } catch (error) {
+        console.warn('Could not play creature sounds:', error);
+      }
+    }
+  }, [type, mood, state]);
+
+  // Add animations
   useFrame(() => {
+    // For base mesh (fallback or creatures without 3D models)
     if (meshRef.current) {
       // Idle bobbing animation
       if (animationState === 'idle') {
@@ -81,6 +145,26 @@ export default function Creature({
       // If leader, add slight up/down motion to indicate status
       if (leader) {
         meshRef.current.position.y = position.y + 0.2 + Math.sin(Date.now() * 0.002) * 0.1;
+      }
+      
+      // If aggressive or attacking, add more intense motion
+      if (mood === 'aggressive' && animationState === 'attack') {
+        meshRef.current.position.z = position.z + Math.sin(Date.now() * 0.01) * 0.2;
+      }
+    }
+    
+    // For 3D models (when loaded)
+    if (groupRef.current && zombieModel) {
+      // More complex animations for the 3D model
+      if (animationState === 'idle') {
+        // Subtle swaying for 3D model
+        groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.001) * 0.05;
+      } else if (animationState === 'walk') {
+        // Walking animation - bob up and down slightly
+        groupRef.current.position.y = Math.sin(Date.now() * 0.01) * 0.05;
+      } else if (animationState === 'attack') {
+        // Attack animation - lunge forward slightly
+        groupRef.current.position.z = Math.sin(Date.now() * 0.01) * 0.1;
       }
     }
   });
@@ -135,8 +219,78 @@ export default function Creature({
         </group>
       ) : (
         // Hostile mobs - different shapes
-        type === 'zombie' || type === 'skeleton' ? (
-          // Humanoid hostiles
+        type === 'zombie' ? (
+          // Zombie with 3D model if available
+          <group>
+            {modelLoaded && zombieModel ? (
+              <Suspense fallback={
+                // Fallback to simple model while loading
+                <mesh castShadow>
+                  <boxGeometry args={[0.6, 1.6, 0.5]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+              }>
+                <group ref={groupRef}>
+                  <primitive 
+                    object={zombieModel.clone()} 
+                    scale={[2.5, 2.5, 2.5]} 
+                    position={[0, -1.5, 0]}
+                    rotation={[0, Math.PI - rotation.y, 0]} 
+                    castShadow 
+                  />
+                </group>
+              </Suspense>
+            ) : (
+              // Fallback if model fails to load
+              <>
+                {/* Torso */}
+                <mesh castShadow position={[0, 0.8, 0]}>
+                  <boxGeometry args={[0.6, 1.2, 0.3]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+                
+                {/* Hips */}
+                <mesh castShadow position={[0, 0.3, 0]}>
+                  <boxGeometry args={[0.3, 0.6, 0.3]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+                
+                {/* Arms */}
+                <mesh castShadow position={[0.4, 0.8, 0]}>
+                  <boxGeometry args={[0.2, 0.8, 0.2]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+                <mesh castShadow position={[-0.4, 0.8, 0]}>
+                  <boxGeometry args={[0.2, 0.8, 0.2]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+                
+                {/* Legs */}
+                <mesh castShadow position={[0.2, -0.5, 0]}>
+                  <boxGeometry args={[0.2, 0.6, 0.2]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+                <mesh castShadow position={[-0.2, -0.5, 0]}>
+                  <boxGeometry args={[0.2, 0.6, 0.2]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+                
+                {/* Head */}
+                <mesh castShadow position={[0, 1.5, 0]}>
+                  <boxGeometry args={[0.5, 0.5, 0.5]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+              </>
+            )}
+            
+            {/* Type indicator (bigger for hostiles) */}
+            <mesh position={[0, 2.0, 0]}>
+              <sphereGeometry args={[0.25, 16, 16]} />
+              <meshStandardMaterial color="red" emissive="red" emissiveIntensity={1} />
+            </mesh>
+          </group>
+        ) : type === 'skeleton' ? (
+          // Skeleton (still using fallback)
           <group>
             {/* Torso */}
             <mesh castShadow position={[0, 0.8, 0]}>

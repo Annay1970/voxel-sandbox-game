@@ -69,25 +69,95 @@ function App() {
       successSfx.volume = 0.7;
       setSound('successSound', successSfx);
       
-      // Additional sounds for expanded audio experience
+      // Basic movement sounds
       const walkSfx = new Audio('/sounds/walk.mp3');
       setSound('walkSound', walkSfx);
       
-      const jumpSfx = new Audio('/sounds/jump.mp3');
-      setSound('jumpSound', jumpSfx);
+      try {
+        // Additional movement sounds for different terrains
+        const walkSandSfx = new Audio('/sounds/blocks/sand_step.mp3');
+        setSound('walkSandSound', walkSandSfx);
+        
+        const walkStoneSfx = new Audio('/sounds/blocks/stone_step.mp3');
+        setSound('walkStoneSound', walkStoneSfx);
+        
+        const walkWoodSfx = new Audio('/sounds/blocks/wood_step.mp3');
+        setSound('walkWoodSound', walkWoodSfx);
+        
+        // Jump and landing
+        const jumpSfx = new Audio('/sounds/jump.mp3');
+        setSound('jumpSound', jumpSfx);
+        
+        const landSfx = new Audio('/sounds/land.mp3');
+        setSound('landSound', landSfx);
+      } catch (e) {
+        console.warn("Could not load some step sounds, using fallbacks.");
+      }
       
+      // Water-related sounds
+      try {
+        const swimSfx = new Audio('/sounds/swim.mp3');
+        setSound('swimSound', swimSfx);
+        
+        const splashSfx = new Audio('/sounds/splash.mp3');
+        setSound('splashSound', splashSfx);
+        
+        const waterAmbientSfx = new Audio('/sounds/ambient/water.mp3');
+        setSound('waterAmbient', waterAmbientSfx);
+      } catch (e) {
+        console.warn("Could not load water sounds, using fallbacks.");
+      }
+      
+      // Block interaction sounds
       const placeSfx = new Audio('/sounds/place.mp3');
       setSound('placeSound', placeSfx);
       
       const breakSfx = new Audio('/sounds/break.mp3');
       setSound('breakSound', breakSfx);
       
+      try {
+        // Specialized dig sounds
+        const digDirtSfx = new Audio('/sounds/blocks/dirt_dig.mp3');
+        setSound('digDirtSound', digDirtSfx);
+        
+        const digStoneSfx = new Audio('/sounds/blocks/stone_dig.mp3');
+        setSound('digStoneSound', digStoneSfx);
+        
+        const digWoodSfx = new Audio('/sounds/blocks/wood_dig.mp3');
+        setSound('digWoodSound', digWoodSfx);
+      } catch (e) {
+        console.warn("Could not load dig sounds, using fallbacks.");
+      }
+      
+      // Combat sounds
       const attackSfx = new Audio('/sounds/attack.mp3');
       setSound('attackSound', attackSfx);
       
       const damageSfx = new Audio('/sounds/damage.mp3');
       setSound('damageSound', damageSfx);
       
+      try {
+        const deathSfx = new Audio('/sounds/death.mp3');
+        setSound('deathSound', deathSfx);
+      } catch (e) {
+        console.warn("Could not load death sound, using fallback.");
+      }
+      
+      // UI sounds
+      try {
+        const uiClickSfx = new Audio('/sounds/ui/click.mp3');
+        setSound('uiClickSound', uiClickSfx);
+        
+        const inventoryOpenSfx = new Audio('/sounds/ui/inventory.mp3');
+        setSound('inventoryOpenSound', inventoryOpenSfx);
+        
+        const craftingSfx = new Audio('/sounds/ui/craft.mp3');
+        setSound('craftingSound', craftingSfx);
+      } catch (e) {
+        console.warn("Could not load UI sounds, using fallbacks.");
+      }
+      
+      // Ambient sounds
       const ambientDaySfx = new Audio('/sounds/ambient_day.mp3');
       setSound('ambientDay', ambientDaySfx);
       
@@ -99,6 +169,48 @@ function App() {
       
       const thunderSfx = new Audio('/sounds/thunder.mp3');
       setSound('thunderSound', thunderSfx);
+      
+      try {
+        // Cave ambient sound
+        const caveAmbientSfx = new Audio('/sounds/ambient/cave.mp3');
+        setSound('caveAmbient', caveAmbientSfx);
+      } catch (e) {
+        console.warn("Could not load cave ambient sound, using fallback.");
+      }
+      
+      // Creature sounds
+      try {
+        // Passive creatures
+        const cowSfx = new Audio('/sounds/creatures/cow.mp3');
+        setSound('cowSound', cowSfx);
+        
+        const sheepSfx = new Audio('/sounds/creatures/sheep.mp3');
+        setSound('sheepSound', sheepSfx);
+        
+        const pigSfx = new Audio('/sounds/creatures/pig.mp3');
+        setSound('pigSound', pigSfx);
+        
+        const chickenSfx = new Audio('/sounds/creatures/chicken.mp3');
+        setSound('chickenSound', chickenSfx);
+        
+        // Hostile creatures
+        const zombieSfx = new Audio('/sounds/creatures/zombie.mp3');
+        setSound('zombieSound', zombieSfx);
+        
+        const zombieHurtSfx = new Audio('/sounds/creatures/zombie_hurt.mp3');
+        setSound('zombieHurtSound', zombieHurtSfx);
+        
+        const skeletonSfx = new Audio('/sounds/creatures/skeleton.mp3');
+        setSound('skeletonSound', skeletonSfx);
+        
+        const spiderSfx = new Audio('/sounds/creatures/spider.mp3');
+        setSound('spiderSound', spiderSfx);
+        
+        const beeSfx = new Audio('/sounds/creatures/bee.mp3');
+        setSound('beeSound', beeSfx);
+      } catch (e) {
+        console.warn("Could not load some creature sounds, using fallbacks.");
+      }
     }
   }, [setChunks, setBlocks, chunks, setSound]);
 
