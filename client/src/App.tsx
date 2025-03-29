@@ -98,7 +98,7 @@ function App() {
         <Canvas
           shadows
           camera={{
-            position: [0, 2, 0], // Initial camera at ground level (will be controlled by Player component)
+            position: [0, 50, 0], // Start high above ground to see terrain (will be controlled by Player component)
             fov: 75, // Minecraft-like FOV
             near: 0.1,
             far: 2000
