@@ -1,10 +1,20 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, Suspense } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { PointerLockControls, useKeyboardControls } from '@react-three/drei';
+import { 
+  PointerLockControls, 
+  useKeyboardControls, 
+  OrbitControls,
+  useGLTF
+} from '@react-three/drei';
 import * as THREE from 'three';
+import { GLTF } from 'three-stdlib';
 import { BlockType } from '../../lib/blocks';
 import { useVoxelGame } from '../../lib/stores/useVoxelGame';
 import { useSkills } from '../../lib/stores/useSkills';
+import { useAudio } from '../../lib/stores/useAudio';
+
+// Preload the player model
+useGLTF.preload('/models/player.glb');
 
 // Controls mapping
 enum Controls {
@@ -39,6 +49,13 @@ export default function Player() {
   // Get character stats from skills
   const characterSpeed = useSkills(state => state.characterSpeed);
   const addXp = useSkills(state => state.addXp);
+  
+  // Get audio functions from audio store
+  const playFootsteps = useAudio(state => state.playFootsteps);
+  const stopFootsteps = useAudio(state => state.stopFootsteps);
+  const playWaterSounds = useAudio(state => state.playWaterSounds);
+  const playBlockBreakSound = useAudio(state => state.playBlockBreakSound);
+  const playBlockPlaceSound = useAudio(state => state.playBlockPlaceSound);
   
   // Get the three.js camera
   const { camera } = useThree();
@@ -250,6 +267,9 @@ export default function Player() {
         // Remove the block
         removeBlock(x, y, z);
         
+        // Play appropriate sound effect for block breaking
+        playBlockBreakSound(blockType);
+        
         // Grant mining XP
         if (blockType === 'stone' || blockType === 'coal') {
           addXp('mining', 5);
@@ -309,6 +329,9 @@ export default function Player() {
       // Place the block
       placeBlock(placeX, placeY, placeZ, inventoryItem.type as BlockType);
       
+      // Play the placement sound
+      playBlockPlaceSound(inventoryItem.type);
+      
       // Grant building XP
       addXp('building', 2);
       
@@ -324,9 +347,42 @@ export default function Player() {
       document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [position, attackCooldown, placeCooldown, blocks, removeBlock, placeBlock, setSelectedBlock, addXp]);
+  }, [position, attackCooldown, placeCooldown, blocks, removeBlock, placeBlock, setSelectedBlock, addXp, playBlockBreakSound, playBlockPlaceSound]);
   
-  // Set up keyboard events for inventory selection
+  // Camera mode state from the game store
+  const cameraMode = useVoxelGame(state => state.player.cameraMode);
+  const toggleCameraMode = useVoxelGame(state => state.toggleCameraMode);
+  
+  // Third person camera orbit control ref
+  const orbitControlsRef = useRef<any>(null);
+  
+  // Load the player 3D model with error handling
+  const [modelLoaded, setModelLoaded] = useState(false);
+  const [modelError, setModelError] = useState(false);
+  
+  // Try to load the model, but handle errors gracefully
+  let playerModel: THREE.Group | null = null;
+  try {
+    // Using useGLTF within a try/catch won't work properly due to React hooks rules,
+    // so we'll use a state to track loading status
+    const { scene } = useGLTF('/models/player.glb') as GLTF & {
+      scene: THREE.Group;
+    };
+    playerModel = scene;
+    
+    // If we got here, loading was successful
+    if (!modelLoaded) {
+      setModelLoaded(true);
+      console.log("Player model loaded successfully");
+    }
+  } catch (error) {
+    if (!modelError) {
+      console.warn("Failed to load player model, using fallback:", error);
+      setModelError(true);
+    }
+  }
+  
+  // Set up keyboard events for inventory selection and camera mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Number keys 1-9 select inventory slots
@@ -343,11 +399,20 @@ export default function Player() {
           document.dispatchEvent(event);
         }
       }
+      
+      // V key to toggle camera mode
+      if (e.key === 'v' || e.key === 'V') {
+        toggleCameraMode();
+        console.log(`Camera mode switched to ${useVoxelGame.getState().player.cameraMode}`);
+        
+        // Play sound
+        useAudio.getState().playUISound('click');
+      }
     };
     
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [attackCooldown]);
+  }, [attackCooldown, toggleCameraMode]);
   
   // Physics and movement update
   useFrame(() => {
@@ -482,6 +547,45 @@ export default function Player() {
     setPosition([newPosition.x, newPosition.y, newPosition.z]);
     setVelocity(newVel);
     
+    // Determine terrain type for sound effects
+    let terrainType: 'grass' | 'sand' | 'stone' | 'wood' | 'water' = 'grass';
+    const blockBelowKey = `${Math.floor(newPosition.x)},${Math.floor(newPosition.y - 0.1)},${Math.floor(newPosition.z)}`;
+    const blockBelow = blocks[blockBelowKey];
+    
+    if (blockBelow) {
+      // Determine terrain type from block below the player
+      switch (blockBelow) {
+        case 'sand': terrainType = 'sand'; break;
+        case 'stone': terrainType = 'stone'; break;
+        case 'wood': terrainType = 'wood'; break;
+        case 'water': terrainType = 'water'; break;
+        default: terrainType = 'grass'; break;
+      }
+    }
+    
+    // Play appropriate sounds based on movement and terrain
+    const isMoving = Math.abs(newVel.x) > 0.01 || Math.abs(newVel.z) > 0.01;
+    const isRunning = sprint && isMoving;
+    const isWalking = isMoving && !isRunning;
+    
+    if (isMoving && grounded) {
+      playFootsteps(isWalking, isRunning, grounded, terrainType);
+    } else {
+      stopFootsteps();
+    }
+    
+    // Check if in water
+    const blockAtFeetKey = `${Math.floor(newPosition.x)},${Math.floor(newPosition.y)},${Math.floor(newPosition.z)}`;
+    const blockAtFeet = blocks[blockAtFeetKey];
+    const blockAtHeadKey = `${Math.floor(newPosition.x)},${Math.floor(newPosition.y + 1)},${Math.floor(newPosition.z)}`;
+    const blockAtHead = blocks[blockAtHeadKey];
+    
+    const isSwimming = blockAtFeet === 'water';
+    const isUnderwater = blockAtFeet === 'water' && blockAtHead === 'water';
+    
+    // Play water sounds if in water
+    playWaterSounds(isSwimming, isUnderwater);
+    
     // Update camera and player position
     if (cameraRef.current) {
       // Position camera at player's eye level
@@ -500,46 +604,123 @@ export default function Player() {
     );
   });
   
+  // Update game store with player position and rotation
+  useEffect(() => {
+    // Send position updates to the global store
+    useVoxelGame.getState().updatePlayerPosition(position);
+    
+    // Calculate rotation from camera
+    if (cameraRef.current) {
+      const cameraDirection = new THREE.Vector3();
+      cameraRef.current.getWorldDirection(cameraDirection);
+      
+      // Calculate Euler angles from direction vector
+      const euler = new THREE.Euler().setFromQuaternion(
+        new THREE.Quaternion().setFromUnitVectors(
+          new THREE.Vector3(0, 0, -1), // Default camera looks down negative z-axis
+          cameraDirection
+        )
+      );
+      
+      // Update rotation in store
+      useVoxelGame.getState().updatePlayerRotation([euler.x, euler.y, euler.z]);
+    }
+  }, [position]);
+
+  // Handle third-person camera adjustments
+  useEffect(() => {
+    if (cameraMode === 'third' && orbitControlsRef.current) {
+      // Set orbit controls distance and angles for third-person view
+      orbitControlsRef.current.minDistance = 3;
+      orbitControlsRef.current.maxDistance = 10;
+      orbitControlsRef.current.distance = 5;
+      orbitControlsRef.current.minPolarAngle = Math.PI / 6; // Limit how high camera can go
+      orbitControlsRef.current.maxPolarAngle = Math.PI / 2; // Limit how low camera can go
+    }
+  }, [cameraMode]);
+  
   return (
     <>
-      {/* First-person controls */}
-      <PointerLockControls ref={controlsRef} />
+      {/* Controls based on camera mode */}
+      {cameraMode === 'first' ? (
+        // First-person controls
+        <PointerLockControls ref={controlsRef} />
+      ) : (
+        // Third-person orbit controls
+        <OrbitControls 
+          ref={orbitControlsRef}
+          target={[position[0], position[1] + eyeHeight, position[2]]}
+          enableZoom={true}
+          enablePan={false}
+          makeDefault
+        />
+      )}
       
-      {/* Player model - visible in third-person mode, but hidden in first-person */}
+      {/* Player model - always present but only visible in third-person mode */}
       <group ref={playerRef} position={[position[0], position[1], position[2]]}>
-        {/* Player head */}
-        <mesh position={[0, playerHeight - 0.25, 0]}>
-          <boxGeometry args={[0.5, 0.5, 0.5]} />
-          <meshStandardMaterial color="#FFD3B4" />
-        </mesh>
+        {/* Conditional rendering based on camera mode */}
+        {cameraMode === 'third' ? (
+          // In third-person view, show player model
+          <Suspense fallback={
+            // Fallback for when model is loading
+            <mesh>
+              <boxGeometry args={[0.5, 1.6, 0.5]} />
+              <meshStandardMaterial color="#2196F3" wireframe />
+            </mesh>
+          }>
+            {modelLoaded && playerModel ? (
+              // If 3D model loaded successfully, use it
+              <primitive 
+                object={playerModel!.clone()} 
+                scale={[0.8, 0.8, 0.8]}
+                position={[0, -0.8, 0]} 
+                rotation={[0, Math.PI, 0]} // Rotate to face forward
+                castShadow
+              />
+            ) : (
+              // Fallback blocky character if model failed to load
+              <group>
+                {/* Player head */}
+                <mesh position={[0, playerHeight - 0.25, 0]}>
+                  <boxGeometry args={[0.5, 0.5, 0.5]} />
+                  <meshStandardMaterial color="#FFD3B4" />
+                </mesh>
+                
+                {/* Player body */}
+                <mesh position={[0, playerHeight - 0.8, 0]}>
+                  <boxGeometry args={[0.5, 0.6, 0.3]} />
+                  <meshStandardMaterial color="#2196F3" />
+                </mesh>
+                
+                {/* Player arms */}
+                <mesh position={[0.4, playerHeight - 0.8, 0]}>
+                  <boxGeometry args={[0.2, 0.6, 0.2]} />
+                  <meshStandardMaterial color="#2196F3" />
+                </mesh>
+                <mesh position={[-0.4, playerHeight - 0.8, 0]}>
+                  <boxGeometry args={[0.2, 0.6, 0.2]} />
+                  <meshStandardMaterial color="#2196F3" />
+                </mesh>
+                
+                {/* Player legs */}
+                <mesh position={[0.15, playerHeight - 1.45, 0]}>
+                  <boxGeometry args={[0.2, 0.6, 0.2]} />
+                  <meshStandardMaterial color="#0D47A1" />
+                </mesh>
+                <mesh position={[-0.15, playerHeight - 1.45, 0]}>
+                  <boxGeometry args={[0.2, 0.6, 0.2]} />
+                  <meshStandardMaterial color="#0D47A1" />
+                </mesh>
+              </group>
+            )}
+          </Suspense>
+        ) : (
+          // In first-person, only render the player's "arms" and tool if needed
+          // Let's skip this for now to keep it simple
+          null
+        )}
         
-        {/* Player body */}
-        <mesh position={[0, playerHeight - 0.8, 0]}>
-          <boxGeometry args={[0.5, 0.6, 0.3]} />
-          <meshStandardMaterial color="#2196F3" />
-        </mesh>
-        
-        {/* Player arms */}
-        <mesh position={[0.4, playerHeight - 0.8, 0]}>
-          <boxGeometry args={[0.2, 0.6, 0.2]} />
-          <meshStandardMaterial color="#2196F3" />
-        </mesh>
-        <mesh position={[-0.4, playerHeight - 0.8, 0]}>
-          <boxGeometry args={[0.2, 0.6, 0.2]} />
-          <meshStandardMaterial color="#2196F3" />
-        </mesh>
-        
-        {/* Player legs */}
-        <mesh position={[0.15, playerHeight - 1.45, 0]}>
-          <boxGeometry args={[0.2, 0.6, 0.2]} />
-          <meshStandardMaterial color="#0D47A1" />
-        </mesh>
-        <mesh position={[-0.15, playerHeight - 1.45, 0]}>
-          <boxGeometry args={[0.2, 0.6, 0.2]} />
-          <meshStandardMaterial color="#0D47A1" />
-        </mesh>
-        
-        {/* Add a light for the player (like holding a torch) */}
+        {/* Light source that follows the player (like holding a torch) */}
         <pointLight 
           position={[0, eyeHeight, 0]} 
           intensity={0.5} 

@@ -306,35 +306,6 @@ export const useAudio = create<AudioState>((set, get) => ({
     }
   },
   
-  // Footstep system with variable speed based on player movement
-  playFootsteps: (isWalking, isRunning, onGround) => {
-    const state = get();
-    
-    // Don't play footsteps if muted, not on ground, or not moving
-    if (state.isMuted || !onGround || (!isWalking && !isRunning)) {
-      state.stopFootsteps();
-      return;
-    }
-    
-    // If already playing, don't start again
-    if (state.footstepTimer) return;
-    
-    // Footstep speed based on movement type
-    const interval = isRunning ? 250 : 400; // milliseconds between steps
-    
-    const timer = window.setInterval(() => {
-      if (!state.walkSound || state.isMuted) return;
-      
-      const soundClone = state.walkSound.cloneNode() as HTMLAudioElement;
-      soundClone.volume = isRunning ? 0.3 : 0.2;
-      soundClone.play().catch(error => {
-        console.log("Walk sound play prevented:", error);
-      });
-    }, interval);
-    
-    set({ footstepTimer: timer });
-  },
-  
   // Stop footstep sounds
   stopFootsteps: () => {
     const { footstepTimer } = get();
