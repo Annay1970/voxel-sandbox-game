@@ -227,11 +227,24 @@ const MobileControls: React.FC = () => {
   const inventoryItems = useVoxelGame(state => state.inventory);
   const selectedInventorySlot = useVoxelGame(state => state.selectedInventorySlot);
   const setSelectedInventorySlot = useVoxelGame(state => state.setSelectedInventorySlot);
-  const toggleInventory = useVoxelGame(state => state.toggleInventory);
-  const setCameraRotation = useVoxelGame(state => state.setCameraRotation);
-  const toggleCameraMode = useVoxelGame(state => state.toggleCameraMode);
   const timeOfDay = useVoxelGame(state => state.timeOfDay);
   const weather = useVoxelGame(state => state.weather);
+  
+  // Fallback functions for features we haven't fully implemented yet
+  const toggleInventory = () => {
+    console.log("Toggle inventory");
+    // We'll implement this function properly later
+  };
+  
+  const setCameraRotation = (x: number, y: number) => {
+    console.log(`Camera rotation: x=${x}, y=${y}`);
+    // We'll implement this function properly later
+  };
+  
+  const toggleCameraMode = () => {
+    console.log("Toggle camera mode");
+    // We'll implement this function properly later
+  };
   
   // Detect mobile devices
   useEffect(() => {
@@ -351,9 +364,6 @@ const MobileControls: React.FC = () => {
     addXp
   ]);
   
-  // Hide if not on mobile
-  if (!isMobile) return null;
-  
   // Camera rotation handler
   useEffect(() => {
     if (!isMobile) return;
@@ -362,9 +372,15 @@ const MobileControls: React.FC = () => {
     if (lookDirection.x !== 0 || lookDirection.y !== 0) {
       // Apply some smoothing to camera movement
       const rotationSpeed = 2.0;
-      setCameraRotation(lookDirection.x * rotationSpeed, lookDirection.y * rotationSpeed);
+      // Check if function exists before calling
+      if (typeof setCameraRotation === 'function') {
+        setCameraRotation(lookDirection.x * rotationSpeed, lookDirection.y * rotationSpeed);
+      }
     }
   }, [isMobile, lookDirection, setCameraRotation]);
+  
+  // Hide if not on mobile
+  if (!isMobile) return null;
   
   // Calculate the time of day and weather for UI display
   const getTimeOfDayLabel = () => {

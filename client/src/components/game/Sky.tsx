@@ -198,30 +198,33 @@ export default function SkyDome() {
       <fog attach="fog" args={[fogColor.getHex(), 5, 100]} />
       
       {/* Sun (visible during day) */}
-      <mesh position={sunPosition} visible={timeOfDay > 0.25 && timeOfDay < 0.75}>
+      <mesh visible={timeOfDay > 0.25 && timeOfDay < 0.75}>
         <sphereGeometry args={[15, 16, 16]} />
         <meshBasicMaterial color="#FFFF77" />
+        <primitive object={new THREE.Vector3(sunPosition[0], sunPosition[1], sunPosition[2])} attach="position" />
       </mesh>
       
       {/* Sun glow */}
-      <sprite position={sunPosition} visible={timeOfDay > 0.25 && timeOfDay < 0.75} scale={50}>
+      <sprite visible={timeOfDay > 0.25 && timeOfDay < 0.75} scale={50}>
         <spriteMaterial attach="material" map={null} transparent opacity={0.4} color="#FFFFA0" />
+        <primitive object={new THREE.Vector3(sunPosition[0], sunPosition[1], sunPosition[2])} attach="position" />
       </sprite>
       
       {/* Moon (visible during night) */}
-      <mesh position={moonPosition} visible={timeOfDay < 0.25 || timeOfDay > 0.75}>
+      <mesh visible={timeOfDay < 0.25 || timeOfDay > 0.75}>
         <sphereGeometry args={[8, 16, 16]} />
         <meshBasicMaterial color="#F0F0F0" />
+        <primitive object={new THREE.Vector3(moonPosition[0], moonPosition[1], moonPosition[2])} attach="position" />
       </mesh>
       
       {/* Moon glow */}
-      <sprite position={moonPosition} visible={timeOfDay < 0.25 || timeOfDay > 0.75} scale={30}>
+      <sprite visible={timeOfDay < 0.25 || timeOfDay > 0.75} scale={30}>
         <spriteMaterial attach="material" map={null} transparent opacity={0.3} color="#C0C0FF" />
+        <primitive object={new THREE.Vector3(moonPosition[0], moonPosition[1], moonPosition[2])} attach="position" />
       </sprite>
       
       {/* Directional light from sun/moon */}
       <directionalLight 
-        position={timeOfDay > 0.25 && timeOfDay < 0.75 ? sunPosition : moonPosition} 
         intensity={sunLightIntensity} 
         color={sunLightColor.getHex()} 
         castShadow
@@ -232,7 +235,16 @@ export default function SkyDome() {
         shadow-camera-right={100}
         shadow-camera-top={100}
         shadow-camera-bottom={-100}
-      />
+      >
+        <primitive 
+          object={new THREE.Vector3(
+            (timeOfDay > 0.25 && timeOfDay < 0.75 ? sunPosition[0] : moonPosition[0]),
+            (timeOfDay > 0.25 && timeOfDay < 0.75 ? sunPosition[1] : moonPosition[1]),
+            (timeOfDay > 0.25 && timeOfDay < 0.75 ? sunPosition[2] : moonPosition[2])
+          )} 
+          attach="position" 
+        />
+      </directionalLight>
       
       {/* Ambient light */}
       <ambientLight intensity={ambientIntensity} />
