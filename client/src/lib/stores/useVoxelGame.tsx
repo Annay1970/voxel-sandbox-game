@@ -37,6 +37,37 @@ export interface Creature {
   targetPosition?: { x: number, y: number, z: number } | null;
 }
 
+// Camera mode types
+export type CameraMode = 'first' | 'third';
+
+export interface PlayerState {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  velocity: [number, number, number];
+  onGround: boolean;
+  health: number;
+  maxHealth: number;
+  hunger: number;
+  maxHunger: number;
+  oxygen: number;
+  maxOxygen: number;
+  experience: number;
+  level: number;
+  flying: boolean;
+  swimming: boolean;
+  cameraMode: CameraMode;
+  canJump: boolean;
+}
+
+export interface CraftingRecipe {
+  output: {
+    type: BlockType;
+    count: number;
+  };
+  input: Record<string, number>; // type -> count
+  requiresCraftingTable: boolean;
+}
+
 export interface VoxelGameState {
   // Block data
   blocks: Record<string, BlockType>; // Format: "x,y,z" -> BlockType
@@ -47,6 +78,11 @@ export interface VoxelGameState {
   // Creatures
   creatures: Record<string, Creature>;
   
+  // Player state
+  player: PlayerState;
+  isInventoryOpen: boolean;
+  isCraftingOpen: boolean;
+  
   // Player interaction
   selectedBlock: [number, number, number] | null; // Currently targeted block
   
@@ -54,9 +90,14 @@ export interface VoxelGameState {
   inventory: InventoryItem[];
   selectedInventorySlot: number;
   
+  // Crafting
+  craftingRecipes: CraftingRecipe[];
+  
   // World state
   timeOfDay: number; // 0.0 to 1.0, where 0.0 is midnight, 0.5 is noon
   weather: WeatherType;
+  gravity: number;
+  seed: number;
   
   // Actions
   placeBlock: (x: number, y: number, z: number, type: BlockType) => void;
@@ -69,6 +110,7 @@ export interface VoxelGameState {
   
   // Time and weather
   incrementTime: () => void;
+  setWeather: (weather: WeatherType) => void;
   
   // World generation and management
   generateChunk: (chunkX: number, chunkZ: number) => void;
@@ -77,6 +119,27 @@ export interface VoxelGameState {
   
   // Creature management
   updateCreatures: () => void;
+  spawnCreature: (type: string, x: number, y: number, z: number) => void;
+  damageCreature: (id: string, amount: number) => void;
+  
+  // Player state management
+  updatePlayerPosition: (position: [number, number, number]) => void;
+  updatePlayerRotation: (rotation: [number, number, number]) => void;
+  updatePlayerVelocity: (velocity: [number, number, number]) => void;
+  setPlayerOnGround: (onGround: boolean) => void;
+  damagePlayer: (amount: number) => void;
+  healPlayer: (amount: number) => void;
+  setCameraMode: (mode: CameraMode) => void;
+  toggleCameraMode: () => void;
+  toggleFlying: () => void;
+  toggleInventory: () => void;
+  toggleCrafting: () => void;
+  
+  // Crafting
+  craftItem: (recipeIndex: number) => boolean;
+  
+  // Camera control
+  setCameraRotation: (x: number, y: number) => void;
 }
 
 export const useVoxelGame = create<VoxelGameState>((set, get) => ({
@@ -162,6 +225,30 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     }
   },
   
+  // Player state - default values
+  player: {
+    position: [0, 10, 0],
+    rotation: [0, 0, 0],
+    velocity: [0, 0, 0],
+    onGround: false,
+    health: 20,
+    maxHealth: 20,
+    hunger: 20,
+    maxHunger: 20,
+    oxygen: 20,
+    maxOxygen: 20,
+    experience: 0,
+    level: 1,
+    flying: false,
+    swimming: false,
+    cameraMode: 'first',
+    canJump: true
+  },
+  
+  // Game UI state
+  isInventoryOpen: false,
+  isCraftingOpen: false,
+  
   // Player interaction
   selectedBlock: null,
   
@@ -179,9 +266,50 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   ],
   selectedInventorySlot: 0,
   
+  // Crafting recipes
+  craftingRecipes: [
+    {
+      output: { type: 'wood' as BlockType, count: 4 },
+      input: { 'log': 1 } as Record<string, number>,
+      requiresCraftingTable: false
+    },
+    {
+      output: { type: 'stick' as BlockType, count: 4 },
+      input: { 'wood': 2 } as Record<string, number>,
+      requiresCraftingTable: false
+    },
+    {
+      output: { type: 'craftingTable' as BlockType, count: 1 },
+      input: { 'wood': 4 } as Record<string, number>,
+      requiresCraftingTable: false
+    },
+    {
+      output: { type: 'woodenPickaxe' as BlockType, count: 1 },
+      input: { 'wood': 3, 'stick': 2 } as Record<string, number>,
+      requiresCraftingTable: true
+    },
+    {
+      output: { type: 'woodenAxe' as BlockType, count: 1 },
+      input: { 'wood': 3, 'stick': 2 } as Record<string, number>,
+      requiresCraftingTable: true
+    },
+    {
+      output: { type: 'woodenShovel' as BlockType, count: 1 },
+      input: { 'wood': 1, 'stick': 2 } as Record<string, number>,
+      requiresCraftingTable: true
+    },
+    {
+      output: { type: 'torch' as BlockType, count: 4 },
+      input: { 'stick': 1, 'coal': 1 } as Record<string, number>,
+      requiresCraftingTable: false
+    }
+  ],
+  
   // World state
   timeOfDay: 0.5, // Start at noon (0.5)
   weather: 'clear', // Start with clear weather
+  gravity: 0.05, // Gravity strength
+  seed: Math.floor(Math.random() * 1000000), // Random world seed
   
   // Actions
   placeBlock: (x, y, z, type) => {
@@ -475,6 +603,58 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   },
 
   // Update creatures
+  // Weather control
+  setWeather: (weather) => {
+    set({ weather });
+    console.log(`Weather changed to ${weather}`);
+  },
+  
+  // Creature management functions
+  spawnCreature: (type, x, y, z) => {
+    set((state) => {
+      const id = `${type}${Date.now()}`;
+      const newCreature: Creature = {
+        id,
+        type,
+        position: { x, y, z },
+        rotation: { y: Math.random() * Math.PI * 2 },
+        state: type === 'bee' ? 'flying' : 'idle',
+        mood: type.includes('zombie') || type.includes('skeleton') ? 'aggressive' : 'calm',
+        animationState: type === 'bee' ? 'flying' : 'idle',
+        animationSpeed: 1,
+        animationProgress: 0,
+        leader: false
+      };
+      
+      return {
+        ...state,
+        creatures: {
+          ...state.creatures,
+          [id]: newCreature
+        }
+      };
+    });
+    console.log(`Spawned ${type} creature at position (${x}, ${y}, ${z})`);
+  },
+  
+  damageCreature: (id, amount) => {
+    set((state) => {
+      if (!state.creatures[id]) return state;
+      
+      // In a real implementation, creatures would have health
+      // For now, let's just remove them when damaged (simplified)
+      const updatedCreatures = { ...state.creatures };
+      delete updatedCreatures[id];
+      
+      console.log(`Creature ${id} was damaged for ${amount} and removed`);
+      
+      return {
+        ...state,
+        creatures: updatedCreatures
+      };
+    });
+  },
+  
   updateCreatures: () => {
     set((state) => {
       const updatedCreatures = { ...state.creatures };
@@ -516,5 +696,172 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
         creatures: updatedCreatures
       };
     });
+  },
+  
+  // Player state management functions
+  updatePlayerPosition: (position) => {
+    set((state) => ({
+      ...state,
+      player: {
+        ...state.player,
+        position
+      }
+    }));
+  },
+  
+  updatePlayerRotation: (rotation) => {
+    set((state) => ({
+      ...state,
+      player: {
+        ...state.player,
+        rotation
+      }
+    }));
+  },
+  
+  updatePlayerVelocity: (velocity) => {
+    set((state) => ({
+      ...state,
+      player: {
+        ...state.player,
+        velocity
+      }
+    }));
+  },
+  
+  setPlayerOnGround: (onGround) => {
+    set((state) => ({
+      ...state,
+      player: {
+        ...state.player,
+        onGround,
+        canJump: onGround // Can only jump when on ground
+      }
+    }));
+  },
+  
+  damagePlayer: (amount) => {
+    set((state) => {
+      const newHealth = Math.max(0, state.player.health - amount);
+      console.log(`Player took ${amount} damage, health: ${newHealth}/${state.player.maxHealth}`);
+      
+      return {
+        ...state,
+        player: {
+          ...state.player,
+          health: newHealth
+        }
+      };
+    });
+  },
+  
+  healPlayer: (amount) => {
+    set((state) => {
+      const newHealth = Math.min(state.player.maxHealth, state.player.health + amount);
+      console.log(`Player healed for ${amount}, health: ${newHealth}/${state.player.maxHealth}`);
+      
+      return {
+        ...state,
+        player: {
+          ...state.player,
+          health: newHealth
+        }
+      };
+    });
+  },
+  
+  setCameraMode: (mode) => {
+    set((state) => ({
+      ...state,
+      player: {
+        ...state.player,
+        cameraMode: mode
+      }
+    }));
+    console.log(`Camera mode set to ${mode}`);
+  },
+  
+  toggleCameraMode: () => {
+    set((state) => ({
+      ...state,
+      player: {
+        ...state.player,
+        cameraMode: state.player.cameraMode === 'first' ? 'third' : 'first'
+      }
+    }));
+    console.log("Camera mode toggled");
+  },
+  
+  toggleFlying: () => {
+    set((state) => ({
+      ...state,
+      player: {
+        ...state.player,
+        flying: !state.player.flying
+      }
+    }));
+    console.log(`Flying mode ${get().player.flying ? 'enabled' : 'disabled'}`);
+  },
+  
+  toggleInventory: () => {
+    set((state) => ({
+      ...state,
+      isInventoryOpen: !state.isInventoryOpen,
+      // Close crafting if inventory is closed
+      isCraftingOpen: state.isInventoryOpen ? false : state.isCraftingOpen
+    }));
+    console.log(`Inventory ${get().isInventoryOpen ? 'opened' : 'closed'}`);
+  },
+  
+  toggleCrafting: () => {
+    set((state) => ({
+      ...state,
+      isCraftingOpen: !state.isCraftingOpen,
+      // Open inventory if crafting is opened
+      isInventoryOpen: !state.isCraftingOpen ? true : state.isInventoryOpen
+    }));
+    console.log(`Crafting ${get().isCraftingOpen ? 'opened' : 'closed'}`);
+  },
+  
+  // Crafting system
+  craftItem: (recipeIndex) => {
+    const { craftingRecipes, inventory } = get();
+    
+    if (recipeIndex < 0 || recipeIndex >= craftingRecipes.length) {
+      console.log("Invalid recipe index");
+      return false;
+    }
+    
+    const recipe = craftingRecipes[recipeIndex];
+    
+    // Check if we have all required ingredients
+    for (const [itemType, count] of Object.entries(recipe.input)) {
+      const hasEnough = inventory.some(item => 
+        item.type === itemType && item.count >= count
+      );
+      
+      if (!hasEnough) {
+        console.log(`Missing ingredients for crafting: need ${count} of ${itemType}`);
+        return false;
+      }
+    }
+    
+    // Remove ingredients from inventory
+    for (const [itemType, count] of Object.entries(recipe.input)) {
+      get().removeFromInventory(itemType as BlockType, count);
+    }
+    
+    // Add crafted item to inventory
+    get().addToInventory(recipe.output.type, recipe.output.count);
+    
+    console.log(`Crafted ${recipe.output.count}x ${recipe.output.type}`);
+    return true;
+  },
+  
+  // Camera control
+  setCameraRotation: (x, y) => {
+    // This is usually handled by the PlayerControls component
+    // Here we only log the rotation for debugging
+    console.log(`Camera rotation: x=${x}, y=${y}`);
   }
 }));
