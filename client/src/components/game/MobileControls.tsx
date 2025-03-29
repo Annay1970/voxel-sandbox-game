@@ -206,13 +206,17 @@ const TouchButton: React.FC<TouchButtonProps> = ({
 };
 
 const MobileControls: React.FC = () => {
+  // State for controls
   const [isMobile, setIsMobile] = useState(false);
   const [moveDirection, setMoveDirection] = useState({ x: 0, y: 0 });
+  const [lookDirection, setLookDirection] = useState({ x: 0, y: 0 });
   const [jumping, setJumping] = useState(false);
   const [attacking, setAttacking] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [sprinting, setSprinting] = useState(false);
   const [inventory, setShowInventory] = useState(false);
+  const [showControls, setShowControls] = useState(false);
+  const [cameraMode, setCameraMode] = useState<'first' | 'third'>('first');
   
   // Access the game state
   const addXp = useSkills(state => state.addXp);
@@ -223,6 +227,11 @@ const MobileControls: React.FC = () => {
   const inventoryItems = useVoxelGame(state => state.inventory);
   const selectedInventorySlot = useVoxelGame(state => state.selectedInventorySlot);
   const setSelectedInventorySlot = useVoxelGame(state => state.setSelectedInventorySlot);
+  const toggleInventory = useVoxelGame(state => state.toggleInventory);
+  const setCameraRotation = useVoxelGame(state => state.setCameraRotation);
+  const toggleCameraMode = useVoxelGame(state => state.toggleCameraMode);
+  const timeOfDay = useVoxelGame(state => state.timeOfDay);
+  const weather = useVoxelGame(state => state.weather);
   
   // Detect mobile devices
   useEffect(() => {
@@ -345,12 +354,57 @@ const MobileControls: React.FC = () => {
   // Hide if not on mobile
   if (!isMobile) return null;
   
+  // Camera rotation handler
+  useEffect(() => {
+    if (!isMobile) return;
+    
+    // Update camera rotation based on the right joystick
+    if (lookDirection.x !== 0 || lookDirection.y !== 0) {
+      // Apply some smoothing to camera movement
+      const rotationSpeed = 2.0;
+      setCameraRotation(lookDirection.x * rotationSpeed, lookDirection.y * rotationSpeed);
+    }
+  }, [isMobile, lookDirection, setCameraRotation]);
+  
+  // Calculate the time of day and weather for UI display
+  const getTimeOfDayLabel = () => {
+    if (timeOfDay < 0.25) return 'Night';
+    if (timeOfDay < 0.35) return 'Dawn';
+    if (timeOfDay < 0.65) return 'Day';
+    if (timeOfDay < 0.75) return 'Dusk';
+    return 'Night';
+  };
+  
+  const getTimeIcon = () => {
+    if (timeOfDay < 0.25) return '🌙';
+    if (timeOfDay < 0.35) return '🌅';
+    if (timeOfDay < 0.65) return '☀️';
+    if (timeOfDay < 0.75) return '🌇';
+    return '🌙';
+  };
+  
+  const getWeatherIcon = () => {
+    switch (weather) {
+      case 'rain': return '🌧️';
+      case 'storm': return '⛈️';
+      case 'cloudy': return '☁️';
+      default: return '☀️';
+    }
+  };
+
   return (
     <div className="mobile-controls">
       {/* Left joystick for movement */}
       <Joystick
         position="left"
         onChange={(x, y) => setMoveDirection({ x, y })}
+      />
+      
+      {/* Right joystick for camera control */}
+      <Joystick
+        position="right"
+        onChange={(x, y) => setLookDirection({ x, y })}
+        size={100}
       />
       
       {/* Action buttons */}
@@ -388,13 +442,12 @@ const MobileControls: React.FC = () => {
       
       <TouchButton
         id="sprint-button"
-        position="right"
+        position="left"
         icon="⚡"
         label="Sprint"
         onTouch={() => setSprinting(true)}
         onRelease={() => setSprinting(false)}
         color="rgba(155, 89, 182, 0.7)"
-        visible={true}
       />
       
       <TouchButton
@@ -402,8 +455,34 @@ const MobileControls: React.FC = () => {
         position="center"
         icon="🎒"
         label="Inventory"
-        onTouch={() => setShowInventory(!inventory)}
+        onTouch={() => {
+          toggleInventory();
+          setShowInventory(!inventory);
+        }}
         color="rgba(243, 156, 18, 0.7)"
+      />
+      
+      {/* Camera mode toggle */}
+      <TouchButton
+        id="camera-mode-button"
+        position="left"
+        icon={cameraMode === 'first' ? '👤' : '👁️'}
+        label="Camera"
+        onTouch={() => {
+          toggleCameraMode();
+          setCameraMode(cameraMode === 'first' ? 'third' : 'first');
+        }}
+        color="rgba(52, 73, 94, 0.7)"
+      />
+      
+      {/* Help button */}
+      <TouchButton
+        id="help-button"
+        position="left"
+        icon="❓"
+        label="Help"
+        onTouch={() => setShowControls(!showControls)}
+        color="rgba(26, 188, 156, 0.7)"
       />
       
       {/* Inventory slot selector */}
@@ -443,6 +522,8 @@ const MobileControls: React.FC = () => {
             {item.type === 'wood' && '🟧'}
             {item.type === 'sand' && '🟨'}
             {item.type === 'leaves' && '🍃'}
+            {item.type === 'water' && '🔷'}
+            {item.type === 'torch' && '🔥'}
             
             {item.count > 0 && (
               <span
@@ -461,6 +542,27 @@ const MobileControls: React.FC = () => {
         ))}
       </div>
       
+      {/* Time & Weather indicator */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '10px',
+          right: '10px',
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          color: 'white',
+          padding: '8px',
+          borderRadius: '5px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '16px'
+        }}
+      >
+        <span>{getTimeIcon()}</span>
+        <span>{getTimeOfDayLabel()}</span>
+        <span>{getWeatherIcon()}</span>
+      </div>
+      
       {/* In-game help for controls */}
       <div
         style={{
@@ -473,18 +575,22 @@ const MobileControls: React.FC = () => {
           borderRadius: '5px',
           fontSize: '12px',
           maxWidth: '200px',
-          display: 'none' // Hidden by default, can be toggled via a button
+          display: showControls ? 'block' : 'none',
+          zIndex: 100
         }}
       >
         <h3 style={{ margin: '0 0 5px 0' }}>Mobile Controls</h3>
         <ul style={{ margin: '0', paddingLeft: '15px' }}>
           <li>Left joystick: Move</li>
+          <li>Right joystick: Look around</li>
           <li>Blue button: Jump</li>
           <li>Red button: Break blocks</li>
           <li>Green button: Place blocks</li>
           <li>Purple button: Sprint</li>
           <li>Orange button: Inventory</li>
-          <li>Tap inventory slots to select</li>
+          <li>Gray button: Camera mode</li>
+          <li>Teal button: Show/hide help</li>
+          <li>Tap inventory slots to select items</li>
         </ul>
       </div>
     </div>

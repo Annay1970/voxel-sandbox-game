@@ -505,13 +505,47 @@ export default function Player() {
       {/* First-person controls */}
       <PointerLockControls ref={controlsRef} />
       
-      {/* Player model - invisible in first person */}
+      {/* Player model - visible in third-person mode, but hidden in first-person */}
       <group ref={playerRef} position={[position[0], position[1], position[2]]}>
-        {/* Player body - only visible to others or in third-person */}
-        <mesh visible={false}>
-          <boxGeometry args={[playerWidth, playerHeight, playerDepth]} />
+        {/* Player head */}
+        <mesh position={[0, playerHeight - 0.25, 0]}>
+          <boxGeometry args={[0.5, 0.5, 0.5]} />
+          <meshStandardMaterial color="#FFD3B4" />
+        </mesh>
+        
+        {/* Player body */}
+        <mesh position={[0, playerHeight - 0.8, 0]}>
+          <boxGeometry args={[0.5, 0.6, 0.3]} />
           <meshStandardMaterial color="#2196F3" />
         </mesh>
+        
+        {/* Player arms */}
+        <mesh position={[0.4, playerHeight - 0.8, 0]}>
+          <boxGeometry args={[0.2, 0.6, 0.2]} />
+          <meshStandardMaterial color="#2196F3" />
+        </mesh>
+        <mesh position={[-0.4, playerHeight - 0.8, 0]}>
+          <boxGeometry args={[0.2, 0.6, 0.2]} />
+          <meshStandardMaterial color="#2196F3" />
+        </mesh>
+        
+        {/* Player legs */}
+        <mesh position={[0.15, playerHeight - 1.45, 0]}>
+          <boxGeometry args={[0.2, 0.6, 0.2]} />
+          <meshStandardMaterial color="#0D47A1" />
+        </mesh>
+        <mesh position={[-0.15, playerHeight - 1.45, 0]}>
+          <boxGeometry args={[0.2, 0.6, 0.2]} />
+          <meshStandardMaterial color="#0D47A1" />
+        </mesh>
+        
+        {/* Add a light for the player (like holding a torch) */}
+        <pointLight 
+          position={[0, eyeHeight, 0]} 
+          intensity={0.5} 
+          distance={10} 
+          color="#FFD700"
+        />
       </group>
     </>
   );

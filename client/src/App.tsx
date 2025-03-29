@@ -40,9 +40,7 @@ function App() {
   const chunks = useVoxelGame(state => state.chunks);
   
   // Set up audio
-  const setBackgroundMusic = useAudio(state => state.setBackgroundMusic);
-  const setHitSound = useAudio(state => state.setHitSound);
-  const setSuccessSound = useAudio(state => state.setSuccessSound);
+  const setSound = useAudio(state => state.setSound);
 
   // Initial world generation
   useEffect(() => {
@@ -61,17 +59,48 @@ function App() {
       const bgMusic = new Audio('/sounds/background.mp3');
       bgMusic.loop = true;
       bgMusic.volume = 0.4;
-      setBackgroundMusic(bgMusic);
+      setSound('backgroundMusic', bgMusic);
       
       const hitSfx = new Audio('/sounds/hit.mp3');
       hitSfx.volume = 0.6;
-      setHitSound(hitSfx);
+      setSound('hitSound', hitSfx);
       
       const successSfx = new Audio('/sounds/success.mp3');
       successSfx.volume = 0.7;
-      setSuccessSound(successSfx);
+      setSound('successSound', successSfx);
+      
+      // Additional sounds for expanded audio experience
+      const walkSfx = new Audio('/sounds/walk.mp3');
+      setSound('walkSound', walkSfx);
+      
+      const jumpSfx = new Audio('/sounds/jump.mp3');
+      setSound('jumpSound', jumpSfx);
+      
+      const placeSfx = new Audio('/sounds/place.mp3');
+      setSound('placeSound', placeSfx);
+      
+      const breakSfx = new Audio('/sounds/break.mp3');
+      setSound('breakSound', breakSfx);
+      
+      const attackSfx = new Audio('/sounds/attack.mp3');
+      setSound('attackSound', attackSfx);
+      
+      const damageSfx = new Audio('/sounds/damage.mp3');
+      setSound('damageSound', damageSfx);
+      
+      const ambientDaySfx = new Audio('/sounds/ambient_day.mp3');
+      setSound('ambientDay', ambientDaySfx);
+      
+      const ambientNightSfx = new Audio('/sounds/ambient_night.mp3');
+      setSound('ambientNight', ambientNightSfx);
+      
+      const rainSfx = new Audio('/sounds/rain.mp3');
+      setSound('rainSound', rainSfx);
+      
+      const thunderSfx = new Audio('/sounds/thunder.mp3');
+      setSound('thunderSound', thunderSfx);
     }
-  }, [setChunks, setBlocks, chunks, setBackgroundMusic, setHitSound, setSuccessSound]);
+  }, [setChunks, setBlocks, chunks, setSound]);
 
   // Define keyboard controls
   const keyMap = [
