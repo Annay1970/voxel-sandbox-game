@@ -85,6 +85,15 @@ export interface CraftingRecipe {
   requiresCraftingTable: boolean;
 }
 
+// Define Blood Moon event interface
+export interface BloodMoonEvent {
+  active: boolean;              // Is Blood Moon event currently active
+  remainingDays: number;        // Remaining days of the Blood Moon (1-3)
+  nextEventDay: number;         // Game day for the next Blood Moon
+  intensity: number;            // Current intensity (0.0-1.0)
+  specialDrops: BlockType[];    // Special items that can drop during Blood Moon
+}
+
 export interface VoxelGameState {
   // Block data
   blocks: Record<string, BlockType>; // Format: "x,y,z" -> BlockType
@@ -111,9 +120,11 @@ export interface VoxelGameState {
   craftingRecipes: CraftingRecipe[];
   
   // World state
-  timeOfDay: number; // 0.0 to 1.0, where 0.0 is midnight, 0.5 is noon
+  timeOfDay: number;            // 0.0 to 1.0, where 0.0 is midnight, 0.5 is noon
+  dayCount: number;             // Total number of days elapsed
   weather: WeatherType;
   weatherSystem: WeatherSystem;
+  bloodMoonEvent: BloodMoonEvent; // Blood Moon event status
   gravity: number;
   seed: number;
   
@@ -327,6 +338,7 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   
   // World state
   timeOfDay: 0.5, // Start at noon (0.5)
+  dayCount: 1, // Start on day 1
   weather: 'clear', // Start with clear weather
   weatherSystem: {
     currentWeather: 'clear',
@@ -341,6 +353,13 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
       temperatureModifier: 0.0, // Neutral temperature
       dangerLevel: 0.0 // No danger
     }
+  },
+  bloodMoonEvent: {
+    active: false,
+    remainingDays: 0,
+    nextEventDay: 14, // First blood moon on day 14
+    intensity: 0.0,
+    specialDrops: ['coal', 'stone', 'torch'] // Special items that can drop during Blood Moon
   },
   gravity: 0.05, // Gravity strength
   seed: Math.floor(Math.random() * 1000000), // Random world seed
@@ -621,6 +640,61 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
       // Increment by a small amount (day/night cycle)
       const newTimeOfDay = (state.timeOfDay + 0.001) % 1;
       
+      // Track day changes - increment day counter when we pass midnight
+      let newDayCount = state.dayCount;
+      let dayChanged = false;
+      
+      // Check if we've completed a day (crossed midnight from 0.999 to 0.000)
+      if (state.timeOfDay > 0.999 && newTimeOfDay < 0.001) {
+        newDayCount += 1;
+        dayChanged = true;
+        console.log(`A new day has dawned! Day ${newDayCount}`);
+      }
+      
+      // Update blood moon event
+      const bloodMoonEvent = { ...state.bloodMoonEvent };
+      
+      // Check if day changed, process Blood Moon logic
+      if (dayChanged) {
+        // If Blood Moon is active, decrement days remaining
+        if (bloodMoonEvent.active) {
+          bloodMoonEvent.remainingDays -= 1;
+          
+          // If Blood Moon ends
+          if (bloodMoonEvent.remainingDays <= 0) {
+            bloodMoonEvent.active = false;
+            bloodMoonEvent.intensity = 0;
+            console.log("🌙 The Blood Moon has ended, the world returns to normal.");
+            
+            // Set next Blood Moon event (14 days from now)
+            bloodMoonEvent.nextEventDay = newDayCount + 14;
+          } else {
+            console.log(`🌙 Blood Moon continues! ${bloodMoonEvent.remainingDays} night${bloodMoonEvent.remainingDays > 1 ? 's' : ''} remaining.`);
+          }
+        } 
+        // Check if it's time for a new Blood Moon event
+        else if (newDayCount >= bloodMoonEvent.nextEventDay) {
+          bloodMoonEvent.active = true;
+          bloodMoonEvent.remainingDays = 3; // Blood Moon lasts for 3 days
+          bloodMoonEvent.intensity = 1.0;
+          console.log("🔴 A BLOOD MOON RISES! Zombies and skeletons are becoming more aggressive!");
+          
+          // Special rare drops are now available
+          console.log(`Special items can be collected during this event: ${bloodMoonEvent.specialDrops.join(', ')}`);
+        }
+      }
+      
+      // During Blood Moon event, increase intensity at night and decrease during day
+      if (bloodMoonEvent.active) {
+        // Night time intensifies the Blood Moon (0.75 to 0.25 is night time in the cycle)
+        if (newTimeOfDay > 0.75 || newTimeOfDay < 0.25) {
+          bloodMoonEvent.intensity = Math.min(1.0, bloodMoonEvent.intensity + 0.001);
+        } else {
+          // Blood Moon effect diminishes during daytime but never fully disappears
+          bloodMoonEvent.intensity = Math.max(0.3, bloodMoonEvent.intensity - 0.0005);
+        }
+      }
+      
       // Update weather system
       const weatherSystem = { ...state.weatherSystem };
       weatherSystem.elapsedTime += 1;
@@ -720,8 +794,10 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
       return {
         ...state,
         timeOfDay: newTimeOfDay,
+        dayCount: newDayCount,
         weather: legacyWeather,
-        weatherSystem
+        weatherSystem,
+        bloodMoonEvent
       };
     });
   },
@@ -781,12 +857,62 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     set((state) => {
       if (!state.creatures[id]) return state;
       
-      // In a real implementation, creatures would have health
-      // For now, let's just remove them when damaged (simplified)
+      const creature = state.creatures[id];
       const updatedCreatures = { ...state.creatures };
+      const { bloodMoonEvent } = state;
+      
+      // Handle creature defeat
       delete updatedCreatures[id];
       
-      console.log(`Creature ${id} was damaged for ${amount} and removed`);
+      // Process drops based on creature type and Blood Moon status
+      let droppedItems: {type: BlockType, count: number}[] = [];
+      const isHostile = creature.type === 'zombie' || creature.type === 'skeleton';
+      
+      // Basic drops based on creature type
+      if (creature.type === 'zombie') {
+        droppedItems.push({ type: 'dirt', count: Math.floor(Math.random() * 2) + 1 });
+      } else if (creature.type === 'skeleton') {
+        droppedItems.push({ type: 'stone', count: Math.floor(Math.random() * 2) + 1 });
+      } else if (creature.type === 'cow' || creature.type === 'pig' || creature.type === 'sheep') {
+        // Farm animals drop food
+        droppedItems.push({ type: 'dirt', count: 1 });
+      }
+      
+      // Add special Blood Moon drops for hostile creatures
+      if (bloodMoonEvent.active && isHostile) {
+        // Higher chance for special drops at night
+        const isNight = state.timeOfDay > 0.75 || state.timeOfDay < 0.25;
+        const specialDropChance = isNight ? 0.7 : 0.3;
+        
+        if (Math.random() < specialDropChance) {
+          // Select a random special drop
+          const specialDrop = bloodMoonEvent.specialDrops[
+            Math.floor(Math.random() * bloodMoonEvent.specialDrops.length)
+          ];
+          
+          // Add to drops with random count
+          droppedItems.push({ 
+            type: specialDrop, 
+            count: Math.floor(Math.random() * 3) + 1 
+          });
+          
+          console.log(`🔴 Blood Moon creature dropped a special item: ${specialDrop}`);
+        }
+      }
+      
+      // Add all dropped items to inventory
+      droppedItems.forEach(item => {
+        // Only add to inventory if count > 0
+        if (item.count > 0) {
+          state.addToInventory(item.type, item.count);
+        }
+      });
+      
+      if (bloodMoonEvent.active && isHostile) {
+        console.log(`🔴 Blood Moon ${creature.type} was defeated!`);
+      } else {
+        console.log(`Creature ${creature.type} was damaged for ${amount} and removed`);
+      }
       
       return {
         ...state,
@@ -798,38 +924,130 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   updateCreatures: () => {
     set((state) => {
       const updatedCreatures = { ...state.creatures };
+      const { bloodMoonEvent, player } = state;
+      const isNight = state.timeOfDay > 0.75 || state.timeOfDay < 0.25;
       
       // Update each creature
       Object.values(updatedCreatures).forEach(creature => {
-        // Simple random movement
-        if (Math.random() < 0.1) {
-          const moveX = (Math.random() - 0.5) * 0.2;
-          const moveZ = (Math.random() - 0.5) * 0.2;
-          
-          // Update position
-          creature.position.x += moveX;
-          creature.position.z += moveZ;
-          
-          // Update rotation based on movement direction
-          if (Math.abs(moveX) > 0.01 || Math.abs(moveZ) > 0.01) {
-            creature.rotation.y = Math.atan2(moveX, moveZ);
-          }
-        }
+        // Check if it's a hostile creature (zombie or skeleton)
+        const isHostile = creature.type === 'zombie' || creature.type === 'skeleton';
         
-        // Randomly change mood
-        if (Math.random() < 0.01) {
-          const moods = ['calm', 'playful', 'afraid'];
-          // Zombies are always aggressive
-          if (creature.type === 'zombie' || creature.type === 'skeleton') {
-            creature.mood = 'aggressive';
-          } else {
-            creature.mood = moods[Math.floor(Math.random() * moods.length)];
+        // Apply Blood Moon effects to zombies and skeletons
+        if (isHostile && bloodMoonEvent.active) {
+          // During Blood Moon, hostiles are always in hunting state and extremely aggressive
+          creature.state = 'hunting';
+          creature.mood = 'frenzied'; // Special Blood Moon mood
+          
+          // Faster animation during Blood Moon
+          creature.animationSpeed = 1.5 + (bloodMoonEvent.intensity * 0.5);
+          
+          // During Blood Moon nights, hostile creatures actively hunt the player
+          if (isNight) {
+            // Move towards player with increased speed during Blood Moon
+            const playerPos = player.position;
+            const directionX = playerPos[0] - creature.position.x;
+            const directionZ = playerPos[2] - creature.position.z;
+            
+            // Normalize direction vector
+            const distance = Math.sqrt(directionX * directionX + directionZ * directionZ);
+            
+            if (distance > 1.0) { // Only move if not too close
+              // Calculate movement speed based on Blood Moon intensity
+              const moveSpeed = 0.05 + (bloodMoonEvent.intensity * 0.05);
+              
+              // Move towards player
+              creature.position.x += (directionX / distance) * moveSpeed;
+              creature.position.z += (directionZ / distance) * moveSpeed;
+              
+              // Update rotation to face player
+              creature.rotation.y = Math.atan2(directionX, directionZ);
+            }
+          }
+        } 
+        // Normal creature behavior
+        else {
+          // Simple random movement
+          if (Math.random() < 0.1) {
+            const moveX = (Math.random() - 0.5) * 0.2;
+            const moveZ = (Math.random() - 0.5) * 0.2;
+            
+            // Update position
+            creature.position.x += moveX;
+            creature.position.z += moveZ;
+            
+            // Update rotation based on movement direction
+            if (Math.abs(moveX) > 0.01 || Math.abs(moveZ) > 0.01) {
+              creature.rotation.y = Math.atan2(moveX, moveZ);
+            }
+          }
+          
+          // Randomly change mood
+          if (Math.random() < 0.01) {
+            const moods = ['calm', 'playful', 'afraid'];
+            // Zombies are always aggressive
+            if (isHostile) {
+              creature.mood = 'aggressive';
+            } else {
+              creature.mood = moods[Math.floor(Math.random() * moods.length)];
+            }
           }
         }
         
         // Update animation progress
         creature.animationProgress = (creature.animationProgress + 0.01 * creature.animationSpeed) % 1;
       });
+      
+      // During Blood Moon nights, spawn additional zombies and skeletons occasionally
+      if (bloodMoonEvent.active && isNight && Math.random() < 0.02) {
+        // Get player position to spawn creatures nearby
+        const playerPos = player.position;
+        
+        // Spawn in a circle around the player (between 10-20 blocks away)
+        const spawnDistance = 10 + Math.random() * 10;
+        const spawnAngle = Math.random() * Math.PI * 2;
+        
+        const spawnX = playerPos[0] + Math.cos(spawnAngle) * spawnDistance;
+        const spawnZ = playerPos[2] + Math.sin(spawnAngle) * spawnDistance;
+        
+        // Find ground level for spawn
+        let spawnY = 30; // Start from a high position
+        let foundGround = false;
+        
+        // Find the highest solid block under spawn position
+        for (let y = spawnY; y > 0; y--) {
+          const blockKey = `${Math.floor(spawnX)},${y-1},${Math.floor(spawnZ)}`;
+          if (state.blocks[blockKey] && state.blocks[blockKey] !== 'air' && state.blocks[blockKey] !== 'water') {
+            spawnY = y;
+            foundGround = true;
+            break;
+          }
+        }
+        
+        // Only spawn if we found ground
+        if (foundGround) {
+          // Choose between zombie or skeleton
+          const creatureType = Math.random() < 0.5 ? 'zombie' : 'skeleton';
+          
+          // Generate unique ID
+          const id = `${creatureType}_bloodmoon_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+          
+          // Create new blood moon creature with enhanced properties
+          updatedCreatures[id] = {
+            id,
+            type: creatureType,
+            position: { x: spawnX, y: spawnY, z: spawnZ },
+            rotation: { y: Math.random() * Math.PI * 2 },
+            state: 'hunting',
+            mood: 'frenzied',
+            animationState: 'walk',
+            animationSpeed: 1.5,
+            animationProgress: 0,
+            leader: false
+          };
+          
+          console.log(`🔴 Blood Moon spawned a ${creatureType} at [${Math.floor(spawnX)}, ${Math.floor(spawnY)}, ${Math.floor(spawnZ)}]`);
+        }
+      }
       
       return {
         ...state,

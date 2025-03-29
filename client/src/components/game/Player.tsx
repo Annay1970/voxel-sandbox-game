@@ -570,17 +570,41 @@ export default function Player() {
       if (!useVoxelGame.getState().player.takingBlockDamage) {
         useVoxelGame.getState().setPlayerTakingBlockDamage(true);
         
+        // Set damage amount based on block type
+        let damageAmount = 1; // Default damage
+        let soundVolume = 0.7;
+        
+        // Adjust damage for different block types
+        if (blockAtFeetLevel === 'lava') {
+          damageAmount = 4; // Lava deals significant damage
+          soundVolume = 0.8;
+          
+          // Log special message for lava
+          console.log(`🔥 Player burning in lava! Taking ${damageAmount} damage`);
+          
+          // Add burning particles effect (for future implementation)
+        } else if (blockAtFeetLevel === 'cactus') {
+          damageAmount = 1; // Cactus deals standard damage
+          
+          // Log special message for cactus
+          console.log(`🌵 Player pricked by cactus! Taking ${damageAmount} damage`);
+        } else {
+          // Generic message for other damaging blocks
+          console.log(`Player taking damage from ${blockAtFeetLevel} block: ${damageAmount} damage`);
+        }
+        
         // Apply damage
-        console.log(`Player taking damage from ${blockAtFeetLevel} block`);
-        useVoxelGame.getState().damagePlayer(1);
+        useVoxelGame.getState().damagePlayer(damageAmount);
         
-        // Play damage sound
-        useAudio.getState().playSound('damageSound', { volume: 0.7 });
+        // Play appropriate damage sound - use 'damageSound' as it's defined in GameSounds
+        useAudio.getState().playSound('damageSound', { volume: soundVolume });
         
-        // Create damage cooldown (1 second)
+        // Create damage cooldown
+        // Lava has a quicker damage rate, other blocks are standard
+        const cooldownTime = blockAtFeetLevel === 'lava' ? 750 : 1000; // ms
         setTimeout(() => {
           useVoxelGame.getState().setPlayerTakingBlockDamage(false);
-        }, 1000);
+        }, cooldownTime);
       }
     }
     

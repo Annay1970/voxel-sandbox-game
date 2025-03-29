@@ -5,8 +5,13 @@ import { useVoxelGame } from '../../lib/stores/useVoxelGame';
 export default function SkyDome() {
   const timeOfDay = useVoxelGame(state => state.timeOfDay);
   const weather = useVoxelGame(state => state.weather);
+  const bloodMoonEvent = useVoxelGame(state => state.bloodMoonEvent);
   
-  // Calculate sky colors based on time of day and weather
+  // Check if Blood Moon is active
+  const isBloodMoonActive = bloodMoonEvent.active;
+  const bloodMoonIntensity = bloodMoonEvent.intensity;
+  
+  // Calculate sky colors based on time of day, weather, and Blood Moon
   const colors = useMemo(() => {
     // Time of day is a value between 0 and 1
     // 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset
@@ -76,11 +81,23 @@ export default function SkyDome() {
       bottomColor.lerp(new THREE.Color('#C0C0C0'), 0.3);
     }
     
+    // Apply Blood Moon effect if active
+    if (isBloodMoonActive) {
+      // Blood Moon effect is stronger at night
+      const bloodMoonEffect = bloodMoonIntensity * (timeOfDay > 0.75 || timeOfDay < 0.25 ? 1 : 0.3);
+      
+      // Blend towards red tones based on intensity
+      topColor.lerp(new THREE.Color('#400000'), bloodMoonEffect);  // Dark red for sky
+      bottomColor.lerp(new THREE.Color('#800000'), bloodMoonEffect); // Brighter red for horizon
+    }
+    
     return { topColor, bottomColor };
-  }, [timeOfDay, weather]);
+  }, [timeOfDay, weather, isBloodMoonActive, bloodMoonIntensity]);
   
   // Log sky status for debugging
-  console.log(`Sky rendering: time=${timeOfDay}, weather=${weather}`);
+  if (isBloodMoonActive) {
+    console.log(`Blood Moon active: intensity=${bloodMoonIntensity.toFixed(2)}, time=${timeOfDay.toFixed(2)}`);
+  }
   
   // Create a gradient background effect
   const skyColor = colors.topColor.getStyle();
@@ -123,27 +140,38 @@ export default function SkyDome() {
     }
   }, [timeOfDay]);
   
-  // Calculate the light color based on time of day
+  // Calculate the light color based on time of day and Blood Moon
   const sunLightColor = useMemo(() => {
+    let baseColor;
+    
     if (timeOfDay < 0.25) {
       // Night to dawn - blueish
-      return new THREE.Color('#2B5797');
+      baseColor = new THREE.Color('#2B5797');
     } else if (timeOfDay < 0.3) {
       // Dawn - orange
-      return new THREE.Color('#FF7F50');
+      baseColor = new THREE.Color('#FF7F50');
     } else if (timeOfDay < 0.7) {
       // Day - white
-      return new THREE.Color('#FFFFFF');
+      baseColor = new THREE.Color('#FFFFFF');
     } else if (timeOfDay < 0.75) {
       // Dusk - orange
-      return new THREE.Color('#FF7F50');
+      baseColor = new THREE.Color('#FF7F50');
     } else {
       // Night - blueish
-      return new THREE.Color('#2B5797');
+      baseColor = new THREE.Color('#2B5797');
     }
-  }, [timeOfDay]);
+    
+    // Adjust color for Blood Moon
+    if (isBloodMoonActive) {
+      // Blood Moon effect is stronger at night
+      const bloodMoonEffect = bloodMoonIntensity * (timeOfDay > 0.75 || timeOfDay < 0.25 ? 1 : 0.3);
+      baseColor.lerp(new THREE.Color('#FF3030'), bloodMoonEffect);
+    }
+    
+    return baseColor;
+  }, [timeOfDay, isBloodMoonActive, bloodMoonIntensity]);
   
-  // Calculate ambient light intensity based on time and weather
+  // Calculate ambient light intensity based on time, weather, and Blood Moon
   const ambientIntensity = useMemo(() => {
     // Reduced ambient light at night
     let baseIntensity = timeOfDay < 0.25 || timeOfDay > 0.75 ? 0.2 : 0.5;
@@ -151,43 +179,90 @@ export default function SkyDome() {
     // Reduce intensity for bad weather
     if (weather === 'rain') {
       baseIntensity *= 0.7;
-    } else if (weather === 'storm') {
+    } else if (weather === 'thunderstorm') {
       baseIntensity *= 0.5;
     } else if (weather === 'cloudy') {
       baseIntensity *= 0.8;
     }
     
+    // During Blood Moon, increase ambient light at night for the red glow effect
+    if (isBloodMoonActive && (timeOfDay > 0.75 || timeOfDay < 0.25)) {
+      baseIntensity += 0.1 * bloodMoonIntensity;
+    }
+    
     return baseIntensity;
-  }, [timeOfDay, weather]);
+  }, [timeOfDay, weather, isBloodMoonActive, bloodMoonIntensity]);
 
-  // Determine fog color based on time of day and weather
+  // Determine fog color based on time of day, weather, and Blood Moon
   const fogColor = useMemo(() => {
     let baseFogColor = colors.bottomColor.clone();
     
     // Apply weather effects to fog
     if (weather === 'rain') {
       baseFogColor.lerp(new THREE.Color('#708090'), 0.7);
-    } else if (weather === 'storm') {
+    } else if (weather === 'thunderstorm') {
       baseFogColor.lerp(new THREE.Color('#4F4F4F'), 0.8);
     } else if (weather === 'cloudy') {
       baseFogColor.lerp(new THREE.Color('#A9A9A9'), 0.5);
     }
     
-    return baseFogColor;
-  }, [colors, weather]);
-  
-  // Calculate fog density based on weather
-  const fogDensity = useMemo(() => {
-    if (weather === 'storm') {
-      return 0.03;
-    } else if (weather === 'rain') {
-      return 0.02;
-    } else if (weather === 'cloudy') {
-      return 0.01;
-    } else {
-      return 0.005;
+    // Apply Blood Moon effect to fog
+    if (isBloodMoonActive) {
+      const bloodMoonEffect = bloodMoonIntensity * (timeOfDay > 0.75 || timeOfDay < 0.25 ? 0.7 : 0.3);
+      baseFogColor.lerp(new THREE.Color('#700000'), bloodMoonEffect);
     }
-  }, [weather]);
+    
+    return baseFogColor;
+  }, [colors, weather, isBloodMoonActive, bloodMoonIntensity, timeOfDay]);
+  
+  // Calculate fog density based on weather and Blood Moon
+  const fogDensity = useMemo(() => {
+    let density = 0.005; // Default clear weather
+    
+    if (weather === 'thunderstorm') {
+      density = 0.03;
+    } else if (weather === 'rain') {
+      density = 0.02;
+    } else if (weather === 'cloudy') {
+      density = 0.01;
+    }
+    
+    // During Blood Moon, increase fog density for ominous effect
+    if (isBloodMoonActive && (timeOfDay > 0.75 || timeOfDay < 0.25)) {
+      density += 0.01 * bloodMoonIntensity;
+    }
+    
+    return density;
+  }, [weather, isBloodMoonActive, bloodMoonIntensity, timeOfDay]);
+
+  // Determine moon color based on Blood Moon status
+  const moonColor = useMemo(() => {
+    if (isBloodMoonActive) {
+      // Lerp between normal white and blood red based on intensity
+      return new THREE.Color().lerpColors(
+        new THREE.Color('#F0F0F0'), // Normal moon color
+        new THREE.Color('#FF0000'), // Blood red
+        bloodMoonIntensity
+      ).getStyle();
+    }
+    return '#F0F0F0'; // Default white moon
+  }, [isBloodMoonActive, bloodMoonIntensity]);
+
+  // Moon glow color and size effect for Blood Moon
+  const moonGlowColor = useMemo(() => {
+    if (isBloodMoonActive) {
+      return new THREE.Color().lerpColors(
+        new THREE.Color('#C0C0FF'), // Normal moon glow
+        new THREE.Color('#FF0000'), // Blood red glow
+        bloodMoonIntensity
+      ).getStyle();
+    }
+    return '#C0C0FF'; // Default blue-ish glow
+  }, [isBloodMoonActive, bloodMoonIntensity]);
+
+  // Make the moon glow larger during Blood Moon
+  const moonGlowScale = isBloodMoonActive ? 30 + (bloodMoonIntensity * 15) : 30;
+  const moonGlowOpacity = isBloodMoonActive ? 0.3 + (bloodMoonIntensity * 0.3) : 0.3;
 
   return (
     <group>
@@ -213,15 +288,49 @@ export default function SkyDome() {
       {/* Moon (visible during night) */}
       <mesh visible={timeOfDay < 0.25 || timeOfDay > 0.75}>
         <sphereGeometry args={[8, 16, 16]} />
-        <meshBasicMaterial color="#F0F0F0" />
+        <meshBasicMaterial color={moonColor} />
         <primitive object={new THREE.Vector3(moonPosition[0], moonPosition[1], moonPosition[2])} attach="position" />
       </mesh>
       
       {/* Moon glow */}
-      <sprite visible={timeOfDay < 0.25 || timeOfDay > 0.75} scale={30}>
-        <spriteMaterial attach="material" map={null} transparent opacity={0.3} color="#C0C0FF" />
+      <sprite visible={timeOfDay < 0.25 || timeOfDay > 0.75} scale={moonGlowScale}>
+        <spriteMaterial attach="material" map={null} transparent opacity={moonGlowOpacity} color={moonGlowColor} />
         <primitive object={new THREE.Vector3(moonPosition[0], moonPosition[1], moonPosition[2])} attach="position" />
       </sprite>
+      
+      {/* Blood Moon particles (only visible during Blood Moon night) */}
+      {isBloodMoonActive && (timeOfDay < 0.25 || timeOfDay > 0.75) && (
+        <>
+          {/* Create a subtle red particle effect around the moon */}
+          <points>
+            <bufferGeometry>
+              <bufferAttribute
+                attach="attributes-position"
+                count={200}
+                array={Float32Array.from(Array(600).fill(0).map((_, i) => {
+                  // Generate positions in a sphere around the moon
+                  if (i % 3 === 0) {
+                    return moonPosition[0] + (Math.random() - 0.5) * 50;
+                  } else if (i % 3 === 1) {
+                    return moonPosition[1] + (Math.random() - 0.5) * 50;
+                  } else {
+                    return moonPosition[2] + (Math.random() - 0.5) * 10;
+                  }
+                }))}
+                itemSize={3}
+              />
+            </bufferGeometry>
+            <pointsMaterial
+              attach="material"
+              color="#FF0000"
+              size={2}
+              transparent
+              opacity={0.4 * bloodMoonIntensity}
+              sizeAttenuation
+            />
+          </points>
+        </>
+      )}
       
       {/* Directional light from sun/moon */}
       <directionalLight 
@@ -253,6 +362,16 @@ export default function SkyDome() {
       <hemisphereLight
         args={[colors.topColor.getHex(), colors.bottomColor.getHex(), 0.6]}
       />
+      
+      {/* Additional red light during Blood Moon night */}
+      {isBloodMoonActive && (timeOfDay < 0.25 || timeOfDay > 0.75) && (
+        <pointLight
+          position={[moonPosition[0], moonPosition[1], moonPosition[2]]}
+          color="#FF0000"
+          intensity={0.2 * bloodMoonIntensity}
+          distance={500}
+        />
+      )}
     </group>
   );
 }
