@@ -13,8 +13,9 @@ import { useVoxelGame } from '../../lib/stores/useVoxelGame';
 import { useSkills } from '../../lib/stores/useSkills';
 import { useAudio } from '../../lib/stores/useAudio';
 
-// Preload the player model
+// Preload the player models
 useGLTF.preload('/models/player.glb');
+useGLTF.preload('/models/steve.glb');
 
 // Controls mapping
 enum Controls {
@@ -370,25 +371,45 @@ export default function Player() {
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelError, setModelError] = useState(false);
   
-  // Try to load the model, but handle errors gracefully
+  // Try to load the models, but handle errors gracefully
   let playerModel: THREE.Group | null = null;
+  let steveModel: THREE.Group | null = null;
+
+  // Load the primary player model
   try {
     // Using useGLTF within a try/catch won't work properly due to React hooks rules,
     // so we'll use a state to track loading status
-    const { scene } = useGLTF('/models/player.glb') as GLTF & {
+    const { scene: playerScene } = useGLTF('/models/steve.glb') as GLTF & {
       scene: THREE.Group;
     };
-    playerModel = scene;
+    steveModel = playerScene;
     
-    // If we got here, loading was successful
-    if (!modelLoaded) {
+    // If Steve model loaded successfully, use that
+    if (!modelLoaded && steveModel) {
       setModelLoaded(true);
-      console.log("Player model loaded successfully");
+      playerModel = steveModel;
+      console.log("Steve model loaded successfully");
     }
   } catch (error) {
-    if (!modelError) {
-      console.warn("Failed to load player model, using fallback:", error);
-      setModelError(true);
+    console.warn("Failed to load Steve model, trying fallback:", error);
+    
+    // Try to load the fallback model
+    try {
+      const { scene: fallbackScene } = useGLTF('/models/player.glb') as GLTF & {
+        scene: THREE.Group;
+      };
+      playerModel = fallbackScene;
+      
+      // If we got here, loading the fallback was successful
+      if (!modelLoaded) {
+        setModelLoaded(true);
+        console.log("Fallback player model loaded successfully");
+      }
+    } catch (fallbackError) {
+      if (!modelError) {
+        console.warn("Failed to load all player models, using basic shape:", fallbackError);
+        setModelError(true);
+      }
     }
   }
   
@@ -893,8 +914,8 @@ export default function Player() {
               // If 3D model loaded successfully, use it
               <primitive 
                 object={playerModel!.clone()} 
-                scale={[0.8, 0.8, 0.8]}
-                position={[0, -0.8, 0]} 
+                scale={[2.5, 2.5, 2.5]} // Steve model needs to be scaled up
+                position={[0, -1.6, 0]} 
                 rotation={[0, Math.PI, 0]} // Rotate to face forward
                 castShadow
               />
