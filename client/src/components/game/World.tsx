@@ -7,6 +7,7 @@ import Player from "./Player";
 import Chunk from "./Chunk";
 import SkyDome from "./Sky";
 import Creature from "./Creature";
+import Weather from "./Weather";
 
 // Enhanced World component with dynamic chunk loading
 export default function World() {
@@ -196,6 +197,9 @@ export default function World() {
     <group ref={worldRef}>
       {/* Basic sky */}
       <SkyDome timeOfDay={timeOfDay} weather={weather} />
+      
+      {/* Weather effects (rain, snow, lightning) */}
+      <Weather />
       
       {/* Performance optimized chunk rendering */}
       {visibleChunks.map(chunk => (
