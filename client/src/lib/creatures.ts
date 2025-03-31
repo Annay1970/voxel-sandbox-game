@@ -2,7 +2,8 @@ import { BlockType, isBlockSolid } from './blocks';
 
 export type CreatureType = 
   'cow' | 'pig' | 'sheep' | 'chicken' | 
-  'zombie' | 'skeleton' | 'spider' | 'bee';
+  'zombie' | 'skeleton' | 'spider' | 'bee' | 
+  'wraith'; // Blood Moon special mob
 
 // Helper function to add creatures at fixed positions
 function addFixedCreature(
@@ -549,6 +550,43 @@ export function getCreatureProperties(type: CreatureType) {
         // Animation properties
         animationStates: ['idle', 'fly', 'attack', 'pollinate', 'dance'],
         animationSpeeds: { idle: 0.6, fly: 1.5, attack: 1.8, pollinate: 0.8, dance: 1.0 }
+      };
+    case 'wraith':
+      return {
+        maxHealth: 35,
+        speed: 1.0,
+        damage: 4,
+        drops: ['glass', 'ice', 'coal', 'torch'], // Special Blood Moon specific drops
+        hostility: 'hostile',
+        spawnBiomes: ['all'], // Can spawn anywhere during Blood Moon
+        bloodMoonOnly: true, // Only spawns during Blood Moon event
+        
+        // Enhanced properties
+        preferredStates: ['hunting', 'attacking'],
+        stateWeights: { hunting: 0.7, attacking: 0.3 },
+        senseRadius: 24, // Exceptional detection range
+        flockingBehavior: false,
+        socialDistance: 0,
+        huntedBy: [],
+        diurnalActivity: false, // Active only at night
+        
+        // Wraith-specific
+        teleportAbility: true, // Can occasionally teleport short distances
+        teleportCooldown: 10, // Seconds between teleports
+        teleportRange: 8, // Maximum teleport distance in blocks
+        ignoresLight: true, // Not affected by light levels
+        spectral: true, // Partially transparent, can pass through some blocks
+        
+        // Mood properties
+        defaultMood: 'frenzied',
+        moodTransitions: {
+          'frenzied': { 'aggressive': 0.1 },
+          'aggressive': { 'frenzied': 0.9 }
+        },
+        
+        // Animation properties
+        animationStates: ['idle', 'hunt', 'attack', 'teleport'],
+        animationSpeeds: { idle: 0.7, hunt: 1.2, attack: 1.8, teleport: 2.5 }
       };
     default:
       return {

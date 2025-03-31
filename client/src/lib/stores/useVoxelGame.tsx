@@ -359,7 +359,7 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     remainingDays: 0,
     nextEventDay: 14, // First blood moon on day 14
     intensity: 0.0,
-    specialDrops: ['coal', 'stone', 'torch'] // Special items that can drop during Blood Moon
+    specialDrops: ['glass', 'ice', 'torch', 'coal'] // Special items that can drop during Blood Moon
   },
   gravity: 0.05, // Gravity strength
   seed: Math.floor(Math.random() * 1000000), // Random world seed
@@ -678,6 +678,7 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
           bloodMoonEvent.remainingDays = 3; // Blood Moon lasts for 3 days
           bloodMoonEvent.intensity = 1.0;
           console.log("🔴 A BLOOD MOON RISES! Zombies and skeletons are becoming more aggressive!");
+          console.log("⚠️ Beware of the wraiths that now roam the night!");
           
           // Special rare drops are now available
           console.log(`Special items can be collected during this event: ${bloodMoonEvent.specialDrops.join(', ')}`);
@@ -866,13 +867,26 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
       
       // Process drops based on creature type and Blood Moon status
       let droppedItems: {type: BlockType, count: number}[] = [];
-      const isHostile = creature.type === 'zombie' || creature.type === 'skeleton';
+      const isHostile = creature.type === 'zombie' || creature.type === 'skeleton' || creature.type === 'wraith';
       
       // Basic drops based on creature type
       if (creature.type === 'zombie') {
         droppedItems.push({ type: 'dirt', count: Math.floor(Math.random() * 2) + 1 });
       } else if (creature.type === 'skeleton') {
         droppedItems.push({ type: 'stone', count: Math.floor(Math.random() * 2) + 1 });
+      } else if (creature.type === 'wraith') {
+        // Wraiths always drop special Blood Moon items
+        const specialDrop1 = bloodMoonEvent.specialDrops[
+          Math.floor(Math.random() * bloodMoonEvent.specialDrops.length)
+        ];
+        const specialDrop2 = bloodMoonEvent.specialDrops[
+          Math.floor(Math.random() * bloodMoonEvent.specialDrops.length)
+        ];
+        
+        // Add multiple special drops with higher counts
+        droppedItems.push({ type: specialDrop1, count: Math.floor(Math.random() * 3) + 2 });
+        droppedItems.push({ type: specialDrop2, count: Math.floor(Math.random() * 2) + 1 });
+        console.log(`🔴⚠️ Wraith defeated! Dropped valuable items: ${specialDrop1}, ${specialDrop2}`);
       } else if (creature.type === 'cow' || creature.type === 'pig' || creature.type === 'sheep') {
         // Farm animals drop food
         droppedItems.push({ type: 'dirt', count: 1 });
@@ -929,11 +943,46 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
       
       // Update each creature
       Object.values(updatedCreatures).forEach(creature => {
-        // Check if it's a hostile creature (zombie or skeleton)
-        const isHostile = creature.type === 'zombie' || creature.type === 'skeleton';
+        // Check if it's a hostile creature (zombie, skeleton, or wraith)
+        const isHostile = creature.type === 'zombie' || creature.type === 'skeleton' || creature.type === 'wraith';
         
+        // Special handling for wraiths
+        if (creature.type === 'wraith') {
+          // Wraiths are always in hunting/frenzied state
+          creature.state = 'hunting';
+          creature.mood = 'frenzied';
+          creature.animationSpeed = 2.0 + (bloodMoonEvent.intensity * 0.5);
+          
+          // Wraiths move faster and are more aggressive at tracking the player
+          const playerPos = player.position;
+          const directionX = playerPos[0] - creature.position.x;
+          const directionZ = playerPos[2] - creature.position.z;
+          
+          // Normalize direction vector
+          const distance = Math.sqrt(directionX * directionX + directionZ * directionZ);
+          
+          if (distance > 0.5) { // Closer engagement range
+            // Wraiths are faster than other creatures
+            const moveSpeed = 0.08 + (bloodMoonEvent.intensity * 0.07);
+            
+            // Move towards player
+            creature.position.x += (directionX / distance) * moveSpeed;
+            creature.position.z += (directionZ / distance) * moveSpeed;
+            
+            // Update rotation to face player
+            creature.rotation.y = Math.atan2(directionX, directionZ);
+            
+            // Occasional teleport for wraiths (5% chance per update)
+            if (Math.random() < 0.05) {
+              // Teleport closer to player (half the current distance)
+              creature.position.x = creature.position.x + (directionX * 0.4);
+              creature.position.z = creature.position.z + (directionZ * 0.4);
+              console.log(`🔮 Wraith teleported closer to player!`);
+            }
+          }
+        }
         // Apply Blood Moon effects to zombies and skeletons
-        if (isHostile && bloodMoonEvent.active) {
+        else if (isHostile && bloodMoonEvent.active) {
           // During Blood Moon, hostiles are always in hunting state and extremely aggressive
           creature.state = 'hunting';
           creature.mood = 'frenzied'; // Special Blood Moon mood
@@ -1025,8 +1074,11 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
         
         // Only spawn if we found ground
         if (foundGround) {
-          // Choose between zombie or skeleton
-          const creatureType = Math.random() < 0.5 ? 'zombie' : 'skeleton';
+          // Choose between zombie, skeleton, or the special wraith creature (rare)
+          // Higher chance for wraith when blood moon intensity is higher
+          const random = Math.random();
+          const wraithChance = 0.15 * bloodMoonEvent.intensity; // 0-15% chance based on intensity
+          const creatureType = random < wraithChance ? 'wraith' : (random < 0.5 + wraithChance ? 'zombie' : 'skeleton');
           
           // Generate unique ID
           const id = `${creatureType}_bloodmoon_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -1040,12 +1092,18 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
             state: 'hunting',
             mood: 'frenzied',
             animationState: 'walk',
-            animationSpeed: 1.5,
+            // Wraiths are faster than zombies/skeletons
+            animationSpeed: creatureType === 'wraith' ? 2.0 : 1.5,
             animationProgress: 0,
-            leader: false
+            leader: creatureType === 'wraith' // Wraiths are always leaders
           };
           
-          console.log(`🔴 Blood Moon spawned a ${creatureType} at [${Math.floor(spawnX)}, ${Math.floor(spawnY)}, ${Math.floor(spawnZ)}]`);
+          // Special log message for wraiths
+          if (creatureType === 'wraith') {
+            console.log(`🔴⚠️ Blood Moon spawned a WRAITH at [${Math.floor(spawnX)}, ${Math.floor(spawnY)}, ${Math.floor(spawnZ)}]`);
+          } else {
+            console.log(`🔴 Blood Moon spawned a ${creatureType} at [${Math.floor(spawnX)}, ${Math.floor(spawnY)}, ${Math.floor(spawnZ)}]`);
+          }
         }
       }
       

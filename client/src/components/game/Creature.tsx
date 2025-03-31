@@ -89,6 +89,9 @@ export default function Creature({
       case 'bee':
         setColor('#FFC107');
         break;
+      case 'wraith':
+        setColor('#9C27B0'); // Purple for the wraith
+        break;
       default:
         setColor('#FF5722');
     }
@@ -383,6 +386,109 @@ export default function Creature({
               <meshStandardMaterial color="purple" emissive="purple" emissiveIntensity={1} />
             </mesh>
           </group>
+        ) : type === 'wraith' ? (
+          // Wraith - special Blood Moon mob with particle effects
+          <group scale={[1.2, 1.2, 1.2]}>
+            {/* Main ghostly floating body */}
+            <mesh castShadow position={[0, 0.9, 0]}>
+              <boxGeometry args={[0.6, 1.5, 0.3]} />
+              <meshStandardMaterial 
+                color={color} 
+                transparent={true} 
+                opacity={0.7} 
+                emissive={color}
+                emissiveIntensity={1.0}
+              />
+            </mesh>
+            
+            {/* Wispy cloak elements */}
+            <mesh castShadow position={[0, 0.7, 0.1]}>
+              <coneGeometry args={[0.8, 2.0, 12]} />
+              <meshStandardMaterial 
+                color={color} 
+                transparent={true} 
+                opacity={0.4}
+                emissive={color}
+                emissiveIntensity={0.5}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+            
+            {/* Additional wispy elements - more volume */}
+            <mesh castShadow position={[0, 0.6, 0]} rotation={[0, Math.PI / 4, 0]}>
+              <coneGeometry args={[0.8, 1.8, 12]} />
+              <meshStandardMaterial 
+                color={color} 
+                transparent={true} 
+                opacity={0.3}
+                emissive={color}
+                emissiveIntensity={0.3}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+            
+            {/* Ghostly arms */}
+            <group position={[0, 0.7, 0]}>
+              {/* Right arm */}
+              <mesh castShadow position={[0.6, 0.2, 0]}>
+                <boxGeometry args={[0.2, 0.8, 0.2]} />
+                <meshStandardMaterial 
+                  color={color} 
+                  transparent={true} 
+                  opacity={0.6}
+                  emissive={color}
+                  emissiveIntensity={0.3}
+                />
+              </mesh>
+              
+              {/* Left arm */}
+              <mesh castShadow position={[-0.6, 0.2, 0]}>
+                <boxGeometry args={[0.2, 0.8, 0.2]} />
+                <meshStandardMaterial 
+                  color={color} 
+                  transparent={true} 
+                  opacity={0.6}
+                  emissive={color}
+                  emissiveIntensity={0.3}
+                />
+              </mesh>
+            </group>
+            
+            {/* Larger, more threatening glowing eyes */}
+            <mesh position={[0.15, 1.4, 0.2]}>
+              <sphereGeometry args={[0.1, 16, 16]} />
+              <meshStandardMaterial color="#FF0000" emissive="#FF0000" emissiveIntensity={3} />
+            </mesh>
+            <mesh position={[-0.15, 1.4, 0.2]}>
+              <sphereGeometry args={[0.1, 16, 16]} />
+              <meshStandardMaterial color="#FF0000" emissive="#FF0000" emissiveIntensity={3} />
+            </mesh>
+            
+            {/* Ethereal particle effect lights */}
+            <pointLight
+              position={[0, 0.5, 0]}
+              distance={4}
+              intensity={1.8}
+              color="#9C27B0"
+            />
+            
+            <pointLight
+              position={[0, 1.3, 0.2]}
+              distance={2}
+              intensity={1.0}
+              color="#FF0000"
+            />
+            
+            {/* Blood Moon indicator with animated glow */}
+            <mesh position={[0, 2.0, 0]}>
+              <sphereGeometry args={[0.3, 16, 16]} />
+              <meshStandardMaterial 
+                color="#FF0000" 
+                emissive="#FF0000" 
+                emissiveIntensity={2 + Math.sin(animationProgress * Math.PI * 2)}
+              />
+            </mesh>
+          </group>
         ) : (
           // Default or bee
           <group>
@@ -435,6 +541,16 @@ export default function Creature({
           <sphereGeometry args={[0.1, 8, 8]} />
           <meshStandardMaterial color="#00FF00" emissive="#00FF00" emissiveIntensity={2} />
         </mesh>
+      )}
+      {mood === 'frenzied' && (
+        // Special Blood Moon mood indicator - more intense
+        <>
+          <mesh position={[0, 1.2, 0]}>
+            <sphereGeometry args={[0.15, 12, 12]} />
+            <meshStandardMaterial color="#FF0000" emissive="#FF0000" emissiveIntensity={4} />
+          </mesh>
+          <pointLight position={[0, 1.2, 0]} intensity={0.8} distance={3} color="#FF0000" />
+        </>
       )}
       
       {/* Leader indicator */}
