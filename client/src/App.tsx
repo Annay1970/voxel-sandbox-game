@@ -6,6 +6,7 @@ import Crosshair from './components/game/Crosshair';
 import MobileControls from './components/game/MobileControls';
 import Player from './components/game/Player';
 import BlockInteraction from './components/game/BlockInteraction';
+import DemoCreatures from './components/game/DemoCreatures';
 import { useIsMobile } from './hooks/use-is-mobile';
 import { gamepadManager } from './lib/controls/GamepadManager';
 
@@ -51,6 +52,7 @@ const LoadingScreen = ({ progress }: LoadingScreenProps) => {
 function App() {
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
+  const [showDemo, setShowDemo] = useState(false);
   const { isMobile, isTouch } = useIsMobile();
   
   // Simulate loading
@@ -99,6 +101,16 @@ function App() {
     <div className="h-screen w-screen overflow-hidden bg-black">
       {loading ? (
         <LoadingScreen progress={progress} />
+      ) : showDemo ? (
+        <>
+          <DemoCreatures />
+          <button 
+            className="fixed top-4 right-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded z-50"
+            onClick={() => setShowDemo(false)}
+          >
+            Back to Game
+          </button>
+        </>
       ) : (
         <>
           <KeyboardControls map={keyMap}>
@@ -126,6 +138,14 @@ function App() {
             <p className="text-sm mt-1">A sandbox adventure</p>
           </div>
           
+          {/* Button to show demo */}
+          <button 
+            className="absolute top-4 right-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+            onClick={() => setShowDemo(true)}
+          >
+            Show Creature Demo
+          </button>
+          
           {/* Crosshair in the center of the screen */}
           <Crosshair size={20} color="white" thickness={2} gap={6} />
           
@@ -137,7 +157,7 @@ function App() {
         </>
       )}
       
-      {!loading && <Loader />}
+      {!loading && !showDemo && <Loader />}
     </div>
   );
 }
