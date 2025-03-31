@@ -26,7 +26,7 @@ export function generateTerrain() {
       ['mountains', 'snow',      'snow',     'mountains'],
       ['forest',    'plains',    'cactus',   'desert'],
       ['mushroom',  'riverbank', 'swamp',    'beach'],
-      ['forest',    'plains',    'riverbank','desert']
+      ['forest',    'plains',    'riverbank','volcanic']
     ];
     
     // Using the biome map to make deterministic biome selection
@@ -85,6 +85,14 @@ export function generateTerrain() {
         case 'mushroom':
           // Somewhat weird and uneven
           baseHeight += Math.floor((noise1 * noise3) * 1.2);
+          break;
+        case 'volcanic':
+          // Volcanic terrain with hills and craters
+          baseHeight += Math.floor(Math.abs(Math.sin(x * 0.1) * Math.cos(z * 0.1)) * 5); // Raised terrain
+          if (Math.random() < 0.1) {
+            // Create occasional craters/calderas
+            baseHeight -= Math.floor(Math.random() * 3) + 2;
+          }
           break;
         default:
           // Default terrain
@@ -187,6 +195,61 @@ export function generateTerrain() {
               generateOreVein(x, height, z, 'goldOre', 2, blocks);
             } else if (Math.random() < 0.1) {
               generateOreVein(x, height, z, 'diamond', 1, blocks);
+            }
+          } else if (biome === 'volcanic') {
+            // Add volcanic features
+            if (Math.random() < 0.2 && !addedFeatures.get(featureKey)?.has('lava_pool')) {
+              // Create lava pools in depressions
+              addedFeatures.get(featureKey)?.add('lava_pool');
+              
+              // Create a small crater with lava
+              const craterRadius = Math.floor(Math.random() * 2) + 1;
+              const craterDepth = Math.floor(Math.random() * 2) + 1;
+              
+              for (let cx = -craterRadius; cx <= craterRadius; cx++) {
+                for (let cz = -craterRadius; cz <= craterRadius; cz++) {
+                  const distance = Math.sqrt(cx*cx + cz*cz);
+                  if (distance <= craterRadius) {
+                    // Dig out the crater
+                    const cx_world = x + cx;
+                    const cz_world = z + cz;
+                    const crater_height = height - craterDepth;
+                    
+                    // Fill with lava
+                    blocks[`${cx_world},${crater_height},${cz_world}`] = 'lava';
+                    
+                    // Add some magmaStone around the edges
+                    if (distance > craterRadius * 0.5) {
+                      blocks[`${cx_world},${crater_height-1},${cz_world}`] = 'magmaStone';
+                    }
+                  }
+                }
+              }
+            } else if (Math.random() < 0.15 && !addedFeatures.get(featureKey)?.has('volcanic_vent')) {
+              // Create volcanic vents
+              addedFeatures.get(featureKey)?.add('volcanic_vent');
+              
+              // Create a column of hotObsidian with magmaStone cap
+              const ventHeight = Math.floor(Math.random() * 3) + 1;
+              
+              for (let vy = 1; vy <= ventHeight; vy++) {
+                blocks[`${x},${height+vy},${z}`] = vy === ventHeight ? 'magmaStone' : 'hotObsidian';
+              }
+              
+              // Add some volcanic ash around the vent
+              for (let vx = -1; vx <= 1; vx++) {
+                for (let vz = -1; vz <= 1; vz++) {
+                  if ((vx !== 0 || vz !== 0) && Math.random() < 0.7) {
+                    if (!blocks[`${x+vx},${height+1},${z+vz}`] || 
+                        blocks[`${x+vx},${height+1},${z+vz}`] === 'air') {
+                      blocks[`${x+vx},${height+1},${z+vz}`] = 'volcanicAsh';
+                    }
+                  }
+                }
+              }
+            } else if (Math.random() < 0.3 && !blocks[`${x},${height+1},${z}`]) {
+              // Add volcanic ash patches
+              blocks[`${x},${height+1},${z}`] = 'volcanicAsh';
             }
           }
           
@@ -408,6 +471,26 @@ function getBlockType(height: number, y: number, biome: string, waterLevel: numb
       return 'gravel';
     } else if (biome === 'swamp') {
       return Math.random() < 0.4 ? 'clay' : 'dirt'; // 40% chance of clay in swamps
+    } else if (biome === 'volcanic') {
+      // Volcanic biome has different underground materials
+      if (y >= height - 2) {
+        // Near surface layers
+        const random = Math.random();
+        if (random < 0.4) {
+          return 'magmaStone'; // 40% chance of magmaStone near surface
+        } else if (random < 0.7) {
+          return 'stone'; // 30% chance of stone
+        } else if (random < 0.85) {
+          return 'volcanicAsh'; // 15% chance of volcanic ash deposits
+        } else if (random < 0.95) {
+          return 'obsidian'; // 10% chance of obsidian
+        } else {
+          return 'hotObsidian'; // 5% chance of hot obsidian
+        }
+      } else {
+        // Deeper layers
+        return Math.random() < 0.3 ? 'magmaStone' : 'stone';
+      }
     }
     return 'dirt';
   }

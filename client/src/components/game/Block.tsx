@@ -2,7 +2,7 @@ import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
-import { BlockType, isBlockTransparent } from '../../lib/blocks';
+import { BlockType, isBlockTransparent, isBlockLightEmitter } from '../../lib/blocks';
 import { useVoxelGame } from '../../lib/stores/useVoxelGame';
 
 interface BlockProps {
@@ -61,7 +61,11 @@ const blockColors: Record<BlockType, string> = {
   'redstone': '#b71c1c',
   'diamond': '#00bcd4',
   'emerald': '#4caf50',
-  'glowstone': '#ffeb3b'
+  'glowstone': '#ffeb3b',
+  // Volcanic biome blocks
+  'magmaStone': '#993300',
+  'volcanicAsh': '#4d4d4d',
+  'hotObsidian': '#1a0066'
 };
 
 // Function to get color with transparency
@@ -121,71 +125,137 @@ export default function Block({
     }
   }, [texturePath]);
   
-  // Emissive color based on block type and blood moon status
-  const emissiveColor = useMemo(() => {
+  // Use enhanced light emitter properties
+  const lightProperties = useMemo(() => {
     // Ensure bloodMoonEvent is defined before accessing its properties
     const isBloodMoonActive = bloodMoonEvent?.active || false;
     
-    if (type === 'glowstone') {
-      return isBloodMoonActive ? new THREE.Color('#ff2200') : new THREE.Color('#ffeb3b');
-    } else if (type === 'lava') {
-      return new THREE.Color(isBloodMoonActive ? '#ff0000' : '#ff2000');
-    } else if (type === 'torch') {
-      return new THREE.Color(isBloodMoonActive ? '#ff3300' : '#ff9900');
-    } else if (type === 'redstone') {
-      return new THREE.Color('#ff0000');
-    } else if (type === 'diamond') {
-      return new THREE.Color('#00bcd4');
-    } else if (type === 'emerald') {
-      return new THREE.Color('#4caf50');
-    } else {
-      return new THREE.Color('#ffffff');
-    }
-  }, [type, bloodMoonEvent?.active]);
-  
-  // Enhanced emission during blood moon
-  const emissiveIntensity = useMemo(() => {
-    // Ensure bloodMoonEvent is defined before accessing its properties
-    const isBloodMoonActive = bloodMoonEvent?.active || false;
+    // Get light properties from our enhanced function
+    const lightEmitter = isBlockLightEmitter(type);
     
-    if (!isBloodMoonActive) {
-      return type === 'lava' ? 0.5 : type === 'glowstone' ? 0.4 : 0.3;
-    } else {
-      // Increase emission during blood moon
-      return type === 'lava' ? 0.7 : 
-             type === 'glowstone' ? 0.6 : 
-             type === 'torch' ? 0.5 : 0.3;
+    // Default values
+    let color = new THREE.Color('#ffffff');
+    let intensity = 0;
+    
+    if (typeof lightEmitter === 'object') {
+      // Use the enhanced light properties with RGB values
+      const { intensity: baseIntensity, color: baseColor } = lightEmitter;
+      
+      // Convert RGB array to THREE.Color
+      color = new THREE.Color(baseColor[0], baseColor[1], baseColor[2]);
+      
+      // Apply blood moon effect
+      if (isBloodMoonActive) {
+        // Shift color toward red for blood moon
+        color.r = Math.min(1.0, color.r * 1.3);
+        color.g = Math.max(0.0, color.g * 0.7);
+        color.b = Math.max(0.0, color.b * 0.5);
+        
+        // Increase intensity during blood moon
+        intensity = baseIntensity * 1.4;
+      } else {
+        intensity = baseIntensity;
+      }
+    } else if (lightEmitter) {
+      // For blocks with simple boolean light emission
+      if (type === 'torch') {
+        color = new THREE.Color(isBloodMoonActive ? '#ff3300' : '#ff9900');
+        intensity = isBloodMoonActive ? 0.5 : 0.3;
+      } else if (type === 'redstone') {
+        color = new THREE.Color('#ff0000');
+        intensity = 0.3;
+      } else if (type === 'diamond') {
+        color = new THREE.Color('#00bcd4');
+        intensity = 0.3;
+      } else if (type === 'emerald') {
+        color = new THREE.Color('#4caf50');
+        intensity = 0.3;
+      } else if (type === 'volcanicAsh') {
+        color = new THREE.Color('#661400');
+        intensity = isBloodMoonActive ? 0.15 : 0.05; // Faint glow
+      } else {
+        intensity = isBloodMoonActive ? 0.4 : 0.2;
+      }
     }
+    
+    return { emissiveColor: color, emissiveIntensity: intensity };
   }, [type, bloodMoonEvent?.active]);
   
-  // Highlight the block when selected
+  // Extract the emissive properties for easier access
+  const emissiveColor = lightProperties.emissiveColor;
+  const emissiveIntensity = lightProperties.emissiveIntensity;
+  
+  // Determine if block emits light
+  const lightEmitter = isBlockLightEmitter(type);
+  
+  // Highlight the block when selected or apply lighting effects
   useFrame(() => {
     if (!meshRef.current || !(meshRef.current.material instanceof THREE.MeshStandardMaterial)) return;
     
     const material = meshRef.current.material;
     
     if (selected) {
+      // Selection highlight effect overrides any other emissive properties
       const time = Date.now() * 0.001;
       const hue = (Math.sin(time) * 0.1) + 0.5;
       material.emissive = new THREE.Color(hue, hue, hue);
-    } else if (type === 'glowstone' || type === 'lava' || type === 'torch' || 
-               type === 'redstone' || type === 'diamond' || type === 'emerald') {
+      material.emissiveIntensity = 0.6;
+    } else if (lightEmitter) {
       // For emissive blocks, add pulsing effect at night or during blood moon
       const isNight = timeOfDay < 0.25 || timeOfDay > 0.75;
       const isBloodMoonActive = bloodMoonEvent?.active || false;
       
-      if ((isNight || isBloodMoonActive) && (type === 'glowstone' || type === 'torch' || type === 'lava')) {
-        const time = Date.now() * 0.001;
-        const pulseIntensity = isBloodMoonActive ? 0.3 : 0.1;
-        const pulse = Math.sin(time * (isBloodMoonActive ? 4 : 2)) * pulseIntensity;
+      // Base emissive properties
+      material.emissive = emissiveColor;
+      
+      // Add pulsing/flickering effect to certain blocks
+      if ((isNight || isBloodMoonActive) && 
+          (type === 'glowstone' || type === 'torch' || type === 'lava' || 
+           type === 'magmaStone' || type === 'hotObsidian' || type === 'volcanicAsh')) {
         
-        material.emissive = emissiveColor;
+        const time = Date.now() * 0.001;
+        
+        // Enhanced pulsing parameters based on block type
+        let pulseIntensity, pulseFrequency;
+        
+        // Special pulsing for volcanic blocks
+        if (type === 'magmaStone' || type === 'hotObsidian') {
+          // Lava-like slow pulsing for volcanic blocks
+          pulseIntensity = isBloodMoonActive ? 0.4 : 0.2;
+          pulseFrequency = 0.8; // Slower frequency for magma blocks
+          
+          // Add a secondary, faster flicker for magmaStone during blood moon
+          if (type === 'magmaStone' && isBloodMoonActive) {
+            const flicker = Math.sin(time * 8) * 0.1;
+            pulseIntensity += flicker;
+          }
+        } else if (type === 'lava') {
+          // Lava has a more dramatic, unpredictable pulsing
+          pulseIntensity = isBloodMoonActive ? 0.35 : 0.25;
+          // Use more complex wave pattern for lava
+          const primaryWave = Math.sin(time * 1.2) * 0.6;
+          const secondaryWave = Math.sin(time * 2.7) * 0.4;
+          const pulse = (primaryWave + secondaryWave) * pulseIntensity;
+          material.emissiveIntensity = emissiveIntensity + pulse;
+          return; // Skip the standard pulsing calculation
+        } else if (type === 'volcanicAsh') {
+          // Subtle, barely visible pulsing for volcanic ash
+          pulseIntensity = isBloodMoonActive ? 0.1 : 0.05;
+          pulseFrequency = 0.5; // Very slow pulse
+        } else {
+          // Standard pulsing for other light-emitting blocks
+          pulseIntensity = isBloodMoonActive ? 0.3 : 0.1;
+          pulseFrequency = isBloodMoonActive ? 4 : 2;
+        }
+        
+        const pulse = Math.sin(time * pulseFrequency) * pulseIntensity;
         material.emissiveIntensity = emissiveIntensity + pulse;
       } else {
-        material.emissive = emissiveColor;
+        // Standard static emissive intensity for normal conditions
         material.emissiveIntensity = emissiveIntensity;
       }
     } else {
+      // Non-emissive blocks
       material.emissive = new THREE.Color(0, 0, 0);
       material.emissiveIntensity = 0;
     }
@@ -205,12 +275,10 @@ export default function Block({
   // Special cases for different block types
   const renderWater = type === 'water';
   const renderFire = type === 'lava';
-  const isEmissive = type === 'lava' || type === 'torch' || type === 'redstone' || 
-                  type === 'glowstone' || type === 'diamond' || type === 'emerald';
+  const isEmissive = !!lightEmitter; // Use our enhanced light emitter function
   
-  // Add pulsating glow for glowstone during blood moon
+  // Blood moon status for visual effects
   const isBloodMoonActive = bloodMoonEvent?.active || false;
-  const renderGlowEffect = type === 'glowstone' && isBloodMoonActive;
   
   return (
     <mesh 
@@ -250,24 +318,61 @@ export default function Block({
         </mesh>
       )}
       
-      {/* Special glow effect for glowstone during blood moon */}
-      {renderGlowEffect && (
+      {/* Enhanced light effects based on block type */}
+      {lightEmitter && typeof lightEmitter === 'object' && (
         <pointLight 
-          color="#ff0000"
-          intensity={0.8}
-          distance={5}
+          color={new THREE.Color(
+            lightEmitter.color[0], 
+            lightEmitter.color[1], 
+            lightEmitter.color[2]
+          ).getHex()}
+          intensity={isBloodMoonActive ? 
+            lightEmitter.intensity * 1.5 : 
+            lightEmitter.intensity}
+          distance={
+            // Different light ranges for different blocks
+            type === 'lava' ? 3.5 :
+            type === 'glowstone' ? 5 :
+            type === 'magmaStone' ? 2.5 :
+            type === 'hotObsidian' ? 2 :
+            type === 'volcanicAsh' ? 1 : 3
+          }
           decay={2}
         />
       )}
       
-      {/* Special glow for lava during blood moon */}
-      {type === 'lava' && isBloodMoonActive && (
+      {/* Special additional flicker effect for volcanic blocks during blood moon */}
+      {isBloodMoonActive && (type === 'magmaStone' || type === 'hotObsidian') && (
         <pointLight 
-          color="#ff3000"
-          intensity={0.6}
-          distance={3}
+          color={type === 'magmaStone' ? "#ff2200" : "#990000"}
+          intensity={0.2}
+          distance={1}
           decay={2}
-        />
+        >
+          {/* Animate the point light for a flickering effect */}
+          <mesh>
+            <sphereGeometry args={[0.1, 8, 8]} />
+            <meshBasicMaterial 
+              color={type === 'magmaStone' ? "#ff2200" : "#990000"} 
+              transparent={true} 
+              opacity={0.0} // Invisible mesh, just for animation
+            />
+          </mesh>
+        </pointLight>
+      )}
+      
+      {/* Pool effect for lava */}
+      {type === 'lava' && (
+        <mesh position={[0, -0.3, 0]} scale={[0.95, 0.4, 0.95]}>
+          <boxGeometry />
+          <meshStandardMaterial
+            color={isBloodMoonActive ? "#ff0000" : "#ff4500"}
+            emissive={isBloodMoonActive ? "#ff0000" : "#ff4500"}
+            emissiveIntensity={isBloodMoonActive ? 0.7 : 0.5}
+            transparent={true}
+            opacity={0.8}
+          />
+        </mesh>
       )}
     </mesh>
   );

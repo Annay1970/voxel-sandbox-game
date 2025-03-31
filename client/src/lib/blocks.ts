@@ -9,7 +9,9 @@ export type BlockType =
   // New block types
   'clay' | 'obsidian' | 'flower' | 'tallGrass' | 'mushroom' | 'gravel' |
   'roseflower' | 'blueflower' | 'pumpkin' | 'melon' | 
-  'ironOre' | 'goldOre' | 'redstone' | 'diamond' | 'emerald' | 'glowstone';
+  'ironOre' | 'goldOre' | 'redstone' | 'diamond' | 'emerald' | 'glowstone' |
+  // Volcanic biome blocks
+  'magmaStone' | 'volcanicAsh' | 'hotObsidian';
   
 /**
  * Properties of each block type
@@ -358,6 +360,39 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     hardness: 0.3,
     drops: 'glowstone',
     stackSize: 64
+  },
+  // Volcanic biome blocks
+  'magmaStone': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'pickaxe',
+    minToolLevel: 2, // Needs at least stone pickaxe
+    hardness: 2.5,
+    drops: [
+      { type: 'stone', chance: 0.6 },
+      { type: 'coal', chance: 0.3 }
+    ],
+    stackSize: 64
+  },
+  'volcanicAsh': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'shovel',
+    minToolLevel: 0,
+    hardness: 0.4,
+    stackSize: 64
+  },
+  'hotObsidian': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'pickaxe',
+    minToolLevel: 3, // Needs diamond pickaxe
+    hardness: 40.0,
+    drops: 'obsidian',
+    stackSize: 64
   }
 };
 
@@ -437,15 +472,56 @@ export function isBlockDamaging(type: BlockType): { damage: number, cooldown: nu
   if (type === 'cactus') {
     return { damage: 1, cooldown: 1000 }; // 1 damage every second
   }
+  if (type === 'magmaStone') {
+    return { damage: 2, cooldown: 1000 }; // 2 damage every second
+  }
+  if (type === 'hotObsidian') {
+    return { damage: 3, cooldown: 1200 }; // 3 damage every 1.2 seconds
+  }
+  if (type === 'volcanicAsh') {
+    return { damage: 1, cooldown: 2000 }; // 1 damage every 2 seconds (hot ash)
+  }
   return null;
 }
 
 /**
  * Check if a block emits light
+ * Returns boolean or light intensity object with RGB values
  */
-export function isBlockLightEmitter(type: BlockType): boolean {
-  return type === 'torch' || type === 'lava' || type === 'redstone' || 
-         type === 'diamond' || type === 'emerald' || type === 'glowstone';
+export function isBlockLightEmitter(type: BlockType): boolean | { intensity: number, color: [number, number, number] } {
+  // Enhanced blocks with custom light properties
+  if (type === 'magmaStone') {
+    return { 
+      intensity: 0.7, 
+      color: [1.0, 0.5, 0.2] // Orange-red glow
+    };
+  }
+  
+  if (type === 'hotObsidian') {
+    return { 
+      intensity: 0.9, 
+      color: [1.0, 0.3, 0.1] // Intense red glow
+    };
+  }
+  
+  if (type === 'lava') {
+    return { 
+      intensity: 1.0, 
+      color: [1.0, 0.6, 0.1] // Bright yellow-orange
+    };
+  }
+  
+  if (type === 'glowstone') {
+    return { 
+      intensity: 0.95, 
+      color: [1.0, 0.9, 0.6] // Warm yellow light
+    };
+  }
+  
+  // Simple boolean for other light-emitting blocks
+  return type === 'torch' || type === 'redstone' || 
+         type === 'diamond' || type === 'emerald' || 
+         type === 'volcanicAsh'; // Volcanic ash has a faint glow
 }
 
 /**
@@ -455,16 +531,32 @@ export function isBlockLightEmitter(type: BlockType): boolean {
 export function getBlockMovementEffect(type: BlockType): { 
   slowdown?: number, 
   bounce?: number,
-  slippery?: boolean
+  slippery?: boolean,
+  speedBoost?: number
 } {
   if (type === 'water') {
-    return { slowdown: 0.5 }; // Slows down player by 50%
+    return { slowdown: 0.5 }; // Slows down player by a lot
   }
   if (type === 'ice') {
     return { slippery: true };
   }
   if (type === 'snow') {
-    return { slowdown: 0.2 }; // Slows down player by 20%
+    return { slowdown: 0.2 }; // Slows down player a bit
+  }
+  if (type === 'volcanicAsh') {
+    return { slowdown: 0.3 }; // Slows down player, ashy ground is hard to walk on
+  }
+  if (type === 'magmaStone') {
+    return { 
+      speedBoost: 0.2, // Slight boost from the heat updraft
+      bounce: 0.1 // Small bounce effect from the hot surface
+    };
+  }
+  if (type === 'hotObsidian') {
+    return { 
+      speedBoost: 0.3, // Faster speed boost on hot obsidian
+      bounce: 0.2 // More bounce from super hot obsidian
+    };
   }
   return {};
 }
@@ -473,7 +565,8 @@ export function getBlockMovementEffect(type: BlockType): {
  * Check if a block can be affected by temperature (melting/freezing)
  */
 export function isBlockTemperatureReactive(type: BlockType): boolean {
-  return type === 'ice' || type === 'snow';
+  return type === 'ice' || type === 'snow' || type === 'hotObsidian' || 
+         type === 'magmaStone' || type === 'volcanicAsh';
 }
 
 /**
@@ -501,6 +594,17 @@ export function getBlockPlacementRestrictions(type: BlockType): {
     return {
       mustBeOnSolid: true,
       cannotBeNextToSolid: true
+    };
+  }
+  if (type === 'hotObsidian' || type === 'magmaStone') {
+    return {
+      mustBeOnSolid: true,
+      cannotBeUnderWater: true // Water would cool these blocks
+    };
+  }
+  if (type === 'volcanicAsh') {
+    return {
+      mustBeOnSolid: true
     };
   }
   return {};
