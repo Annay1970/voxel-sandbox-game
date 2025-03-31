@@ -7,6 +7,7 @@ import { useAudio } from '../../lib/stores/useAudio';
 
 // Preload available models
 useGLTF.preload('/models/zombie.glb');
+useGLTF.preload('/models/wraith.glb');
 
 interface CreatureProps {
   type: string;
@@ -52,8 +53,13 @@ export default function Creature({
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelError, setModelError] = useState(false);
   
-  // Try to load 3D model for zombie
+  // Try to load 3D models for creatures
   let zombieModel: THREE.Group | null = null;
+  let wraithModel: THREE.Group | null = null;
+  const [zombieModelLoaded, setZombieModelLoaded] = useState(false);
+  const [wraithModelLoaded, setWraithModelLoaded] = useState(false);
+  
+  // Load zombie model
   if (type === 'zombie') {
     try {
       const { scene } = useGLTF('/models/zombie.glb') as GLTF & {
@@ -61,13 +67,35 @@ export default function Creature({
       };
       zombieModel = scene;
       
-      if (!modelLoaded) {
+      if (!zombieModelLoaded) {
+        setZombieModelLoaded(true);
         setModelLoaded(true);
         console.log("Zombie model loaded successfully");
       }
     } catch (error) {
       if (!modelError) {
         console.warn("Failed to load zombie model, using fallback:", error);
+        setModelError(true);
+      }
+    }
+  }
+  
+  // Load wraith model
+  if (type === 'wraith') {
+    try {
+      const { scene } = useGLTF('/models/wraith.glb') as GLTF & {
+        scene: THREE.Group;
+      };
+      wraithModel = scene;
+      
+      if (!wraithModelLoaded) {
+        setWraithModelLoaded(true);
+        setModelLoaded(true);
+        console.log("Wraith model loaded successfully");
+      }
+    } catch (error) {
+      if (!modelError) {
+        console.warn("Failed to load wraith model, using fallback:", error);
         setModelError(true);
       }
     }
@@ -168,17 +196,36 @@ export default function Creature({
     }
     
     // For 3D models (when loaded)
-    if (groupRef.current && zombieModel) {
-      // More complex animations for the 3D model
-      if (animationState === 'idle') {
-        // Subtle swaying for 3D model
-        groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.001) * 0.05;
-      } else if (animationState === 'walk') {
-        // Walking animation - bob up and down slightly
-        groupRef.current.position.y = Math.sin(Date.now() * 0.01) * 0.05;
-      } else if (animationState === 'attack') {
-        // Attack animation - lunge forward slightly
-        groupRef.current.position.z = Math.sin(Date.now() * 0.01) * 0.1;
+    if (groupRef.current) {
+      // Different animations for different creature models
+      if (type === 'zombie' && zombieModel) {
+        if (animationState === 'idle') {
+          // Subtle swaying for zombie model
+          groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.001) * 0.05;
+        } else if (animationState === 'walk') {
+          // Walking animation - bob up and down slightly
+          groupRef.current.position.y = Math.sin(Date.now() * 0.01) * 0.05;
+        } else if (animationState === 'attack') {
+          // Attack animation - lunge forward slightly
+          groupRef.current.position.z = Math.sin(Date.now() * 0.01) * 0.1;
+        }
+      } 
+      else if (type === 'wraith' && wraithModel) {
+        // More ethereal, floating animations for wraith
+        if (animationState === 'idle' || animationState === 'hunt') {
+          // Ghostly hovering animation for wraith
+          groupRef.current.position.y = Math.sin(Date.now() * 0.002) * 0.1;
+          // Slow rotation
+          groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.0005) * 0.1;
+        } else if (animationState === 'attack') {
+          // Attack animation - more aggressive motion
+          groupRef.current.position.z = Math.sin(Date.now() * 0.015) * 0.15;
+          groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.01) * 0.2;
+        } else if (animationState === 'teleport') {
+          // Teleport animation - pulsing scale and opacity
+          const scale = 1.0 + Math.sin(Date.now() * 0.01) * 0.1;
+          groupRef.current.scale.set(scale, scale, scale);
+        }
       }
     }
   });
@@ -398,107 +445,148 @@ export default function Creature({
             </mesh>
           </group>
         ) : type === 'wraith' ? (
-          // Wraith - special Blood Moon mob with particle effects
+          // Wraith - special Blood Moon mob
           <group scale={[1.2, 1.2, 1.2]}>
-            {/* Main ghostly floating body */}
-            <mesh castShadow position={[0, 0.9, 0]}>
-              <boxGeometry args={[0.6, 1.5, 0.3]} />
-              <meshStandardMaterial 
-                color={color} 
-                transparent={true} 
-                opacity={0.7} 
-                emissive={color}
-                emissiveIntensity={1.0}
-              />
-            </mesh>
-            
-            {/* Wispy cloak elements */}
-            <mesh castShadow position={[0, 0.7, 0.1]}>
-              <coneGeometry args={[0.8, 2.0, 12]} />
-              <meshStandardMaterial 
-                color={color} 
-                transparent={true} 
-                opacity={0.4}
-                emissive={color}
-                emissiveIntensity={0.5}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
-            
-            {/* Additional wispy elements - more volume */}
-            <mesh castShadow position={[0, 0.6, 0]} rotation={[0, Math.PI / 4, 0]}>
-              <coneGeometry args={[0.8, 1.8, 12]} />
-              <meshStandardMaterial 
-                color={color} 
-                transparent={true} 
-                opacity={0.3}
-                emissive={color}
-                emissiveIntensity={0.3}
-                side={THREE.DoubleSide}
-              />
-            </mesh>
-            
-            {/* Ghostly arms */}
-            <group position={[0, 0.7, 0]}>
-              {/* Right arm */}
-              <mesh castShadow position={[0.6, 0.2, 0]}>
-                <boxGeometry args={[0.2, 0.8, 0.2]} />
-                <meshStandardMaterial 
-                  color={color} 
-                  transparent={true} 
-                  opacity={0.6}
-                  emissive={color}
-                  emissiveIntensity={0.3}
+            {modelLoaded && wraithModel ? (
+              <Suspense fallback={
+                // Fallback to simple model while loading
+                <mesh castShadow>
+                  <boxGeometry args={[0.6, 1.6, 0.5]} />
+                  <meshStandardMaterial 
+                    color={color} 
+                    transparent={true} 
+                    opacity={0.7} 
+                    emissive={color}
+                    emissiveIntensity={1.0} 
+                  />
+                </mesh>
+              }>
+                <group ref={groupRef}>
+                  <primitive 
+                    object={wraithModel.clone()} 
+                    scale={[2.5, 2.5, 2.5]} 
+                    position={[0, -1.5, 0]}
+                    rotation={[0, Math.PI - rotation.y, 0]} 
+                    castShadow 
+                  />
+                </group>
+                
+                {/* Add additional particle effects and glow to the 3D model */}
+                <pointLight
+                  position={[0, 0.5, 0]}
+                  distance={5}
+                  intensity={2.0}
+                  color="#9C27B0"
                 />
-              </mesh>
-              
-              {/* Left arm */}
-              <mesh castShadow position={[-0.6, 0.2, 0]}>
-                <boxGeometry args={[0.2, 0.8, 0.2]} />
-                <meshStandardMaterial 
-                  color={color} 
-                  transparent={true} 
-                  opacity={0.6}
-                  emissive={color}
-                  emissiveIntensity={0.3}
+                
+                <pointLight
+                  position={[0, 1.3, 0.2]}
+                  distance={3}
+                  intensity={1.2}
+                  color="#FF0000"
                 />
-              </mesh>
-            </group>
-            
-            {/* Larger, more threatening glowing eyes */}
-            <mesh position={[0.15, 1.4, 0.2]}>
-              <sphereGeometry args={[0.1, 16, 16]} />
-              <meshStandardMaterial color="#FF0000" emissive="#FF0000" emissiveIntensity={3} />
-            </mesh>
-            <mesh position={[-0.15, 1.4, 0.2]}>
-              <sphereGeometry args={[0.1, 16, 16]} />
-              <meshStandardMaterial color="#FF0000" emissive="#FF0000" emissiveIntensity={3} />
-            </mesh>
-            
-            {/* Ethereal particle effect lights */}
-            <pointLight
-              position={[0, 0.5, 0]}
-              distance={4}
-              intensity={1.8}
-              color="#9C27B0"
-            />
-            
-            <pointLight
-              position={[0, 1.3, 0.2]}
-              distance={2}
-              intensity={1.0}
-              color="#FF0000"
-            />
-            
-            {/* Blood Moon indicator with animated glow */}
-            <mesh position={[0, 2.0, 0]}>
-              <sphereGeometry args={[0.3, 16, 16]} />
-              <meshStandardMaterial 
-                color="#FF0000" 
-                emissive="#FF0000" 
-                emissiveIntensity={2 + Math.sin(animationProgress * Math.PI * 2)}
-              />
-            </mesh>
+                
+                {/* Blood Moon indicator with animated glow */}
+                <mesh position={[0, 2.0, 0]}>
+                  <sphereGeometry args={[0.3, 16, 16]} />
+                  <meshStandardMaterial 
+                    color="#FF0000" 
+                    emissive="#FF0000" 
+                    emissiveIntensity={2 + Math.sin(animationProgress * Math.PI * 2)}
+                  />
+                </mesh>
+              </Suspense>
+            ) : (
+              // Fallback if model fails to load - simpler ghostly wraith
+              <group>
+                {/* Main ghostly floating body */}
+                <mesh castShadow position={[0, 0.9, 0]}>
+                  <boxGeometry args={[0.6, 1.5, 0.3]} />
+                  <meshStandardMaterial 
+                    color={color} 
+                    transparent={true} 
+                    opacity={0.7} 
+                    emissive={color}
+                    emissiveIntensity={1.0}
+                  />
+                </mesh>
+                
+                {/* Wispy cloak elements */}
+                <mesh castShadow position={[0, 0.7, 0.1]}>
+                  <coneGeometry args={[0.8, 2.0, 12]} />
+                  <meshStandardMaterial 
+                    color={color} 
+                    transparent={true} 
+                    opacity={0.4}
+                    emissive={color}
+                    emissiveIntensity={0.5}
+                    side={THREE.DoubleSide}
+                  />
+                </mesh>
+                
+                {/* Ghostly arms */}
+                <group position={[0, 0.7, 0]}>
+                  {/* Right arm */}
+                  <mesh castShadow position={[0.6, 0.2, 0]}>
+                    <boxGeometry args={[0.2, 0.8, 0.2]} />
+                    <meshStandardMaterial 
+                      color={color} 
+                      transparent={true} 
+                      opacity={0.6}
+                      emissive={color}
+                      emissiveIntensity={0.3}
+                    />
+                  </mesh>
+                  
+                  {/* Left arm */}
+                  <mesh castShadow position={[-0.6, 0.2, 0]}>
+                    <boxGeometry args={[0.2, 0.8, 0.2]} />
+                    <meshStandardMaterial 
+                      color={color} 
+                      transparent={true} 
+                      opacity={0.6}
+                      emissive={color}
+                      emissiveIntensity={0.3}
+                    />
+                  </mesh>
+                </group>
+                
+                {/* Glowing eyes */}
+                <mesh position={[0.15, 1.4, 0.2]}>
+                  <sphereGeometry args={[0.1, 16, 16]} />
+                  <meshStandardMaterial color="#FF0000" emissive="#FF0000" emissiveIntensity={3} />
+                </mesh>
+                <mesh position={[-0.15, 1.4, 0.2]}>
+                  <sphereGeometry args={[0.1, 16, 16]} />
+                  <meshStandardMaterial color="#FF0000" emissive="#FF0000" emissiveIntensity={3} />
+                </mesh>
+                
+                {/* Ethereal particle effect lights */}
+                <pointLight
+                  position={[0, 0.5, 0]}
+                  distance={4}
+                  intensity={1.8}
+                  color="#9C27B0"
+                />
+                
+                <pointLight
+                  position={[0, 1.3, 0.2]}
+                  distance={2}
+                  intensity={1.0}
+                  color="#FF0000"
+                />
+                
+                {/* Blood Moon indicator with animated glow */}
+                <mesh position={[0, 2.0, 0]}>
+                  <sphereGeometry args={[0.3, 16, 16]} />
+                  <meshStandardMaterial 
+                    color="#FF0000" 
+                    emissive="#FF0000" 
+                    emissiveIntensity={2 + Math.sin(animationProgress * Math.PI * 2)}
+                  />
+                </mesh>
+              </group>
+            )}
           </group>
         ) : (
           // Default or bee
