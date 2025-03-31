@@ -1,176 +1,156 @@
-import { Canvas } from "@react-three/fiber";
-import { Suspense, useEffect, useState } from "react";
-import { KeyboardControls } from "@react-three/drei";
-import * as THREE from "three";
-import "@fontsource/inter";
-import { Controls, useVoxelGame } from "./lib/stores/useVoxelGame";
-import { useAudio } from "./lib/stores/useAudio";
-import { generateTerrain } from "./lib/terrain";
-import World from "./components/game/World";
-import UI from "./components/game/UI";
-import { GameMonitoringSystem } from "./components/monitoring";
+import React, { useState, useEffect, Suspense } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { Sky, KeyboardControls, Stars, Loader } from '@react-three/drei';
+import GamepadDisplay from './components/game/GamepadDisplay';
+import { useIsMobile } from './hooks/use-is-mobile';
+import { gamepadManager } from './lib/controls/GamepadManager';
 
-// Ultra simplified loading screen for better performance
+// Define game controls
+enum Controls {
+  forward = 'forward',
+  back = 'back',
+  left = 'left',
+  right = 'right',
+  jump = 'jump',
+  sprint = 'sprint',
+  attack = 'attack',
+  place = 'place',
+  interact = 'interact',
+  inventory = 'inventory',
+  toggleCamera = 'toggleCamera'
+}
+
+// Loading screen component
 interface LoadingScreenProps {
   progress: number;
 }
 
 const LoadingScreen = ({ progress }: LoadingScreenProps) => {
-  // Simplified messages
-  let message = "Loading - Please Wait...";
-  
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-90 z-50 text-white">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold mb-4">{message}</h1>
-        <div className="w-64 h-4 bg-gray-700 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-green-500" 
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <p className="mt-2 text-gray-300">{progress}% Complete</p>
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black text-white">
+      <h1 className="mb-4 text-4xl font-bold">Voxel World</h1>
+      <div className="w-64 h-2 bg-gray-800 rounded-full overflow-hidden">
+        <div 
+          className="h-full bg-green-500 transition-all duration-300 ease-out"
+          style={{ width: `${progress}%` }}
+        />
       </div>
+      <p className="mt-2">{Math.round(progress)}% loaded</p>
     </div>
   );
 };
 
-// Ultra simple loading fallback
-const LoadingFallback = () => {
+// Placeholder for the game world component
+const GameWorld = () => {
   return (
-    <mesh>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color="#FFFFFF" />
-    </mesh>
+    <>
+      <ambientLight intensity={0.5} />
+      <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
+      
+      {/* Ground plane */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -0.5, 0]}>
+        <planeGeometry args={[100, 100]} />
+        <meshStandardMaterial color="#3b8c3b" />
+      </mesh>
+      
+      {/* Demo cube */}
+      <mesh position={[0, 0.5, 0]} castShadow>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color="#964B00" />
+      </mesh>
+    </>
   );
 };
 
+// Placeholder for player component
+const Player = () => {
+  // This would include player movement, camera controls, etc.
+  return null;
+};
+
 function App() {
-  // Game state from store
-  const setChunks = useVoxelGame(state => state.setChunks);
-  const setBlocks = useVoxelGame(state => state.setBlocks);
-  const chunks = useVoxelGame(state => state.chunks);
+  const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState(0);
+  const { isMobile, isTouch } = useIsMobile();
   
-  // Only use minimal required sounds
-  const setSound = useAudio(state => state.setSound);
-
-  // Loading state
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  
-  // EMERGENCY MODE: Minimal world generation 
+  // Simulate loading
   useEffect(() => {
-    // Only generate if we don't already have chunks
-    if (Object.keys(chunks).length === 0) {
-      console.log("EMERGENCY MODE: Generating minimal world...");
+    let progressValue = 0;
+    const interval = setInterval(() => {
+      progressValue += 5;
+      setProgress(progressValue);
       
-      // Immediate generation with simplified steps
-      try {
-        // Step 1: Generate terrain (80%)
-        setLoadingProgress(20);
-        const { generatedChunks, generatedBlocks } = generateTerrain();
-        setLoadingProgress(80);
-        
-        // Step 2: Apply to store (100%)
-        setChunks(generatedChunks as Record<string, { x: number, z: number }>);
-        setBlocks(generatedBlocks);
-        setLoadingProgress(100);
-        
-        // Only load absolutely essential sounds
-        try {
-          // Just load the minimum required sounds
-          const hitSfx = new Audio('/sounds/hit.mp3');
-          hitSfx.volume = 0.6;
-          setSound('hitSound', hitSfx);
-        } catch (e) {
-          console.warn("Sound loading error:", e);
-        }
-        
-        // Complete loading
-        setIsLoading(false);
-      } catch (e) {
-        console.error("Critical error during world generation:", e);
-        // If terrain generation fails, still attempt to show UI
-        setLoadingProgress(100);
-        setIsLoading(false);
+      if (progressValue >= 100) {
+        clearInterval(interval);
+        setTimeout(() => setLoading(false), 500); // Small delay for smooth transition
       }
-    } else {
-      // Already have chunks, no need to load
-      setIsLoading(false);
-    }
-  }, [setChunks, setBlocks, chunks, setSound]);
-
-  // Complete keyboard controls
+    }, 100);
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Initialize gamepad support
+  useEffect(() => {
+    // Start the gamepad manager
+    gamepadManager.start();
+    
+    // Cleanup on unmount
+    return () => {
+      gamepadManager.stop();
+    };
+  }, []);
+  
+  // Define key mappings for keyboard controls
   const keyMap = [
-    { name: Controls.forward, keys: ["KeyW", "ArrowUp"] },
-    { name: Controls.back, keys: ["KeyS", "ArrowDown"] },
-    { name: Controls.left, keys: ["KeyA", "ArrowLeft"] },
-    { name: Controls.right, keys: ["KeyD", "ArrowRight"] },
-    { name: Controls.jump, keys: ["Space"] },
-    { name: Controls.sprint, keys: ["ShiftLeft"] },
-    { name: Controls.attack, keys: ["KeyF"] }, // F key for attacking
-    { name: Controls.place, keys: ["KeyE"] }, // E key for placing
+    { name: Controls.forward, keys: ['ArrowUp', 'KeyW'] },
+    { name: Controls.back, keys: ['ArrowDown', 'KeyS'] },
+    { name: Controls.left, keys: ['ArrowLeft', 'KeyA'] },
+    { name: Controls.right, keys: ['ArrowRight', 'KeyD'] },
+    { name: Controls.jump, keys: ['Space'] },
+    { name: Controls.sprint, keys: ['ShiftLeft', 'ShiftRight'] },
+    { name: Controls.attack, keys: ['KeyF'] },
+    { name: Controls.place, keys: ['KeyE'] },
+    { name: Controls.interact, keys: ['KeyQ'] },
+    { name: Controls.inventory, keys: ['Tab', 'KeyI'] },
+    { name: Controls.toggleCamera, keys: ['KeyV'] }
   ];
-
+  
   return (
-    <div className="w-full h-full">
-      {isLoading && (
-        <LoadingScreen progress={loadingProgress} />
+    <div className="h-screen w-screen overflow-hidden bg-black">
+      {loading ? (
+        <LoadingScreen progress={progress} />
+      ) : (
+        <>
+          <KeyboardControls map={keyMap}>
+            <Canvas shadows camera={{ position: [0, 5, 10], fov: 60 }}>
+              <Suspense fallback={null}>
+                <Sky sunPosition={[10, 5, 10]} />
+                <Stars radius={100} depth={50} count={5000} factor={4} />
+                <GameWorld />
+                <Player />
+              </Suspense>
+            </Canvas>
+          </KeyboardControls>
+          
+          {/* Game UI components */}
+          <div className="absolute left-4 top-4 text-white">
+            <h1 className="text-2xl font-bold">Voxel World</h1>
+            <p className="text-sm mt-1">A sandbox adventure</p>
+          </div>
+          
+          {/* Gamepad display (press G to toggle) */}
+          <GamepadDisplay showByDefault={false} />
+          
+          {/* Mobile controls would be added here */}
+          {isMobile && (
+            <div className="absolute bottom-4 left-4 text-white bg-black bg-opacity-50 px-3 py-1 rounded-md">
+              Mobile controls placeholder
+            </div>
+          )}
+        </>
       )}
       
-      <KeyboardControls map={keyMap}>
-        <Canvas
-          shadows={false} // Disable shadows for performance
-          camera={{
-            position: [0, 50, 0], 
-            fov: 75,
-            near: 0.1,
-            far: 500 // Reduced for performance
-          }}
-          gl={{
-            antialias: false, // Disable for performance
-            powerPreference: "high-performance",
-            alpha: false,
-            stencil: false,
-            depth: true,
-            logarithmicDepthBuffer: false // Disable for performance
-          }}
-          dpr={1} // Lowest resolution for performance
-          style={{ background: "#87CEEB" }}
-          onCreated={({ gl, scene, camera }) => {
-            gl.setClearColor(new THREE.Color('#87CEEB'));
-            
-            // Set the sky color for the scene background
-            scene.background = new THREE.Color('#87CEEB');
-            
-            // Disable shadows
-            gl.shadowMap.enabled = false;
-            
-            // Set up camera
-            camera.lookAt(0, 2, -1);
-          }}
-        >
-          {/* Minimal scene */}
-          <Suspense fallback={<LoadingFallback />}>
-            {/* The World component contains everything */}
-            <World />
-            
-            {/* Minimal lighting for performance */}
-            <ambientLight intensity={0.7} />
-            <directionalLight
-              position={[0, 100, 0]}
-              intensity={1.0}
-              castShadow={false}
-            />
-          </Suspense>
-        </Canvas>
-        
-        {/* Game UI overlay */}
-        <UI />
-        
-        {/* Game Monitoring System */}
-        <GameMonitoringSystem />
-      </KeyboardControls>
+      {!loading && <Loader />}
     </div>
   );
 }
