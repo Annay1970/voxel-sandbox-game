@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { BlockType } from '../../lib/blocks';
 import { WeatherType } from '../../lib/stores/useVoxelGame';
 import { useVoxelGame } from '../../lib/stores/useVoxelGame';
@@ -14,6 +14,12 @@ export default function UI() {
   const blocks = useVoxelGame(state => state.blocks);
   const timeOfDay = useVoxelGame(state => state.timeOfDay);
   const weather = useVoxelGame(state => state.weather);
+  const bloodMoonEvent = useVoxelGame(state => state.bloodMoonEvent);
+  const dayCount = useVoxelGame(state => state.dayCount);
+  
+  // Blood moon particle effect refs
+  const particlesRef = useRef<HTMLDivElement>(null);
+  const [particles, setParticles] = useState<Array<{id: number, x: number, y: number, size: number, speed: number}>>([]);
   
   // Skills state
   const skills = useSkills(state => state.skills);
@@ -22,6 +28,45 @@ export default function UI() {
   // Debug state
   const [showDebug, setShowDebug] = useState(false);
   const [fps, setFps] = useState(0);
+  
+  // Blood moon particles animation
+  useEffect(() => {
+    if (!bloodMoonEvent.active || bloodMoonEvent.intensity < 0.5) return;
+    
+    // Generate initial particles
+    const newParticles = [];
+    for (let i = 0; i < 20; i++) {
+      newParticles.push({
+        id: i,
+        x: Math.random() * 100,
+        y: Math.random() * 100,
+        size: 1 + Math.random() * 3,
+        speed: 0.2 + Math.random() * 0.5
+      });
+    }
+    setParticles(newParticles);
+    
+    // Animation frame to update particles
+    let animId: number;
+    const updateParticles = () => {
+      setParticles(prev => prev.map(particle => ({
+        ...particle,
+        y: particle.y + particle.speed,
+        x: particle.x + Math.sin(particle.y / 20) * 0.5,
+        // Reset particles that go off screen
+        ...(particle.y > 100 ? { y: -10, x: Math.random() * 100 } : {})
+      })));
+      
+      animId = requestAnimationFrame(updateParticles);
+    };
+    
+    animId = requestAnimationFrame(updateParticles);
+    
+    return () => {
+      cancelAnimationFrame(animId);
+      setParticles([]);
+    };
+  }, [bloodMoonEvent.active, bloodMoonEvent.intensity]);
   
   // Selected block info
   const selectedBlockType = selectedBlock ? 
@@ -69,6 +114,9 @@ export default function UI() {
     return () => cancelAnimationFrame(animationId);
   }, []);
   
+  // Calculate days until next blood moon
+  const daysUntilBloodMoon = bloodMoonEvent.active ? 0 : (14 - (dayCount % 14));
+  
   return (
     <div className="fixed inset-0 pointer-events-none">
       {/* Crosshair */}
@@ -78,6 +126,44 @@ export default function UI() {
       <div className="pointer-events-auto">
         <MobileControls />
       </div>
+      
+      {/* Blood Moon Particles */}
+      {bloodMoonEvent.active && (
+        <div ref={particlesRef} className="fixed inset-0 overflow-hidden pointer-events-none">
+          {particles.map(particle => (
+            <div 
+              key={particle.id}
+              className="absolute rounded-full" 
+              style={{
+                left: `${particle.x}%`,
+                top: `${particle.y}%`,
+                width: `${particle.size}px`,
+                height: `${particle.size}px`,
+                backgroundColor: '#FF2222',
+                opacity: 0.7,
+                boxShadow: '0 0 4px #FF0000',
+                filter: 'blur(1px)'
+              }}
+            />
+          ))}
+        </div>
+      )}
+      
+      {/* Blood Moon Alert */}
+      {bloodMoonEvent.active && (
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-red-900 bg-opacity-75 text-white p-2 rounded flex items-center gap-2 animate-pulse">
+          <span className="text-red-300">🌑</span>
+          <span className="font-bold text-red-100">BLOOD MOON</span>
+          <span className="text-red-300">🌑</span>
+        </div>
+      )}
+      
+      {/* Blood Moon Countdown */}
+      {!bloodMoonEvent.active && daysUntilBloodMoon <= 3 && (
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 bg-gray-800 bg-opacity-75 text-white p-2 rounded">
+          <span className="text-red-300">{daysUntilBloodMoon === 1 ? 'Blood Moon Tonight!' : `Blood Moon in ${daysUntilBloodMoon} days`}</span>
+        </div>
+      )}
       
       {/* Inventory bar */}
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-1">
@@ -127,6 +213,10 @@ export default function UI() {
       <div className="absolute top-4 right-4 bg-gray-800 bg-opacity-75 text-white p-2 rounded flex items-center gap-2">
         <span>{getTimeString()}</span>
         <span>{getWeatherIcon(weather)}</span>
+        <span>Day {dayCount}</span>
+        {bloodMoonEvent.active && (
+          <span className="text-red-400 ml-1">🌑</span>
+        )}
       </div>
       
       {/* Skills display */}
@@ -167,6 +257,9 @@ export default function UI() {
           <div>Player Pos: {selectedBlock ? `${selectedBlock[0]}, ${selectedBlock[1]}, ${selectedBlock[2]}` : 'Unknown'}</div>
           <div>Time: {getTimeString()}</div>
           <div>Weather: {weather}</div>
+          <div>Day: {dayCount}</div>
+          <div>Blood Moon: {bloodMoonEvent.active ? 'Active' : `In ${daysUntilBloodMoon} days`}</div>
+          <div>Blood Moon Intensity: {bloodMoonEvent.intensity.toFixed(2)}</div>
           <div>Inventory Slot: {selectedInventorySlot + 1}/9</div>
         </div>
       )}
@@ -193,6 +286,23 @@ function getBlockColor(type: string): string {
     case 'woodenShovel': return '#A1887F';
     case 'coal': return '#263238';
     case 'torch': return '#FFB300';
+    case 'obsidian': return '#1E1E1E';
+    case 'clay': return '#B39DDB';
+    case 'glowstone': return '#FFFF00';
+    case 'lava': return '#FF5722';
+    case 'ice': return '#B3E5FC';
+    case 'glass': return '#E0E0E0';
+    case 'ironOre': return '#E8EAF6';
+    case 'goldOre': return '#FFC107';
+    case 'redstone': return '#F44336';
+    case 'diamond': return '#00BCD4';
+    case 'emerald': return '#4CAF50';
+    case 'flower': return '#FF4081';
+    case 'roseflower': return '#FF80AB';
+    case 'blueflower': return '#2196F3';
+    case 'snow': return '#FFFFFF';
+    case 'gravel': return '#607D8B';
+    case 'cactus': return '#2E7D32';
     default: return '#FFFFFF';
   }
 }

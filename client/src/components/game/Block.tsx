@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 import { BlockType, isBlockTransparent } from '../../lib/blocks';
+import { useVoxelGame } from '../../lib/stores/useVoxelGame';
 
 interface BlockProps {
   position: [number, number, number];
@@ -101,6 +102,10 @@ export default function Block({
   // Reference to the mesh
   const meshRef = useRef<THREE.Mesh>(null);
   
+  // Get blood moon event state
+  const bloodMoonEvent = useVoxelGame(state => state.bloodMoonEvent);
+  const timeOfDay = useVoxelGame(state => state.timeOfDay);
+  
   // Get texture path for this block type
   const texturePath = getBlockTexture(type);
   
@@ -116,17 +121,66 @@ export default function Block({
     }
   }, [texturePath]);
   
+  // Emissive color based on block type and blood moon status
+  const emissiveColor = useMemo(() => {
+    if (type === 'glowstone') {
+      return bloodMoonEvent.active ? new THREE.Color('#ff2200') : new THREE.Color('#ffeb3b');
+    } else if (type === 'lava') {
+      return new THREE.Color(bloodMoonEvent.active ? '#ff0000' : '#ff2000');
+    } else if (type === 'torch') {
+      return new THREE.Color(bloodMoonEvent.active ? '#ff3300' : '#ff9900');
+    } else if (type === 'redstone') {
+      return new THREE.Color('#ff0000');
+    } else if (type === 'diamond') {
+      return new THREE.Color('#00bcd4');
+    } else if (type === 'emerald') {
+      return new THREE.Color('#4caf50');
+    } else {
+      return new THREE.Color('#ffffff');
+    }
+  }, [type, bloodMoonEvent.active]);
+  
+  // Enhanced emission during blood moon
+  const emissiveIntensity = useMemo(() => {
+    if (!bloodMoonEvent.active) {
+      return type === 'lava' ? 0.5 : type === 'glowstone' ? 0.4 : 0.3;
+    } else {
+      // Increase emission during blood moon
+      return type === 'lava' ? 0.7 : 
+             type === 'glowstone' ? 0.6 : 
+             type === 'torch' ? 0.5 : 0.3;
+    }
+  }, [type, bloodMoonEvent.active]);
+  
   // Highlight the block when selected
   useFrame(() => {
-    if (meshRef.current && selected) {
+    if (!meshRef.current || !(meshRef.current.material instanceof THREE.MeshStandardMaterial)) return;
+    
+    const material = meshRef.current.material;
+    
+    if (selected) {
       const time = Date.now() * 0.001;
       const hue = (Math.sin(time) * 0.1) + 0.5;
-      // Make sure we're dealing with a MeshStandardMaterial
-      if (meshRef.current.material instanceof THREE.MeshStandardMaterial) {
-        meshRef.current.material.emissive = new THREE.Color(hue, hue, hue);
+      material.emissive = new THREE.Color(hue, hue, hue);
+    } else if (type === 'glowstone' || type === 'lava' || type === 'torch' || 
+               type === 'redstone' || type === 'diamond' || type === 'emerald') {
+      // For emissive blocks, add pulsing effect at night or during blood moon
+      const isNight = timeOfDay < 0.25 || timeOfDay > 0.75;
+      
+      if ((isNight || bloodMoonEvent.active) && (type === 'glowstone' || type === 'torch' || type === 'lava')) {
+        const time = Date.now() * 0.001;
+        const pulseIntensity = bloodMoonEvent.active ? 0.3 : 0.1;
+        const pulse = Math.sin(time * (bloodMoonEvent.active ? 4 : 2)) * pulseIntensity;
+        
+        material.emissive = emissiveColor;
+        material.emissiveIntensity = emissiveIntensity + pulse;
+      } else {
+        material.emissive = emissiveColor;
+        material.emissiveIntensity = emissiveIntensity;
       }
-    } else if (meshRef.current && meshRef.current.material instanceof THREE.MeshStandardMaterial) {
-      meshRef.current.material.emissive = new THREE.Color(0, 0, 0);
+    } else {
+      material.emissive = new THREE.Color(0, 0, 0);
+      material.emissiveIntensity = 0;
     }
   });
   
@@ -147,6 +201,9 @@ export default function Block({
   const isEmissive = type === 'lava' || type === 'torch' || type === 'redstone' || 
                   type === 'glowstone' || type === 'diamond' || type === 'emerald';
   
+  // Add pulsating glow for glowstone during blood moon
+  const renderGlowEffect = type === 'glowstone' && bloodMoonEvent.active;
+  
   return (
     <mesh 
       ref={meshRef}
@@ -164,15 +221,8 @@ export default function Block({
         // Apply texture if available
         map={texture || undefined}
         // Special material properties for different block types
-        emissive={isEmissive ? new THREE.Color(
-                              type === 'lava' ? '#ff2000' : 
-                              type === 'torch' ? '#ff9900' : 
-                              type === 'redstone' ? '#ff0000' : 
-                              type === 'glowstone' ? '#ffeb3b' :
-                              type === 'diamond' ? '#00bcd4' :
-                              type === 'emerald' ? '#4caf50' :
-                              '#ffffff') : undefined}
-        emissiveIntensity={isEmissive ? (type === 'lava' ? 0.5 : 0.3) : 0}
+        emissive={isEmissive ? emissiveColor : undefined}
+        emissiveIntensity={isEmissive ? emissiveIntensity : 0}
         metalness={(type === 'stone' || type === 'stonePickaxe' || 
                    type === 'ironOre' || type === 'goldOre') ? 0.3 : 0}
         roughness={type === 'ice' || type === 'glass' ? 0.1 : 
@@ -190,6 +240,26 @@ export default function Block({
             opacity={0.7}
           />
         </mesh>
+      )}
+      
+      {/* Special glow effect for glowstone during blood moon */}
+      {renderGlowEffect && (
+        <pointLight 
+          color="#ff0000"
+          intensity={0.8}
+          distance={5}
+          decay={2}
+        />
+      )}
+      
+      {/* Special glow for lava during blood moon */}
+      {type === 'lava' && bloodMoonEvent.active && (
+        <pointLight 
+          color="#ff3000"
+          intensity={0.6}
+          distance={3}
+          decay={2}
+        />
       )}
     </mesh>
   );

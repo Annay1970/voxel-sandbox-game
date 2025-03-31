@@ -103,6 +103,49 @@ export default function SkyDome({ timeOfDay: propTimeOfDay, weather: propWeather
     }
   }, [timeOfDay, isBloodMoonActive]);
   
+  // Calculate moon position based on time of day
+  const moonPosition = useMemo(() => {
+    // Moon is visible from 0.75 to 0.25 (night time)
+    if (timeOfDay > 0.75 || timeOfDay < 0.25) {
+      // Convert time to angle (0.75 = 0 degrees, 0.0 = 180 degrees, 0.25 = 360 degrees)
+      let angle = 0;
+      if (timeOfDay > 0.75) {
+        // 0.75 to 1.0 maps to 0 to 90 degrees
+        angle = (timeOfDay - 0.75) * 360;
+      } else {
+        // 0.0 to 0.25 maps to 90 to 180 degrees
+        angle = (timeOfDay + 0.25) * 360;
+      }
+      
+      // Convert angle to radians and calculate position on a circle
+      const radians = angle * (Math.PI / 180);
+      const radius = 50; // Distance from center
+      
+      // Position the moon in the sky along an arc
+      return [
+        Math.sin(radians) * radius,
+        Math.abs(Math.cos(radians)) * 30 + 5, // Keep moon above horizon
+        Math.cos(radians) * radius
+      ];
+    } else {
+      // Moon not visible during day (position it behind the scene)
+      return [0, -100, 0];
+    }
+  }, [timeOfDay]);
+  
+  // Calculate moon color
+  const moonColor = useMemo(() => {
+    return isBloodMoonActive ? '#FF2222' : '#FFFFFF';
+  }, [isBloodMoonActive]);
+  
+  // Calculate moon glow intensity
+  const moonGlowIntensity = useMemo(() => {
+    if (timeOfDay > 0.75 || timeOfDay < 0.25) {
+      return isBloodMoonActive ? 0.5 : 0.3;
+    }
+    return 0;
+  }, [timeOfDay, isBloodMoonActive]);
+
   // Pure-minimum render for basic lighting
   return (
     <group>
@@ -111,6 +154,25 @@ export default function SkyDome({ timeOfDay: propTimeOfDay, weather: propWeather
       
       {/* Ultra simplified fog - very short distance */}
       <fog attach="fog" args={[skyColor, 20, 70]} />
+      
+      {/* Add moon */}
+      <group position={moonPosition as [number, number, number]}>
+        {/* Moon sphere */}
+        <mesh>
+          <sphereGeometry args={[3, 16, 16]} />
+          <meshBasicMaterial color={moonColor} />
+        </mesh>
+        
+        {/* Moon light - only active at night */}
+        {(timeOfDay > 0.75 || timeOfDay < 0.25) && (
+          <pointLight 
+            color={moonColor} 
+            intensity={moonGlowIntensity}
+            distance={100}
+            decay={2}
+          />
+        )}
+      </group>
       
       {/* Single directional light */}
       <directionalLight 

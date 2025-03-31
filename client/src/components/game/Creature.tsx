@@ -1,9 +1,10 @@
-import { useRef, useEffect, useState, Suspense } from 'react';
+import { useRef, useEffect, useState, Suspense, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { GLTF } from 'three-stdlib';
 import { useAudio } from '../../lib/stores/useAudio';
+import { useVoxelGame } from '../../lib/stores/useVoxelGame';
 
 // Preload all creature models for faster loading
 useGLTF.preload('/models/zombie.glb');
@@ -319,6 +320,25 @@ export default function Creature({
   // Health bar width calculation
   const healthPercent = Math.max(0, Math.min(1, health / maxHealth));
   
+  // Get Blood Moon event state for wraith visuals
+  const bloodMoonEvent = useVoxelGame(state => state.bloodMoonEvent);
+  
+  // Special effects for wraith during Blood Moon
+  const wraithColor = useMemo(() => {
+    if (type === 'wraith') {
+      return bloodMoonEvent.active ? '#FF2222' : '#9C27B0';
+    }
+    return color;
+  }, [type, color, bloodMoonEvent.active]);
+  
+  // Intensity of glow for wraith
+  const wraithGlowIntensity = useMemo(() => {
+    if (type === 'wraith') {
+      return bloodMoonEvent.active ? 1.2 : 0.8;
+    }
+    return 0.5;
+  }, [type, bloodMoonEvent.active]);
+  
   // Use a placeholder mesh for all creatures (simpler for now)
   return (
     <mesh 
@@ -601,10 +621,32 @@ export default function Creature({
                 {/* Add ghostly glow effect */}
                 <pointLight
                   position={[0, 0.5, 0]}
-                  distance={4}
-                  intensity={1.0}
-                  color={color}
+                  distance={bloodMoonEvent.active ? 6 : 4}
+                  intensity={wraithGlowIntensity}
+                  color={wraithColor}
                 />
+                
+                {/* Additional blood moon effects for wraith */}
+                {bloodMoonEvent.active && (
+                  <>
+                    <pointLight
+                      position={[0, 1.0, 0]}
+                      distance={3}
+                      intensity={0.8}
+                      color="#FF2222"
+                    />
+                    <mesh position={[0, 0, 0]}>
+                      <sphereGeometry args={[1.8, 16, 16]} />
+                      <meshStandardMaterial 
+                        color="#FF0000" 
+                        opacity={0.2} 
+                        transparent={true}
+                        emissive="#FF0000"
+                        emissiveIntensity={0.3}
+                      />
+                    </mesh>
+                  </>
+                )}
               </Suspense>
             ) : (
               // Fallback if model fails to load - simple ghostly figure
@@ -613,11 +655,11 @@ export default function Creature({
                 <mesh castShadow position={[0, 0.5, 0]}>
                   <boxGeometry args={[0.6, 1.2, 0.3]} />
                   <meshStandardMaterial 
-                    color={color} 
-                    opacity={0.6} 
+                    color={wraithColor} 
+                    opacity={bloodMoonEvent.active ? 0.7 : 0.6} 
                     transparent={true} 
-                    emissive={color} 
-                    emissiveIntensity={0.3} 
+                    emissive={wraithColor} 
+                    emissiveIntensity={bloodMoonEvent.active ? 0.5 : 0.3} 
                   />
                 </mesh>
                 
@@ -625,35 +667,63 @@ export default function Creature({
                 <mesh castShadow position={[0, 1.4, 0]}>
                   <sphereGeometry args={[0.4, 16, 16]} />
                   <meshStandardMaterial 
-                    color={color} 
-                    opacity={0.7} 
+                    color={wraithColor} 
+                    opacity={bloodMoonEvent.active ? 0.8 : 0.7} 
                     transparent={true} 
-                    emissive={color} 
-                    emissiveIntensity={0.4} 
+                    emissive={wraithColor} 
+                    emissiveIntensity={bloodMoonEvent.active ? 0.6 : 0.4} 
                   />
                 </mesh>
                 
                 {/* Ghostly glow */}
                 <pointLight
                   position={[0, 0.8, 0]}
-                  distance={3}
-                  intensity={0.8}
-                  color={color}
+                  distance={bloodMoonEvent.active ? 5 : 3}
+                  intensity={wraithGlowIntensity}
+                  color={wraithColor}
                 />
+                
+                {/* Additional blood moon effects */}
+                {bloodMoonEvent.active && (
+                  <mesh position={[0, 0.8, 0]}>
+                    <sphereGeometry args={[1.5, 16, 16]} />
+                    <meshStandardMaterial 
+                      color="#FF0000" 
+                      opacity={0.15} 
+                      transparent={true}
+                      emissive="#FF0000"
+                      emissiveIntensity={0.2}
+                    />
+                  </mesh>
+                )}
               </group>
             )}
             
             {/* Type indicator (bigger and specially colored for the wraith) */}
             <mesh position={[0, 2.2, 0]}>
-              <sphereGeometry args={[0.3, 16, 16]} />
+              <sphereGeometry args={[bloodMoonEvent.active ? 0.4 : 0.3, 16, 16]} />
               <meshStandardMaterial 
-                color="#FF00FF" 
-                emissive="#FF00FF" 
-                emissiveIntensity={1.5} 
+                color={bloodMoonEvent.active ? "#FF2222" : "#FF00FF"} 
+                emissive={bloodMoonEvent.active ? "#FF2222" : "#FF00FF"} 
+                emissiveIntensity={bloodMoonEvent.active ? 2.0 : 1.5} 
                 opacity={0.8} 
                 transparent={true} 
               />
             </mesh>
+            
+            {/* Additional Blood Moon indicator for wraith */}
+            {bloodMoonEvent.active && (
+              <mesh position={[0, 2.7, 0]}>
+                <sphereGeometry args={[0.2, 16, 16]} />
+                <meshStandardMaterial 
+                  color="#FFFF00" 
+                  emissive="#FFFF00" 
+                  emissiveIntensity={1.8} 
+                  opacity={0.9} 
+                  transparent={true} 
+                />
+              </mesh>
+            )}
           </group>
         ) : type === 'spider' ? (
           // Spider creature (using simpler geometry)
