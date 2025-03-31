@@ -65,6 +65,7 @@ export function spawnCreatures(
   addFixedCreature(creatures, 'zombie', -5, 25, -5);
   addFixedCreature(creatures, 'skeleton', 10, 25, 10);
   addFixedCreature(creatures, 'spider', -10, 25, -10);
+  addFixedCreature(creatures, 'bee', 3, 27, 3);
   
   // For each chunk
   Object.keys(chunks).forEach(chunkKey => {

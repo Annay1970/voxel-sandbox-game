@@ -14,6 +14,7 @@ useGLTF.preload('/models/cow.glb');
 useGLTF.preload('/models/sheep.glb');
 useGLTF.preload('/models/pig.glb');
 useGLTF.preload('/models/chicken.glb');
+useGLTF.preload('/models/bee.glb');
 
 interface CreatureProps {
   type: string;
@@ -75,7 +76,8 @@ export default function Creature({
       'cow': '/models/cow.glb',
       'sheep': '/models/sheep.glb',
       'pig': '/models/pig.glb',
-      'chicken': '/models/chicken.glb'
+      'chicken': '/models/chicken.glb',
+      'bee': '/models/bee.glb'
     };
     
     const modelPath = modelMap[type];
@@ -311,6 +313,35 @@ export default function Creature({
           groupRef.current.rotation.x = Math.sin(Date.now() * 0.03) * 0.04;
         }
       }
+      else if (type === 'bee') {
+        // Bee animations - flying movement patterns
+        if (animationState === 'idle') {
+          // Hovering animation with wing flutter effect
+          groupRef.current.position.y = Math.sin(Date.now() * 0.01) * 0.1;
+          // Slight side-to-side drift
+          groupRef.current.position.x = position.x + Math.sin(Date.now() * 0.005) * 0.05;
+          groupRef.current.position.z = position.z + Math.cos(Date.now() * 0.005) * 0.05;
+          // Gentle rotation as it hovers
+          groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.002) * 0.2;
+          // Subtle body tilt
+          groupRef.current.rotation.x = Math.sin(Date.now() * 0.01) * 0.05;
+        } else if (animationState === 'walk' || animationState === 'wandering') {
+          // Flying animation - more directional
+          groupRef.current.position.y = position.y + Math.sin(Date.now() * 0.015) * 0.15;
+          // Faster wing flutter effect when moving
+          const flutterSpeed = Math.sin(Date.now() * 0.1) * 0.02;
+          groupRef.current.rotation.z = flutterSpeed;
+          // Forward-backward tilt while flying
+          groupRef.current.rotation.x = Math.sin(Date.now() * 0.02) * 0.1;
+        } else if (animationState === 'attack') {
+          // Aggressive darting attack motion
+          groupRef.current.position.z = position.z + Math.sin(Date.now() * 0.04) * 0.2;
+          // More aggressive rotation
+          groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.04) * 0.3;
+          // Sharper vertical movement for attacking
+          groupRef.current.position.y = position.y + Math.sin(Date.now() * 0.04) * 0.1;
+        }
+      }
     }
   });
   
@@ -377,7 +408,7 @@ export default function Creature({
         </mesh>
       )}
       
-      {type === 'cow' || type === 'pig' || type === 'sheep' || type === 'chicken' ? (
+      {type === 'cow' || type === 'pig' || type === 'sheep' || type === 'chicken' || type === 'bee' ? (
         // Passive mobs with 3D models if available
         <group>
           {modelLoaded && model ? (
