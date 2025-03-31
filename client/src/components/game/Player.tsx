@@ -1,12 +1,13 @@
 import { useRef, useState, useEffect, Suspense } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { useKeyboardControls, useGLTF, OrbitControls } from '@react-three/drei';
+import { useKeyboardControls, useGLTF, OrbitControls, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { Controls } from '../../App'; // Import the Controls enum from App.tsx
 import { useGamepadControls } from '../../lib/controls/useGamepadControls';
 import { useVoxelGame, WeatherType } from '../../lib/stores/useVoxelGame';
 import { getBlockTemperatureEffect } from '../../lib/blocks';
 import { GLTF } from 'three-stdlib';
+import CombatSystem, { AttackType, WeaponType } from './CombatSystem';
 
 // Player configuration
 const PLAYER_SPEED = 5;
@@ -388,6 +389,17 @@ function Player({ position = [0, 1, 0] }: PlayerProps) {
             </>
           )}
         </group>
+      )}
+      
+      {/* Combat system */}
+      {playerRef.current && (
+        <CombatSystem 
+          playerPosition={playerRef.current.position}
+          playerRotation={playerRef.current.rotation}
+          onHitCreature={(creatureId, damage, attackType) => {
+            console.log(`Hit creature ${creatureId} with ${damage} damage using ${attackType} attack`);
+          }}
+        />
       )}
     </group>
   );

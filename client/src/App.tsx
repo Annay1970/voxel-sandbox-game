@@ -12,6 +12,8 @@ import StaminaBar from './components/ui/StaminaBar';
 import TemperatureIndicator from './components/ui/TemperatureIndicator';
 import HungerBar from './components/ui/HungerBar';
 import StatusEffects from './components/ui/StatusEffects';
+import SkillTree from './components/ui/SkillTree';
+import EnhancedCrafting, { CraftingStationType } from './components/game/EnhancedCrafting';
 import { useIsMobile } from './hooks/use-is-mobile';
 import { gamepadManager } from './lib/controls/GamepadManager';
 
@@ -58,6 +60,8 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState(0);
   const [showDemo, setShowDemo] = useState(false);
+  const [showSkillTree, setShowSkillTree] = useState(false);
+  const [showCrafting, setShowCrafting] = useState(false);
   const { isMobile, isTouch } = useIsMobile();
   
   // Simulate loading
@@ -143,13 +147,29 @@ function App() {
             <p className="text-sm mt-1">A sandbox adventure</p>
           </div>
           
-          {/* Button to show demo */}
-          <button 
-            className="absolute top-4 right-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
-            onClick={() => setShowDemo(true)}
-          >
-            Show Creature Demo
-          </button>
+          {/* UI action buttons */}
+          <div className="absolute top-4 right-4 flex flex-col space-y-2">
+            <button 
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+              onClick={() => setShowDemo(true)}
+            >
+              Show Creature Demo
+            </button>
+            
+            <button 
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded"
+              onClick={() => setShowSkillTree(true)}
+            >
+              Skill Tree
+            </button>
+            
+            <button 
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+              onClick={() => setShowCrafting(true)}
+            >
+              Crafting
+            </button>
+          </div>
           
           {/* Crosshair in the center of the screen */}
           <Crosshair size={20} color="white" thickness={2} gap={6} />
@@ -174,6 +194,20 @@ function App() {
           
           {/* Status effects */}
           <StatusEffects position="bottom-left" />
+          
+          {/* Skill Tree */}
+          <SkillTree 
+            isOpen={showSkillTree}
+            onClose={() => setShowSkillTree(false)}
+          />
+          
+          {/* Enhanced Crafting */}
+          <EnhancedCrafting
+            isOpen={showCrafting}
+            onClose={() => setShowCrafting(false)}
+            stationType={CraftingStationType.Workbench}
+            playerSkillLevel={25}
+          />
         </>
       )}
       
