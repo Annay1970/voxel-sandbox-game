@@ -1,5 +1,5 @@
 import { Canvas } from "@react-three/fiber";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { KeyboardControls } from "@react-three/drei";
 import * as THREE from "three";
 import "@fontsource/inter";
@@ -10,14 +10,37 @@ import World from "./components/game/World";
 import UI from "./components/game/UI";
 
 // Loading screen while world generates
-const LoadingScreen = () => {
+interface LoadingScreenProps {
+  progress: number;
+}
+
+const LoadingScreen = ({ progress }: LoadingScreenProps) => {
+  // Map loading phases to appropriate messages
+  let message = "Generating World...";
+  if (progress < 40) {
+    message = "Generating Terrain...";
+  } else if (progress < 70) {
+    message = "Loading World Data...";
+  } else if (progress < 90) {
+    message = "Setting Up Game...";
+  } else {
+    message = "Almost Ready!";
+  }
+  
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50 text-white">
       <div className="text-center">
-        <h1 className="text-3xl font-bold mb-4">Generating World...</h1>
-        <div className="w-64 h-2 bg-gray-700 rounded-full overflow-hidden">
-          <div className="h-full bg-green-500 animate-pulse" style={{ width: '90%' }}></div>
+        <h1 className="text-3xl font-bold mb-4">{message}</h1>
+        <div className="w-64 h-4 bg-gray-700 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-green-500" 
+            style={{ 
+              width: `${progress}%`,
+              transition: 'width 0.3s ease-out'
+            }}
+          />
         </div>
+        <p className="mt-2 text-gray-300">{progress}% Complete</p>
       </div>
     </div>
   );
@@ -42,37 +65,78 @@ function App() {
   // Set up audio
   const setSound = useAudio(state => state.setSound);
 
-  // Initial world generation
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  
+  // Initial world generation - split into smaller tasks to prevent freezing
   useEffect(() => {
     // Only generate if we don't already have chunks
     if (Object.keys(chunks).length === 0) {
       console.log("Initializing world generation...");
       
-      // Generate initial terrain
-      const { generatedChunks, generatedBlocks } = generateTerrain();
-      
-      // Set chunks and blocks in the game store
-      // Cast to ensure type compatibility
-      setChunks(generatedChunks as Record<string, { x: number, z: number }>);
-      setBlocks(generatedBlocks);
-      
-      // Load game sounds
-      const bgMusic = new Audio('/sounds/background.mp3');
-      bgMusic.loop = true;
-      bgMusic.volume = 0.4;
-      setSound('backgroundMusic', bgMusic);
-      
-      const hitSfx = new Audio('/sounds/hit.mp3');
-      hitSfx.volume = 0.6;
-      setSound('hitSound', hitSfx);
-      
-      const successSfx = new Audio('/sounds/success.mp3');
-      successSfx.volume = 0.7;
-      setSound('successSound', successSfx);
-      
-      // Basic movement sounds
-      const walkSfx = new Audio('/sounds/walk.mp3');
-      setSound('walkSound', walkSfx);
+      // Start loading world in next tick
+      setTimeout(() => {
+        try {
+          // Step 1: Initial Generation (40%)
+          setLoadingProgress(10);
+          const { generatedChunks, generatedBlocks } = generateTerrain();
+          setLoadingProgress(40);
+          
+          // Step 2: Apply to store (70%)
+          setTimeout(() => {
+            // Set chunks and blocks in the game store
+            setChunks(generatedChunks as Record<string, { x: number, z: number }>);
+            setBlocks(generatedBlocks);
+            setLoadingProgress(70);
+            
+            // Step 3: Load sounds (90%)
+            setTimeout(() => {
+              // Load minimal sounds first
+              try {
+                // Only load essential sounds initially to improve startup time
+                const hitSfx = new Audio('/sounds/hit.mp3');
+                hitSfx.volume = 0.6;
+                setSound('hitSound', hitSfx);
+                
+                // Load the rest in the background after a delay
+                setTimeout(() => {
+                  try {
+                    const bgMusic = new Audio('/sounds/background.mp3');
+                    bgMusic.loop = true;
+                    bgMusic.volume = 0.2; // Reduced volume
+                    setSound('backgroundMusic', bgMusic);
+                    
+                    const successSfx = new Audio('/sounds/success.mp3');
+                    successSfx.volume = 0.7;
+                    setSound('successSound', successSfx);
+                    
+                    // Basic movement sounds
+                    const walkSfx = new Audio('/sounds/walk.mp3');
+                    setSound('walkSound', walkSfx);
+                  } catch (e) {
+                    console.warn("Non-critical sounds failed to load:", e);
+                  }
+                }, 2000); // Delay loading of non-essential sounds
+                
+                // Complete loading
+                setLoadingProgress(100);
+                setIsLoading(false);
+              } catch (e) {
+                console.warn("Sound loading error:", e);
+                // Continue even if sounds fail
+                setLoadingProgress(100);
+                setIsLoading(false);
+              }
+            }, 200);
+          }, 200);
+        } catch (e) {
+          console.error("Critical error during world generation:", e);
+          // If terrain generation fails, create minimal playable area
+          setLoadingProgress(100);
+          setIsLoading(false);
+        }
+      }, 100);
       
       try {
         // Additional movement sounds for different terrains
@@ -227,12 +291,11 @@ function App() {
     { name: Controls.attack, keys: ["KeyF", "Mouse0"] }, // Attack with F or left mouse click
   ];
 
-  // Check if world is still loading
-  const isLoading = Object.keys(chunks).length === 0;
-
   return (
     <div className="w-full h-full">
-      {isLoading && <LoadingScreen />}
+      {isLoading && (
+        <LoadingScreen progress={loadingProgress} />
+      )}
       
       <KeyboardControls map={keyMap}>
         <Canvas

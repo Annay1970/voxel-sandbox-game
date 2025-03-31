@@ -17,12 +17,12 @@ export function generateTerrain() {
     const simplex2 = new SimplexNoise(seed2);
     const simplex3 = new SimplexNoise(seed3);
   
-    // Terrain parameters
-    const WORLD_SIZE = 12; // in chunks (16x16 each) - increased for more exploration area
+    // Terrain parameters - REDUCED for better performance
+    const WORLD_SIZE = 6; // in chunks (16x16 each) - significantly reduced for performance
     const WATER_LEVEL = 10;
-    const MOUNTAIN_HEIGHT = 80; // Higher mountains
+    const MOUNTAIN_HEIGHT = 60; // Higher mountains but reduced from 80
     const BASE_HEIGHT = 20;
-    const CAVE_FREQUENCY = 0.03; // Controls how often caves appear
+    const CAVE_FREQUENCY = 0.01; // Reduced cave frequency to improve performance
     
     // Data structures to store generated world
     const chunks: Record<string, { x: number, z: number }> = {};

@@ -287,29 +287,39 @@ export default function SkyDome({ timeOfDay: propTimeOfDay, weather: propWeather
       <fog attach="fog" args={[fogColor.getHex(), 5, 100]} />
       
       {/* Sun (visible during day) */}
-      <mesh visible={timeOfDay > 0.25 && timeOfDay < 0.75}>
+      <mesh 
+        visible={timeOfDay > 0.25 && timeOfDay < 0.75}
+        position={[sunPosition[0], sunPosition[1], sunPosition[2]]}
+      >
         <sphereGeometry args={[15, 16, 16]} />
         <meshBasicMaterial color="#FFFF77" />
-        <primitive object={new THREE.Vector3(sunPosition[0], sunPosition[1], sunPosition[2])} attach="position" />
       </mesh>
       
       {/* Sun glow */}
-      <sprite visible={timeOfDay > 0.25 && timeOfDay < 0.75} scale={50}>
+      <sprite 
+        visible={timeOfDay > 0.25 && timeOfDay < 0.75} 
+        scale={50}
+        position={[sunPosition[0], sunPosition[1], sunPosition[2]]}
+      >
         <spriteMaterial attach="material" map={null} transparent opacity={0.4} color="#FFFFA0" />
-        <primitive object={new THREE.Vector3(sunPosition[0], sunPosition[1], sunPosition[2])} attach="position" />
       </sprite>
       
       {/* Moon (visible during night) */}
-      <mesh visible={timeOfDay < 0.25 || timeOfDay > 0.75}>
+      <mesh 
+        visible={timeOfDay < 0.25 || timeOfDay > 0.75}
+        position={[moonPosition[0], moonPosition[1], moonPosition[2]]}
+      >
         <sphereGeometry args={[8, 16, 16]} />
         <meshBasicMaterial color={moonColor} />
-        <primitive object={new THREE.Vector3(moonPosition[0], moonPosition[1], moonPosition[2])} attach="position" />
       </mesh>
       
       {/* Moon glow */}
-      <sprite visible={timeOfDay < 0.25 || timeOfDay > 0.75} scale={moonGlowScale}>
+      <sprite 
+        visible={timeOfDay < 0.25 || timeOfDay > 0.75} 
+        scale={moonGlowScale}
+        position={[moonPosition[0], moonPosition[1], moonPosition[2]]}
+      >
         <spriteMaterial attach="material" map={null} transparent opacity={moonGlowOpacity} color={moonGlowColor} />
-        <primitive object={new THREE.Vector3(moonPosition[0], moonPosition[1], moonPosition[2])} attach="position" />
       </sprite>
       
       {/* Blood Moon particles (only visible during Blood Moon night) */}
@@ -346,8 +356,13 @@ export default function SkyDome({ timeOfDay: propTimeOfDay, weather: propWeather
         </>
       )}
       
-      {/* Directional light from sun/moon */}
+      {/* Directional light from sun/moon - Position set directly */}
       <directionalLight 
+        position={[
+          (timeOfDay > 0.25 && timeOfDay < 0.75 ? sunPosition[0] : moonPosition[0]),
+          (timeOfDay > 0.25 && timeOfDay < 0.75 ? sunPosition[1] : moonPosition[1]),
+          (timeOfDay > 0.25 && timeOfDay < 0.75 ? sunPosition[2] : moonPosition[2])
+        ]}
         intensity={sunLightIntensity} 
         color={sunLightColor.getHex()} 
         castShadow
@@ -355,19 +370,10 @@ export default function SkyDome({ timeOfDay: propTimeOfDay, weather: propWeather
         shadow-mapSize-height={2048}
         shadow-camera-far={500}
         shadow-camera-left={-100}
-        shadow-camera-right={100}
+        shadow-camera-right={-100}
         shadow-camera-top={100}
         shadow-camera-bottom={-100}
-      >
-        <primitive 
-          object={new THREE.Vector3(
-            (timeOfDay > 0.25 && timeOfDay < 0.75 ? sunPosition[0] : moonPosition[0]),
-            (timeOfDay > 0.25 && timeOfDay < 0.75 ? sunPosition[1] : moonPosition[1]),
-            (timeOfDay > 0.25 && timeOfDay < 0.75 ? sunPosition[2] : moonPosition[2])
-          )} 
-          attach="position" 
-        />
-      </directionalLight>
+      />
       
       {/* Ambient light */}
       <ambientLight intensity={ambientIntensity} />
