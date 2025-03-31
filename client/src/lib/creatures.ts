@@ -53,7 +53,7 @@ export function spawnCreatures(
   const creatures: Record<string, any> = {};
   
   // Define creature types
-  const passiveCreatures: CreatureType[] = ['cow', 'pig', 'sheep', 'chicken', 'bee'];
+  const passiveCreatures: CreatureType[] = ['cow', 'pig', 'sheep', 'chicken', 'bee', 'unicorn', 'pegasus', 'friendlyHorse'];
   const hostileCreatures: CreatureType[] = ['zombie', 'skeleton', 'spider'];
   
   console.log(`Spawning creatures in ${Object.keys(chunks).length} chunks...`);
@@ -67,6 +67,11 @@ export function spawnCreatures(
   addFixedCreature(creatures, 'skeleton', 10, 25, 10);
   addFixedCreature(creatures, 'spider', -10, 25, -10);
   addFixedCreature(creatures, 'bee', 3, 27, 3);
+  
+  // Add our fantasy creatures in a special area
+  addFixedCreature(creatures, 'unicorn', 15, 25, 15);
+  addFixedCreature(creatures, 'pegasus', 15, 27, 18); // Slightly elevated for the flying creature
+  addFixedCreature(creatures, 'friendlyHorse', 12, 25, 15);
   
   // For each chunk
   Object.keys(chunks).forEach(chunkKey => {

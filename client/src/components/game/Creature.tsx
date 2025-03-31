@@ -15,6 +15,9 @@ useGLTF.preload('/models/sheep.glb');
 useGLTF.preload('/models/pig.glb');
 useGLTF.preload('/models/chicken.glb');
 useGLTF.preload('/models/bee.glb');
+useGLTF.preload('/models/unicorn.glb');
+useGLTF.preload('/models/pegasus.glb');
+useGLTF.preload('/models/friendlyHorse.glb');
 
 interface CreatureProps {
   type: string;
@@ -77,7 +80,10 @@ export default function Creature({
       'sheep': '/models/sheep.glb',
       'pig': '/models/pig.glb',
       'chicken': '/models/chicken.glb',
-      'bee': '/models/bee.glb'
+      'bee': '/models/bee.glb',
+      'unicorn': '/models/unicorn.glb',
+      'pegasus': '/models/pegasus.glb',
+      'friendlyHorse': '/models/friendlyHorse.glb'
     };
     
     const modelPath = modelMap[type];
@@ -132,6 +138,15 @@ export default function Creature({
         break;
       case 'wraith':
         setColor('#9C27B0'); // Purple for the wraith
+        break;
+      case 'unicorn':
+        setColor('#FFFFFF'); // White for the unicorn
+        break;
+      case 'pegasus':
+        setColor('#E0F7FA'); // Light blue-white for the pegasus
+        break;
+      case 'friendlyHorse':
+        setColor('#F48FB1'); // Pink for the friendly horse
         break;
       default:
         setColor('#FF5722');
@@ -342,6 +357,122 @@ export default function Creature({
           groupRef.current.position.y = position.y + Math.sin(Date.now() * 0.04) * 0.1;
         }
       }
+      // Unicorn animations
+      else if (type === 'unicorn') {
+        if (animationState === 'idle') {
+          // Gentle, majestic movement for idle unicorn
+          groupRef.current.position.y = Math.sin(Date.now() * 0.0008) * 0.03;
+          // Occasional head movement
+          if (Math.sin(Date.now() * 0.0003) > 0.9) {
+            groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.001) * 0.1;
+          }
+          // Subtle horn glow effect - scale slightly
+          if (groupRef.current.children[0]) {
+            const hornScale = 1.0 + Math.sin(Date.now() * 0.002) * 0.02;
+            // Apply subtle scale pulsing to horn area
+            groupRef.current.scale.set(2.0, 2.0 * hornScale, 2.0);
+          }
+        } else if (animationState === 'walk') {
+          // Graceful walking animation
+          groupRef.current.position.y = Math.sin(Date.now() * 0.01) * 0.05;
+          // Slight head bobbing while walking
+          groupRef.current.rotation.x = Math.sin(Date.now() * 0.01) * 0.02;
+        } else if (animationState === 'attack') {
+          // Horn-based attack animation
+          groupRef.current.position.z = Math.sin(Date.now() * 0.02) * 0.2;
+          // Aggressive head movement during attack
+          groupRef.current.rotation.x = Math.sin(Date.now() * 0.03) * 0.15;
+        }
+        
+        // Add glowing horn effect
+        const hornGlow = new THREE.PointLight('#FFD700', 0.8 + Math.sin(Date.now() * 0.003) * 0.2, 3);
+        hornGlow.position.set(0, 1.5, -0.5); // Position at the horn
+        if (!groupRef.current.children.find(child => child.type === 'PointLight')) {
+          groupRef.current.add(hornGlow);
+        }
+      }
+      // Pegasus animations
+      else if (type === 'pegasus') {
+        if (animationState === 'idle') {
+          // Hovering effect for pegasus
+          groupRef.current.position.y = Math.sin(Date.now() * 0.002) * 0.08;
+          // Wing movement simulation
+          groupRef.current.rotation.z = Math.sin(Date.now() * 0.004) * 0.03;
+          // Occasional head movement
+          if (Math.sin(Date.now() * 0.0004) > 0.9) {
+            groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.002) * 0.12;
+          }
+        } else if (animationState === 'walk') {
+          // Flying animation for pegasus
+          groupRef.current.position.y = Math.sin(Date.now() * 0.008) * 0.15;
+          // Wing flapping - more pronounced when flying
+          groupRef.current.rotation.z = Math.sin(Date.now() * 0.02) * 0.1;
+          // Smooth forward movement
+          groupRef.current.position.z = position.z + Math.sin(Date.now() * 0.01) * 0.05;
+        } else if (animationState === 'attack') {
+          // Dive attack animation
+          groupRef.current.position.y = position.y + Math.sin(Date.now() * 0.03) * 0.2;
+          groupRef.current.rotation.x = Math.sin(Date.now() * 0.03) * 0.2;
+          groupRef.current.position.z = position.z + Math.sin(Date.now() * 0.04) * 0.25;
+        }
+        
+        // Add subtle air effects around wings
+        if (animationState === 'walk' && Math.random() > 0.95) {
+          // Occasionally add wind particle effects for flying
+          // This is simplified since we don't have a particle system yet
+          const windEffect = new THREE.PointLight('#FFFFFF', 0.2, 1);
+          windEffect.position.set(
+            Math.random() * 0.5 - 0.25, 
+            Math.random() * 0.2 + 0.8, 
+            Math.random() * 0.5 - 0.25
+          );
+          groupRef.current.add(windEffect);
+          // Remove after a short time
+          setTimeout(() => {
+            groupRef.current?.remove(windEffect);
+          }, 200);
+        }
+      }
+      // Friendly Horse animations
+      else if (type === 'friendlyHorse') {
+        if (animationState === 'idle') {
+          // Happy, bouncy movement for the friendly horse
+          groupRef.current.position.y = Math.sin(Date.now() * 0.003) * 0.05;
+          // Occasional head movement - more animated and playful
+          if (Math.sin(Date.now() * 0.0005) > 0.8) {
+            groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.004) * 0.15;
+            groupRef.current.rotation.z = Math.sin(Date.now() * 0.01) * 0.03;
+          }
+        } else if (animationState === 'walk') {
+          // Playful walking/hopping animation
+          groupRef.current.position.y = Math.sin(Date.now() * 0.015) * 0.08;
+          // Slight head bobbing while walking - more pronounced
+          groupRef.current.rotation.x = Math.sin(Date.now() * 0.015) * 0.04;
+          // Slight side-to-side movement
+          groupRef.current.position.x = position.x + Math.sin(Date.now() * 0.01) * 0.03;
+        } else if (animationState === 'attack') {
+          // Friendly "attack" is more playful - like nuzzling
+          groupRef.current.position.z = Math.sin(Date.now() * 0.03) * 0.1;
+          groupRef.current.rotation.x = Math.sin(Date.now() * 0.02) * 0.1;
+          // Slight happy bounce
+          groupRef.current.position.y = position.y + 0.05 + Math.sin(Date.now() * 0.04) * 0.05;
+        }
+        
+        // Add playful sparkle effects
+        if (Math.random() > 0.97) {
+          const sparkleEffect = new THREE.PointLight('#FF69B4', 0.5, 1);
+          sparkleEffect.position.set(
+            Math.random() * 0.8 - 0.4, 
+            Math.random() * 0.8 + 0.5, 
+            Math.random() * 0.8 - 0.4
+          );
+          groupRef.current.add(sparkleEffect);
+          // Remove after a short time
+          setTimeout(() => {
+            groupRef.current?.remove(sparkleEffect);
+          }, 300);
+        }
+      }
     }
   });
   
@@ -408,7 +539,8 @@ export default function Creature({
         </mesh>
       )}
       
-      {type === 'cow' || type === 'pig' || type === 'sheep' || type === 'chicken' || type === 'bee' ? (
+      {type === 'cow' || type === 'pig' || type === 'sheep' || type === 'chicken' || type === 'bee' || 
+       type === 'unicorn' || type === 'pegasus' || type === 'friendlyHorse' ? (
         // Passive mobs with 3D models if available
         <group>
           {modelLoaded && model ? (
