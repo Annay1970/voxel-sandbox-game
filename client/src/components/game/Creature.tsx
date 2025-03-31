@@ -5,10 +5,7 @@ import * as THREE from 'three';
 import { GLTF } from 'three-stdlib';
 import { useAudio } from '../../lib/stores/useAudio';
 
-// Preload available models
-useGLTF.preload('/models/zombie.glb');
-useGLTF.preload('/models/wraith.glb');
-useGLTF.preload('/models/skeleton.glb');
+// No preloading - simplified for performance
 
 interface CreatureProps {
   type: string;
@@ -54,76 +51,47 @@ export default function Creature({
   const [modelLoaded, setModelLoaded] = useState(false);
   const [modelError, setModelError] = useState(false);
   
-  // Try to load 3D models for creatures
-  let zombieModel: THREE.Group | null = null;
-  let wraithModel: THREE.Group | null = null;
-  let skeletonModel: THREE.Group | null = null;
-  const [zombieModelLoaded, setZombieModelLoaded] = useState(false);
-  const [wraithModelLoaded, setWraithModelLoaded] = useState(false);
-  const [skeletonModelLoaded, setSkeletonModelLoaded] = useState(false);
+  // Single model reference with proper typing
+  const [model, setModel] = useState<THREE.Group | null>(null);
   
-  // Load zombie model
-  if (type === 'zombie') {
-    try {
-      const { scene } = useGLTF('/models/zombie.glb') as GLTF & {
-        scene: THREE.Group;
-      };
-      zombieModel = scene;
-      
-      if (!zombieModelLoaded) {
-        setZombieModelLoaded(true);
-        setModelLoaded(true);
-        console.log("Zombie model loaded successfully");
-      }
-    } catch (error) {
-      if (!modelError) {
-        console.warn("Failed to load zombie model, using fallback:", error);
+  // Load model based on creature type
+  useEffect(() => {
+    // Skip loading if we already tried or got an error
+    if (modelLoaded || modelError) return;
+    
+    // Only attempt to load models for these creature types
+    if (['zombie', 'wraith', 'skeleton'].includes(type)) {
+      try {
+        // Load the appropriate model based on type
+        const modelPath = `/models/${type}.glb`;
+        
+        // Use a function to load the model
+        const loadModel = async () => {
+          try {
+            // Use dynamic import to load only when needed
+            const gltf = await useGLTF(modelPath) as GLTF & {
+              scene: THREE.Group
+            };
+            
+            // Store the model and update state
+            setModel(gltf.scene);
+            setModelLoaded(true);
+            console.log(`${type} model loaded successfully`);
+          } catch (err) {
+            console.warn(`Failed to load ${type} model, using fallback:`, err);
+            setModelError(true);
+          }
+        };
+        
+        // Start loading
+        loadModel();
+        
+      } catch (error) {
+        console.warn(`Error loading ${type} model:`, error);
         setModelError(true);
       }
     }
-  }
-  
-  // Load wraith model
-  if (type === 'wraith') {
-    try {
-      const { scene } = useGLTF('/models/wraith.glb') as GLTF & {
-        scene: THREE.Group;
-      };
-      wraithModel = scene;
-      
-      if (!wraithModelLoaded) {
-        setWraithModelLoaded(true);
-        setModelLoaded(true);
-        console.log("Wraith model loaded successfully");
-      }
-    } catch (error) {
-      if (!modelError) {
-        console.warn("Failed to load wraith model, using fallback:", error);
-        setModelError(true);
-      }
-    }
-  }
-  
-  // Load skeleton model
-  if (type === 'skeleton') {
-    try {
-      const { scene } = useGLTF('/models/skeleton.glb') as GLTF & {
-        scene: THREE.Group;
-      };
-      skeletonModel = scene;
-      
-      if (!skeletonModelLoaded) {
-        setSkeletonModelLoaded(true);
-        setModelLoaded(true);
-        console.log("Skeleton model loaded successfully");
-      }
-    } catch (error) {
-      if (!modelError) {
-        console.warn("Failed to load skeleton model, using fallback:", error);
-        setModelError(true);
-      }
-    }
-  }
+  }, [type, modelLoaded, modelError]);
   
   // Set up creature appearance based on type
   useEffect(() => {
@@ -220,9 +188,9 @@ export default function Creature({
     }
     
     // For 3D models (when loaded)
-    if (groupRef.current) {
+    if (groupRef.current && model) {
       // Different animations for different creature models
-      if (type === 'zombie' && zombieModel) {
+      if (type === 'zombie') {
         if (animationState === 'idle') {
           // Subtle swaying for zombie model
           groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.001) * 0.05;
@@ -234,7 +202,7 @@ export default function Creature({
           groupRef.current.position.z = Math.sin(Date.now() * 0.01) * 0.1;
         }
       } 
-      else if (type === 'wraith' && wraithModel) {
+      else if (type === 'wraith') {
         // More ethereal, floating animations for wraith
         if (animationState === 'idle' || animationState === 'hunt') {
           // Ghostly hovering animation for wraith
@@ -251,7 +219,7 @@ export default function Creature({
           groupRef.current.scale.set(scale, scale, scale);
         }
       }
-      else if (type === 'skeleton' && skeletonModel) {
+      else if (type === 'skeleton') {
         // Skeleton animations
         if (animationState === 'idle') {
           // Subtle bone-rattling effect
@@ -272,6 +240,12 @@ export default function Creature({
     }
   });
   
+  // Show health bar if creature has health less than max and is not at full health
+  const showHealthBar = showHealth && health < maxHealth;
+  
+  // Health bar width calculation
+  const healthPercent = Math.max(0, Math.min(1, health / maxHealth));
+  
   // Use a placeholder mesh for all creatures (simpler for now)
   return (
     <mesh 
@@ -281,6 +255,35 @@ export default function Creature({
       castShadow
       scale={1.5} // Make creatures bigger
     >
+      {/* Health bar positioned above creature if needed */}
+      {showHealthBar && (
+        <group position={[0, 1.3, 0]}>
+          {/* Health bar background */}
+          <mesh position={[0, 0, 0]}>
+            <boxGeometry args={[0.8, 0.1, 0.05]} />
+            <meshStandardMaterial color="#333333" />
+          </mesh>
+          
+          {/* Health bar fill - scales with health percentage */}
+          <mesh position={[-(0.8 * (1 - healthPercent)) / 2, 0, 0.026]}>
+            <boxGeometry args={[0.8 * healthPercent, 0.08, 0.05]} />
+            <meshStandardMaterial 
+              color={health > maxHealth * 0.6 ? '#4CAF50' : health > maxHealth * 0.3 ? '#FFC107' : '#F44336'} 
+              emissive={health > maxHealth * 0.6 ? '#4CAF50' : health > maxHealth * 0.3 ? '#FFC107' : '#F44336'}
+              emissiveIntensity={0.5}
+            />
+          </mesh>
+        </group>
+      )}
+      
+      {/* Loot bag indicator */}
+      {hasLoot && (
+        <mesh position={[0, 0.8, 0]} rotation={[0, 0, Math.PI / 4]}>
+          <boxGeometry args={[0.3, 0.3, 0.3]} />
+          <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={0.5} />
+        </mesh>
+      )}
+      
       {type === 'cow' || type === 'pig' || type === 'sheep' ? (
         // Passive mobs - box with legs
         <group>
@@ -325,7 +328,7 @@ export default function Creature({
         type === 'zombie' ? (
           // Zombie with 3D model if available
           <group>
-            {modelLoaded && zombieModel ? (
+            {modelLoaded && model ? (
               <Suspense fallback={
                 // Fallback to simple model while loading
                 <mesh castShadow>
@@ -335,7 +338,7 @@ export default function Creature({
               }>
                 <group ref={groupRef}>
                   <primitive 
-                    object={zombieModel.clone()} 
+                    object={model.clone()} 
                     scale={[2.5, 2.5, 2.5]} 
                     position={[0, -1.5, 0]}
                     rotation={[0, Math.PI - rotation.y, 0]} 
@@ -395,7 +398,7 @@ export default function Creature({
         ) : type === 'skeleton' ? (
           // Skeleton with 3D model if available
           <group>
-            {modelLoaded && skeletonModel ? (
+            {modelLoaded && model ? (
               <Suspense fallback={
                 // Fallback to simple model while loading
                 <mesh castShadow>
@@ -405,7 +408,7 @@ export default function Creature({
               }>
                 <group ref={groupRef}>
                   <primitive 
-                    object={skeletonModel.clone()} 
+                    object={model.clone()} 
                     scale={[2.5, 2.5, 2.5]} 
                     position={[0, -1.5, 0]}
                     rotation={[0, Math.PI - rotation.y, 0]} 
@@ -478,8 +481,86 @@ export default function Creature({
               <meshStandardMaterial color="red" emissive="red" emissiveIntensity={1} />
             </mesh>
           </group>
+        ) : type === 'wraith' ? (
+          // Wraith with 3D model if available
+          <group>
+            {modelLoaded && model ? (
+              <Suspense fallback={
+                // Fallback to simple model while loading
+                <mesh castShadow>
+                  <boxGeometry args={[0.6, 1.6, 0.5]} />
+                  <meshStandardMaterial color={color} opacity={0.8} transparent={true} />
+                </mesh>
+              }>
+                <group ref={groupRef}>
+                  <primitive 
+                    object={model.clone()} 
+                    scale={[2.5, 2.5, 2.5]} 
+                    position={[0, -1.5, 0]}
+                    rotation={[0, Math.PI - rotation.y, 0]} 
+                    castShadow 
+                  />
+                </group>
+                
+                {/* Add ghostly glow effect */}
+                <pointLight
+                  position={[0, 0.5, 0]}
+                  distance={4}
+                  intensity={1.0}
+                  color={color}
+                />
+              </Suspense>
+            ) : (
+              // Fallback if model fails to load - simple ghostly figure
+              <group>
+                {/* Ghostly body */}
+                <mesh castShadow position={[0, 0.5, 0]}>
+                  <boxGeometry args={[0.6, 1.2, 0.3]} />
+                  <meshStandardMaterial 
+                    color={color} 
+                    opacity={0.6} 
+                    transparent={true} 
+                    emissive={color} 
+                    emissiveIntensity={0.3} 
+                  />
+                </mesh>
+                
+                {/* Head */}
+                <mesh castShadow position={[0, 1.4, 0]}>
+                  <sphereGeometry args={[0.4, 16, 16]} />
+                  <meshStandardMaterial 
+                    color={color} 
+                    opacity={0.7} 
+                    transparent={true} 
+                    emissive={color} 
+                    emissiveIntensity={0.4} 
+                  />
+                </mesh>
+                
+                {/* Ghostly glow */}
+                <pointLight
+                  position={[0, 0.8, 0]}
+                  distance={3}
+                  intensity={0.8}
+                  color={color}
+                />
+              </group>
+            )}
+            
+            {/* Type indicator (bigger and specially colored for the wraith) */}
+            <mesh position={[0, 2.2, 0]}>
+              <sphereGeometry args={[0.3, 16, 16]} />
+              <meshStandardMaterial 
+                color="#FF00FF" 
+                emissive="#FF00FF" 
+                emissiveIntensity={1.5} 
+                opacity={0.8} 
+                transparent={true} 
+              />
+            </mesh>
+          </group>
         ) : type === 'spider' ? (
-          // Spider
+          // Spider creature (using simpler geometry)
           <group>
             {/* Body */}
             <mesh castShadow position={[0, 0.3, 0]}>
@@ -488,325 +569,130 @@ export default function Creature({
             </mesh>
             
             {/* Head */}
-            <mesh castShadow position={[0, 0.6, 0.3]}>
-              <sphereGeometry args={[0.3, 16, 16]} />
+            <mesh castShadow position={[0, 0.3, 0.4]}>
+              <sphereGeometry args={[0.2, 16, 16]} />
               <meshStandardMaterial color={color} />
             </mesh>
             
-            {/* Spider legs */}
-            {[0, 1, 2, 3].map((i) => (
-              <group key={`right-leg-${i}`}>
-                <mesh castShadow position={[0.5, 0.3, 0.3 - i * 0.2]}>
-                  <boxGeometry args={[0.5, 0.1, 0.1]} />
-                  <meshStandardMaterial color={color} />
-                </mesh>
-                <mesh castShadow position={[0.9, 0.1, 0.3 - i * 0.2]}>
-                  <boxGeometry args={[0.3, 0.1, 0.1]} />
-                  <meshStandardMaterial color={color} />
-                </mesh>
-              </group>
-            ))}
-            {[0, 1, 2, 3].map((i) => (
-              <group key={`left-leg-${i}`}>
-                <mesh castShadow position={[-0.5, 0.3, 0.3 - i * 0.2]}>
-                  <boxGeometry args={[0.5, 0.1, 0.1]} />
-                  <meshStandardMaterial color={color} />
-                </mesh>
-                <mesh castShadow position={[-0.9, 0.1, 0.3 - i * 0.2]}>
-                  <boxGeometry args={[0.3, 0.1, 0.1]} />
-                  <meshStandardMaterial color={color} />
-                </mesh>
-              </group>
-            ))}
+            {/* Eyes */}
+            <mesh castShadow position={[0.1, 0.4, 0.5]}>
+              <sphereGeometry args={[0.05, 8, 8]} />
+              <meshStandardMaterial color="red" emissive="red" emissiveIntensity={1} />
+            </mesh>
+            <mesh castShadow position={[-0.1, 0.4, 0.5]}>
+              <sphereGeometry args={[0.05, 8, 8]} />
+              <meshStandardMaterial color="red" emissive="red" emissiveIntensity={1} />
+            </mesh>
+            
+            {/* Legs */}
+            <mesh castShadow position={[0.3, 0.2, 0.2]} rotation={[0, 0.3, 0.5]}>
+              <cylinderGeometry args={[0.05, 0.05, 0.8]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            <mesh castShadow position={[-0.3, 0.2, 0.2]} rotation={[0, -0.3, -0.5]}>
+              <cylinderGeometry args={[0.05, 0.05, 0.8]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            <mesh castShadow position={[0.3, 0.2, -0.2]} rotation={[0, -0.3, 0.5]}>
+              <cylinderGeometry args={[0.05, 0.05, 0.8]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            <mesh castShadow position={[-0.3, 0.2, -0.2]} rotation={[0, 0.3, -0.5]}>
+              <cylinderGeometry args={[0.05, 0.05, 0.8]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            <mesh castShadow position={[0.3, 0.2, 0]} rotation={[0, 0, 0.5]}>
+              <cylinderGeometry args={[0.05, 0.05, 0.8]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            <mesh castShadow position={[-0.3, 0.2, 0]} rotation={[0, 0, -0.5]}>
+              <cylinderGeometry args={[0.05, 0.05, 0.8]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            <mesh castShadow position={[0, 0.2, -0.3]} rotation={[0.5, 0, 0]}>
+              <cylinderGeometry args={[0.05, 0.05, 0.6]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            <mesh castShadow position={[0, 0.2, 0.3]} rotation={[-0.5, 0, 0]}>
+              <cylinderGeometry args={[0.05, 0.05, 0.6]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            
+            {/* Type indicator */}
+            <mesh position={[0, 1.0, 0]}>
+              <sphereGeometry args={[0.15, 16, 16]} />
+              <meshStandardMaterial color="red" emissive="red" emissiveIntensity={0.8} />
+            </mesh>
+          </group>
+        ) : type === 'bee' ? (
+          // Bee creature (using simple shapes)
+          <group>
+            {/* Body */}
+            <mesh castShadow position={[0, 0.3, 0]}>
+              <capsuleGeometry args={[0.2, 0.4, 8, 16]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            
+            {/* Stripes */}
+            <mesh castShadow position={[0, 0.3, 0.05]}>
+              <cylinderGeometry args={[0.21, 0.21, 0.1, 16]} />
+              <meshStandardMaterial color="black" />
+            </mesh>
+            <mesh castShadow position={[0, 0.3, -0.05]}>
+              <cylinderGeometry args={[0.21, 0.21, 0.1, 16]} />
+              <meshStandardMaterial color="black" />
+            </mesh>
+            
+            {/* Head */}
+            <mesh castShadow position={[0, 0.3, 0.35]}>
+              <sphereGeometry args={[0.15, 16, 16]} />
+              <meshStandardMaterial color="black" />
+            </mesh>
+            
+            {/* Wing1 - with animation in useFrame */}
+            <mesh castShadow position={[0.2, 0.5, 0]} rotation={[0.3, 0, Math.PI / 6]}>
+              <planeGeometry args={[0.3, 0.2]} />
+              <meshStandardMaterial 
+                color="white" 
+                transparent={true} 
+                opacity={0.6} 
+                side={THREE.DoubleSide} 
+              />
+            </mesh>
+            
+            {/* Wing2 */}
+            <mesh castShadow position={[-0.2, 0.5, 0]} rotation={[0.3, 0, -Math.PI / 6]}>
+              <planeGeometry args={[0.3, 0.2]} />
+              <meshStandardMaterial 
+                color="white" 
+                transparent={true} 
+                opacity={0.6} 
+                side={THREE.DoubleSide} 
+              />
+            </mesh>
+            
+            {/* Type indicator */}
+            <mesh position={[0, 0.7, 0]}>
+              <sphereGeometry args={[0.1, 16, 16]} />
+              <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
+            </mesh>
+          </group>
+        ) : (
+          // Default creature for any other types
+          <group>
+            <mesh castShadow>
+              <boxGeometry args={[0.8, 0.8, 0.8]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
             
             {/* Type indicator */}
             <mesh position={[0, 0.8, 0]}>
               <sphereGeometry args={[0.2, 16, 16]} />
-              <meshStandardMaterial color="purple" emissive="purple" emissiveIntensity={1} />
+              <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
             </mesh>
-          </group>
-        ) : type === 'wraith' ? (
-          // Wraith - special Blood Moon mob
-          <group scale={[1.2, 1.2, 1.2]}>
-            {modelLoaded && wraithModel ? (
-              <Suspense fallback={
-                // Fallback to simple model while loading
-                <mesh castShadow>
-                  <boxGeometry args={[0.6, 1.6, 0.5]} />
-                  <meshStandardMaterial 
-                    color={color} 
-                    transparent={true} 
-                    opacity={0.7} 
-                    emissive={color}
-                    emissiveIntensity={1.0} 
-                  />
-                </mesh>
-              }>
-                <group ref={groupRef}>
-                  <primitive 
-                    object={wraithModel.clone()} 
-                    scale={[2.5, 2.5, 2.5]} 
-                    position={[0, -1.5, 0]}
-                    rotation={[0, Math.PI - rotation.y, 0]} 
-                    castShadow 
-                  />
-                </group>
-                
-                {/* Add additional particle effects and glow to the 3D model */}
-                <pointLight
-                  position={[0, 0.5, 0]}
-                  distance={5}
-                  intensity={2.0}
-                  color="#9C27B0"
-                />
-                
-                <pointLight
-                  position={[0, 1.3, 0.2]}
-                  distance={3}
-                  intensity={1.2}
-                  color="#FF0000"
-                />
-                
-                {/* Blood Moon indicator with animated glow */}
-                <mesh position={[0, 2.0, 0]}>
-                  <sphereGeometry args={[0.3, 16, 16]} />
-                  <meshStandardMaterial 
-                    color="#FF0000" 
-                    emissive="#FF0000" 
-                    emissiveIntensity={2 + Math.sin(animationProgress * Math.PI * 2)}
-                  />
-                </mesh>
-              </Suspense>
-            ) : (
-              // Fallback if model fails to load - simpler ghostly wraith
-              <group>
-                {/* Main ghostly floating body */}
-                <mesh castShadow position={[0, 0.9, 0]}>
-                  <boxGeometry args={[0.6, 1.5, 0.3]} />
-                  <meshStandardMaterial 
-                    color={color} 
-                    transparent={true} 
-                    opacity={0.7} 
-                    emissive={color}
-                    emissiveIntensity={1.0}
-                  />
-                </mesh>
-                
-                {/* Wispy cloak elements */}
-                <mesh castShadow position={[0, 0.7, 0.1]}>
-                  <coneGeometry args={[0.8, 2.0, 12]} />
-                  <meshStandardMaterial 
-                    color={color} 
-                    transparent={true} 
-                    opacity={0.4}
-                    emissive={color}
-                    emissiveIntensity={0.5}
-                    side={THREE.DoubleSide}
-                  />
-                </mesh>
-                
-                {/* Ghostly arms */}
-                <group position={[0, 0.7, 0]}>
-                  {/* Right arm */}
-                  <mesh castShadow position={[0.6, 0.2, 0]}>
-                    <boxGeometry args={[0.2, 0.8, 0.2]} />
-                    <meshStandardMaterial 
-                      color={color} 
-                      transparent={true} 
-                      opacity={0.6}
-                      emissive={color}
-                      emissiveIntensity={0.3}
-                    />
-                  </mesh>
-                  
-                  {/* Left arm */}
-                  <mesh castShadow position={[-0.6, 0.2, 0]}>
-                    <boxGeometry args={[0.2, 0.8, 0.2]} />
-                    <meshStandardMaterial 
-                      color={color} 
-                      transparent={true} 
-                      opacity={0.6}
-                      emissive={color}
-                      emissiveIntensity={0.3}
-                    />
-                  </mesh>
-                </group>
-                
-                {/* Glowing eyes */}
-                <mesh position={[0.15, 1.4, 0.2]}>
-                  <sphereGeometry args={[0.1, 16, 16]} />
-                  <meshStandardMaterial color="#FF0000" emissive="#FF0000" emissiveIntensity={3} />
-                </mesh>
-                <mesh position={[-0.15, 1.4, 0.2]}>
-                  <sphereGeometry args={[0.1, 16, 16]} />
-                  <meshStandardMaterial color="#FF0000" emissive="#FF0000" emissiveIntensity={3} />
-                </mesh>
-                
-                {/* Ethereal particle effect lights */}
-                <pointLight
-                  position={[0, 0.5, 0]}
-                  distance={4}
-                  intensity={1.8}
-                  color="#9C27B0"
-                />
-                
-                <pointLight
-                  position={[0, 1.3, 0.2]}
-                  distance={2}
-                  intensity={1.0}
-                  color="#FF0000"
-                />
-                
-                {/* Blood Moon indicator with animated glow */}
-                <mesh position={[0, 2.0, 0]}>
-                  <sphereGeometry args={[0.3, 16, 16]} />
-                  <meshStandardMaterial 
-                    color="#FF0000" 
-                    emissive="#FF0000" 
-                    emissiveIntensity={2 + Math.sin(animationProgress * Math.PI * 2)}
-                  />
-                </mesh>
-              </group>
-            )}
-          </group>
-        ) : (
-          // Default or bee
-          <group>
-            <mesh castShadow position={[0, 0, 0]}>
-              <boxGeometry args={[0.4, 0.4, 0.6]} />
-              <meshStandardMaterial color={color} />
-            </mesh>
-            {type === 'bee' && (
-              <>
-                <mesh castShadow position={[0, 0, -0.4]}>
-                  <boxGeometry args={[0.2, 0.2, 0.2]} />
-                  <meshStandardMaterial color="#000000" />
-                </mesh>
-                {/* Wings */}
-                <mesh castShadow position={[0.2, 0.2, 0]}>
-                  <planeGeometry args={[0.4, 0.2]} />
-                  <meshStandardMaterial color="#ffffff" transparent opacity={0.8} side={THREE.DoubleSide} />
-                </mesh>
-                <mesh castShadow position={[-0.2, 0.2, 0]}>
-                  <planeGeometry args={[0.4, 0.2]} />
-                  <meshStandardMaterial color="#ffffff" transparent opacity={0.8} side={THREE.DoubleSide} />
-                </mesh>
-                
-                {/* Type indicator */}
-                <mesh position={[0, 0.6, 0]}>
-                  <sphereGeometry args={[0.15, 16, 16]} />
-                  <meshStandardMaterial color="yellow" emissive="yellow" emissiveIntensity={1} />
-                </mesh>
-              </>
-            )}
           </group>
         )
       )}
-      
-      {/* Indicator for creature state/mood */}
-      {mood === 'aggressive' && (
-        <mesh position={[0, 1.2, 0]}>
-          <sphereGeometry args={[0.1, 8, 8]} />
-          <meshStandardMaterial color="#FF0000" emissive="#FF0000" emissiveIntensity={2} />
-        </mesh>
-      )}
-      {mood === 'afraid' && (
-        <mesh position={[0, 1.2, 0]}>
-          <sphereGeometry args={[0.1, 8, 8]} />
-          <meshStandardMaterial color="#FFFF00" emissive="#FFFF00" emissiveIntensity={2} />
-        </mesh>
-      )}
-      {mood === 'playful' && (
-        <mesh position={[0, 1.2, 0]}>
-          <sphereGeometry args={[0.1, 8, 8]} />
-          <meshStandardMaterial color="#00FF00" emissive="#00FF00" emissiveIntensity={2} />
-        </mesh>
-      )}
-      {mood === 'frenzied' && (
-        // Special Blood Moon mood indicator - more intense
-        <>
-          <mesh position={[0, 1.2, 0]}>
-            <sphereGeometry args={[0.15, 12, 12]} />
-            <meshStandardMaterial color="#FF0000" emissive="#FF0000" emissiveIntensity={4} />
-          </mesh>
-          <pointLight position={[0, 1.2, 0]} intensity={0.8} distance={3} color="#FF0000" />
-        </>
-      )}
-      
-      {/* Leader indicator */}
-      {leader && (
-        <mesh position={[0, 1.5, 0]}>
-          <sphereGeometry args={[0.15, 8, 8]} />
-          <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={2} />
-        </mesh>
-      )}
-      
-      {/* Health bar - only show if health is less than maxHealth or showHealth is explicitly true */}
-      {showHealth && (health < maxHealth || showHealth) && (
-        <group position={[0, 2.5, 0]}>
-          {/* Health bar background */}
-          <mesh position={[0, 0, 0]} scale={[1.2, 0.15, 0.05]}>
-            <boxGeometry />
-            <meshStandardMaterial color="#333333" />
-          </mesh>
-          
-          {/* Health bar fill - scales based on health percentage */}
-          {health > 0 && (
-            <mesh 
-              position={[-0.6 + (health / maxHealth * 0.6), 0, 0.05]} 
-              scale={[1.2 * (health / maxHealth), 0.1, 0.05]}
-            >
-              <boxGeometry />
-              <meshStandardMaterial 
-                color={
-                  health > maxHealth * 0.7 ? "#00FF00" : 
-                  health > maxHealth * 0.3 ? "#FFFF00" : 
-                  "#FF0000"
-                } 
-                emissive={
-                  health > maxHealth * 0.7 ? "#00FF00" : 
-                  health > maxHealth * 0.3 ? "#FFFF00" : 
-                  "#FF0000"
-                }
-                emissiveIntensity={0.5}
-              />
-            </mesh>
-          )}
-        </group>
-      )}
-      
-      {/* Loot bag - displayed when creature is killed */}
-      {hasLoot && (
-        <group position={[0, 0.1, 0]}>
-          {/* Loot bag body */}
-          <mesh position={[0, 0.3, 0]} rotation={[0, Math.PI / 4, 0]}>
-            <boxGeometry args={[0.5, 0.5, 0.5]} />
-            <meshStandardMaterial color="#8B4513" />
-          </mesh>
-          
-          {/* Loot bag tie/top */}
-          <mesh position={[0, 0.6, 0]}>
-            <cylinderGeometry args={[0.1, 0.2, 0.2, 8]} />
-            <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={0.5} />
-          </mesh>
-          
-          {/* Loot sparkling effect */}
-          <pointLight
-            position={[0, 0.5, 0]}
-            intensity={0.7}
-            distance={2}
-            color="#FFD700"
-          />
-        </group>
-      )}
-      
-      {/* Add a spotlight to make creatures more visible */}
-      <pointLight 
-        position={[0, 2, 0]}
-        intensity={0.5}
-        distance={5}
-        color="#ffffff"
-      />
     </mesh>
   );
 }
