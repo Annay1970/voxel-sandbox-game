@@ -18,6 +18,7 @@ useGLTF.preload('/models/bee.glb');
 useGLTF.preload('/models/unicorn.glb');
 useGLTF.preload('/models/pegasus.glb');
 useGLTF.preload('/models/friendlyHorse.glb');
+useGLTF.preload('/models/mermaid.glb');
 
 interface CreatureProps {
   type: string;
@@ -83,7 +84,8 @@ export default function Creature({
       'bee': '/models/bee.glb',
       'unicorn': '/models/unicorn.glb',
       'pegasus': '/models/pegasus.glb',
-      'friendlyHorse': '/models/friendlyHorse.glb'
+      'friendlyHorse': '/models/friendlyHorse.glb',
+      'mermaid': '/models/mermaid.glb'
     };
     
     const modelPath = modelMap[type];
@@ -147,6 +149,9 @@ export default function Creature({
         break;
       case 'friendlyHorse':
         setColor('#F48FB1'); // Pink for the friendly horse
+        break;
+      case 'mermaid':
+        setColor('#4DD0E1'); // Turquoise blue for the mermaid
         break;
       default:
         setColor('#FF5722');
@@ -473,6 +478,80 @@ export default function Creature({
           }, 300);
         }
       }
+      // Mermaid animations
+      else if (type === 'mermaid') {
+        if (animationState === 'idle') {
+          // Smooth swimming motion for idle mermaid
+          groupRef.current.position.y = position.y + Math.sin(Date.now() * 0.002) * 0.06;
+          // Gentle tail swaying
+          groupRef.current.rotation.z = Math.sin(Date.now() * 0.002) * 0.05;
+          // Occasional looking around
+          if (Math.sin(Date.now() * 0.0004) > 0.9) {
+            groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.003) * 0.2;
+          }
+        } else if (animationState === 'swim') {
+          // More active swimming animation
+          groupRef.current.position.y = position.y + Math.sin(Date.now() * 0.01) * 0.1;
+          // Strong tail swaying
+          groupRef.current.rotation.z = Math.sin(Date.now() * 0.01) * 0.1;
+          // Some side-to-side movement
+          groupRef.current.position.x = position.x + Math.sin(Date.now() * 0.008) * 0.05;
+        } else if (animationState === 'attack') {
+          // Rock throwing attack animation
+          // Prepare and throw motion
+          groupRef.current.rotation.x = Math.sin(Date.now() * 0.03) * 0.15;
+          
+          // Arm motion simulation - move back then forward
+          const throwPhase = (Date.now() % 2000) / 2000; // 0-1 cycle over 2 seconds
+          
+          if (throwPhase < 0.5) {
+            // Wind up
+            groupRef.current.position.z = position.z - throwPhase * 0.2;
+          } else {
+            // Throw forward
+            groupRef.current.position.z = position.z - 0.1 + (throwPhase - 0.5) * 0.3;
+            
+            // Create and throw rock at the peak of the forward motion
+            if (throwPhase > 0.8 && throwPhase < 0.85 && Math.random() > 0.7) {
+              // Visual indication of rock throwing - briefly flash
+              const rockEffect = new THREE.PointLight('#A9A9A9', 0.3, 2);
+              rockEffect.position.set(0, 0.5, 1); // Position in front
+              groupRef.current.add(rockEffect);
+              
+              // Remove rock effect after a short time
+              setTimeout(() => {
+                groupRef.current?.remove(rockEffect);
+              }, 150);
+            }
+          }
+        } else if (animationState === 'flee') {
+          // Rapid swimming away animation
+          groupRef.current.position.y = position.y + Math.sin(Date.now() * 0.03) * 0.15;
+          // Frantic tail movement
+          groupRef.current.rotation.z = Math.sin(Date.now() * 0.04) * 0.15;
+          // Erratic movement
+          groupRef.current.position.x = position.x + Math.sin(Date.now() * 0.02) * 0.08;
+          groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.015) * 0.1;
+        }
+        
+        // Add subtle water ripple effects occasionally
+        if (animationState === 'swim' || animationState === 'attack') {
+          if (Math.random() > 0.95) {
+            const rippleEffect = new THREE.PointLight('#4FC3F7', 0.3, 1.5);
+            rippleEffect.position.set(
+              Math.random() * 0.4 - 0.2, 
+              -0.2, // Below the mermaid where the tail would be
+              Math.random() * 0.4 - 0.2
+            );
+            groupRef.current.add(rippleEffect);
+            
+            // Fade out ripple effect
+            setTimeout(() => {
+              groupRef.current?.remove(rippleEffect);
+            }, 250);
+          }
+        }
+      }
     }
   });
   
@@ -666,7 +745,7 @@ export default function Creature({
         </group>
       ) : (
         // Hostile mobs - different shapes
-        type === 'zombie' ? (
+        type === 'zombie' || type === 'mermaid' ? (
           // Zombie with 3D model if available
           <group>
             {modelLoaded && model ? (

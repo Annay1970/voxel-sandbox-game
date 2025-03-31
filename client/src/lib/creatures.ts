@@ -4,7 +4,8 @@ export type CreatureType =
   'cow' | 'pig' | 'sheep' | 'chicken' | 
   'zombie' | 'skeleton' | 'spider' | 'bee' | 
   'unicorn' | 'pegasus' | 'friendlyHorse' |
-  'wraith'; // Blood Moon special mob
+  'wraith' | // Blood Moon special mob
+  'mermaid'; // Hostile water creature
 
 // Helper function to add creatures at fixed positions
 function addFixedCreature(
@@ -54,7 +55,7 @@ export function spawnCreatures(
   
   // Define creature types
   const passiveCreatures: CreatureType[] = ['cow', 'pig', 'sheep', 'chicken', 'bee', 'unicorn', 'pegasus', 'friendlyHorse'];
-  const hostileCreatures: CreatureType[] = ['zombie', 'skeleton', 'spider'];
+  const hostileCreatures: CreatureType[] = ['zombie', 'skeleton', 'spider', 'mermaid'];
   
   console.log(`Spawning creatures in ${Object.keys(chunks).length} chunks...`);
   
@@ -72,6 +73,9 @@ export function spawnCreatures(
   addFixedCreature(creatures, 'unicorn', 15, 25, 15);
   addFixedCreature(creatures, 'pegasus', 15, 27, 18); // Slightly elevated for the flying creature
   addFixedCreature(creatures, 'friendlyHorse', 12, 25, 15);
+  
+  // Add a mermaid near water
+  addFixedCreature(creatures, 'mermaid', 8, 25, 8);
   
   // For each chunk
   Object.keys(chunks).forEach(chunkKey => {
@@ -366,6 +370,43 @@ export function getCreatureLoot(type: CreatureType): { type: BlockType, count: n
 
 export function getCreatureProperties(type: CreatureType): CreatureProperties {
   switch (type) {
+    case 'mermaid':
+      return {
+        maxHealth: 18,
+        damage: 3,
+        speed: 0.8,
+        hostility: 'hostile',
+        spawnBiomes: ['beach', 'ocean'],
+        lootTable: [
+          { type: 'sand', chance: 0.8, minCount: 1, maxCount: 4 },
+          { type: 'glass', chance: 0.4, minCount: 1, maxCount: 2 },
+          { type: 'blueflower', chance: 0.3, minCount: 1, maxCount: 2 }
+        ],
+        
+        // Enhanced properties
+        preferredStates: ['idle', 'hunting', 'wandering'],
+        stateWeights: { idle: 0.3, hunting: 0.5, wandering: 0.2 },
+        senseRadius: 12, // Can detect player from further away
+        flockingBehavior: true, // Tends to stay in groups
+        socialDistance: 4, // Preferred distance from other mermaids
+        diurnalActivity: true, // Active during the day
+        
+        // Specialized properties
+        rangedAttack: true, // Can throw rocks at player
+        attackRange: 10, // Attack range for rock throwing
+        avoidsMelee: true, // Tries to keep distance from player
+        
+        // Animation properties
+        animationStates: ['idle', 'swim', 'attack', 'flee'],
+        animationSpeeds: { idle: 0.5, swim: 1.2, attack: 1.0, flee: 1.5 },
+        
+        // Mood properties
+        defaultMood: 'aggressive',
+        moodTransitions: {
+          'aggressive': { 'calm': 0.1 },
+          'calm': { 'aggressive': 0.7 },
+        }
+      };
     case 'cow':
       return {
         maxHealth: 10,
