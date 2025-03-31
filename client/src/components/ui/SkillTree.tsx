@@ -1,8 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useVoxelGame } from '../../lib/stores/useVoxelGame';
-import { MiningSkillLevel, MiningEffect } from '../game/EnhancedMining';
+import React, { useState, useRef, useEffect } from 'react';
 
-// Skill categories
 export enum SkillCategory {
   Combat = 'combat',
   Mining = 'mining',
@@ -12,7 +9,6 @@ export enum SkillCategory {
   Magic = 'magic'
 }
 
-// Common skill interface
 export interface Skill {
   id: string;
   name: string;
@@ -27,7 +23,6 @@ export interface Skill {
   unlocked: boolean;
 }
 
-// Skill tree data structure
 export interface SkillTreeNode {
   skill: Skill;
   position: {
@@ -37,400 +32,243 @@ export interface SkillTreeNode {
   connections: string[]; // IDs of connected skills
 }
 
-// Combat skills
-const COMBAT_SKILLS: Skill[] = [
-  {
-    id: 'combat_basic',
-    name: 'Basic Combat',
-    description: 'Learn the basics of combat, improving attack speed by 10%',
-    category: SkillCategory.Combat,
-    level: 1,
-    maxLevel: 1,
-    icon: '⚔️',
-    requiredSkills: [],
-    requiredLevel: 0,
-    effects: ['Increases attack speed by 10%'],
-    unlocked: true
-  },
-  {
-    id: 'combat_swordsmanship',
-    name: 'Swordsmanship',
-    description: 'Improve your sword attacks, increasing damage by 20%',
-    category: SkillCategory.Combat,
-    level: 0,
-    maxLevel: 3,
-    icon: '🗡️',
-    requiredSkills: ['combat_basic'],
-    requiredLevel: 5,
-    effects: [
-      'Level 1: Increases sword damage by 20%',
-      'Level 2: Increases sword damage by 40%',
-      'Level 3: Increases sword damage by 60%'
-    ],
-    unlocked: false
-  },
-  {
-    id: 'combat_critical_hits',
-    name: 'Critical Strikes',
-    description: 'Chance to deal critical hits that do double damage',
-    category: SkillCategory.Combat,
-    level: 0,
-    maxLevel: 3,
-    icon: '💥',
-    requiredSkills: ['combat_basic'],
-    requiredLevel: 5,
-    effects: [
-      'Level 1: 10% chance for critical hits',
-      'Level 2: 20% chance for critical hits',
-      'Level 3: 30% chance for critical hits'
-    ],
-    unlocked: false
-  },
-  {
-    id: 'combat_combos',
-    name: 'Combat Combos',
-    description: 'Learn special attack combinations for devastating effects',
-    category: SkillCategory.Combat,
-    level: 0,
-    maxLevel: 2,
-    icon: '🔄',
-    requiredSkills: ['combat_swordsmanship', 'combat_critical_hits'],
-    requiredLevel: 15,
-    effects: [
-      'Level 1: Unlocks basic combo attacks',
-      'Level 2: Unlocks advanced combo attacks'
-    ],
-    unlocked: false
-  },
-  {
-    id: 'combat_defense',
-    name: 'Improved Defense',
-    description: 'Reduce damage taken from attacks',
-    category: SkillCategory.Combat,
-    level: 0,
-    maxLevel: 3,
-    icon: '🛡️',
-    requiredSkills: ['combat_basic'],
-    requiredLevel: 10,
-    effects: [
-      'Level 1: Reduces damage taken by 10%',
-      'Level 2: Reduces damage taken by 20%',
-      'Level 3: Reduces damage taken by 30%'
-    ],
-    unlocked: false
-  }
-];
-
-// Mining skills
-const MINING_SKILLS: Skill[] = [
-  {
-    id: 'mining_basic',
-    name: 'Basic Mining',
-    description: 'Learn the basics of mining, improving mining speed by 10%',
-    category: SkillCategory.Mining,
-    level: 1,
-    maxLevel: 1,
-    icon: '⛏️',
-    requiredSkills: [],
-    requiredLevel: 0,
-    effects: ['Increases mining speed by 10%'],
-    unlocked: true
-  },
-  {
-    id: 'mining_efficiency',
-    name: 'Mining Efficiency',
-    description: 'Mine blocks faster',
-    category: SkillCategory.Mining,
-    level: 0,
-    maxLevel: 3,
-    icon: '⚒️',
-    requiredSkills: ['mining_basic'],
-    requiredLevel: 5,
-    effects: [
-      'Level 1: Increases mining speed by 20%',
-      'Level 2: Increases mining speed by 40%',
-      'Level 3: Increases mining speed by 60%'
-    ],
-    unlocked: false
-  },
-  {
-    id: 'mining_fortune',
-    name: 'Fortune',
-    description: 'Chance to get extra resources when mining',
-    category: SkillCategory.Mining,
-    level: 0,
-    maxLevel: 3,
-    icon: '💎',
-    requiredSkills: ['mining_basic'],
-    requiredLevel: 10,
-    effects: [
-      'Level 1: 10% chance for extra drops',
-      'Level 2: 20% chance for extra drops',
-      'Level 3: 30% chance for extra drops'
-    ],
-    unlocked: false
-  },
-  {
-    id: 'mining_silk_touch',
-    name: 'Silk Touch',
-    description: 'Mine blocks without breaking them',
-    category: SkillCategory.Mining,
-    level: 0,
-    maxLevel: 1,
-    icon: '🧵',
-    requiredSkills: ['mining_fortune'],
-    requiredLevel: 20,
-    effects: ['Allows you to mine blocks without breaking them'],
-    unlocked: false
-  },
-  {
-    id: 'mining_explosive',
-    name: 'Explosive Mining',
-    description: 'Mine multiple blocks at once',
-    category: SkillCategory.Mining,
-    level: 0,
-    maxLevel: 3,
-    icon: '💣',
-    requiredSkills: ['mining_efficiency'],
-    requiredLevel: 15,
-    effects: [
-      'Level 1: Mine blocks in a 1-block radius',
-      'Level 2: Mine blocks in a 2-block radius',
-      'Level 3: Mine blocks in a 3-block radius'
-    ],
-    unlocked: false
-  }
-];
-
-// Building skills
-const BUILDING_SKILLS: Skill[] = [
-  {
-    id: 'building_basic',
-    name: 'Basic Building',
-    description: 'Learn the basics of building, improving placement speed by 10%',
-    category: SkillCategory.Building,
-    level: 1,
-    maxLevel: 1,
-    icon: '🧱',
-    requiredSkills: [],
-    requiredLevel: 0,
-    effects: ['Increases block placement speed by 10%'],
-    unlocked: true
-  },
-  {
-    id: 'building_reach',
-    name: 'Extended Reach',
-    description: 'Place blocks from further away',
-    category: SkillCategory.Building,
-    level: 0,
-    maxLevel: 3,
-    icon: '👐',
-    requiredSkills: ['building_basic'],
-    requiredLevel: 5,
-    effects: [
-      'Level 1: Increases placement range by 1 block',
-      'Level 2: Increases placement range by 2 blocks',
-      'Level 3: Increases placement range by 3 blocks'
-    ],
-    unlocked: false
-  }
-];
-
-// All skills combined
-const ALL_SKILLS = [
-  ...COMBAT_SKILLS,
-  ...MINING_SKILLS,
-  ...BUILDING_SKILLS
-];
-
-// Skill tree layout
-const SKILL_TREE_LAYOUT: Record<SkillCategory, SkillTreeNode[]> = {
-  [SkillCategory.Combat]: [
-    {
-      skill: COMBAT_SKILLS[0], // Basic Combat
-      position: { x: 50, y: 20 },
-      connections: ['combat_swordsmanship', 'combat_critical_hits', 'combat_defense']
-    },
-    {
-      skill: COMBAT_SKILLS[1], // Swordsmanship
-      position: { x: 30, y: 40 },
-      connections: ['combat_combos']
-    },
-    {
-      skill: COMBAT_SKILLS[2], // Critical Hits
-      position: { x: 70, y: 40 },
-      connections: ['combat_combos']
-    },
-    {
-      skill: COMBAT_SKILLS[3], // Combos
-      position: { x: 50, y: 60 },
-      connections: []
-    },
-    {
-      skill: COMBAT_SKILLS[4], // Defense
-      position: { x: 50, y: 80 },
-      connections: []
-    }
-  ],
-  [SkillCategory.Mining]: [
-    {
-      skill: MINING_SKILLS[0], // Basic Mining
-      position: { x: 50, y: 20 },
-      connections: ['mining_efficiency', 'mining_fortune']
-    },
-    {
-      skill: MINING_SKILLS[1], // Efficiency
-      position: { x: 30, y: 40 },
-      connections: ['mining_explosive']
-    },
-    {
-      skill: MINING_SKILLS[2], // Fortune
-      position: { x: 70, y: 40 },
-      connections: ['mining_silk_touch']
-    },
-    {
-      skill: MINING_SKILLS[3], // Silk Touch
-      position: { x: 70, y: 60 },
-      connections: []
-    },
-    {
-      skill: MINING_SKILLS[4], // Explosive Mining
-      position: { x: 30, y: 60 },
-      connections: []
-    }
-  ],
-  [SkillCategory.Building]: [
-    {
-      skill: BUILDING_SKILLS[0], // Basic Building
-      position: { x: 50, y: 20 },
-      connections: ['building_reach']
-    },
-    {
-      skill: BUILDING_SKILLS[1], // Extended Reach
-      position: { x: 50, y: 40 },
-      connections: []
-    }
-  ],
-  [SkillCategory.Crafting]: [],
-  [SkillCategory.Farming]: [],
-  [SkillCategory.Magic]: []
-};
-
 interface SkillTreeProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+// Sample skills for demonstration
+const SAMPLE_SKILLS: Skill[] = [
+  {
+    id: 'mining_efficiency',
+    name: 'Mining Efficiency',
+    description: 'Increase mining speed by 10% per level',
+    category: SkillCategory.Mining,
+    level: 2,
+    maxLevel: 5,
+    icon: '⛏️',
+    requiredSkills: [],
+    requiredLevel: 0,
+    effects: ['10% faster mining per level'],
+    unlocked: true
+  },
+  {
+    id: 'ore_sense',
+    name: 'Ore Sense',
+    description: 'Highlight nearby ores when mining',
+    category: SkillCategory.Mining,
+    level: 0,
+    maxLevel: 3,
+    icon: '👁️',
+    requiredSkills: ['mining_efficiency'],
+    requiredLevel: 2,
+    effects: ['Level 1: Highlight common ores', 'Level 2: Highlight rare ores', 'Level 3: See ores through walls'],
+    unlocked: false
+  },
+  {
+    id: 'melee_damage',
+    name: 'Melee Damage',
+    description: 'Increase melee damage by 15% per level',
+    category: SkillCategory.Combat,
+    level: 1,
+    maxLevel: 5,
+    icon: '⚔️',
+    requiredSkills: [],
+    requiredLevel: 0,
+    effects: ['15% increased melee damage per level'],
+    unlocked: true
+  },
+  {
+    id: 'critical_strike',
+    name: 'Critical Strike',
+    description: 'Chance to deal double damage with melee attacks',
+    category: SkillCategory.Combat,
+    level: 0,
+    maxLevel: 3,
+    icon: '🎯',
+    requiredSkills: ['melee_damage'],
+    requiredLevel: 1,
+    effects: ['5% critical chance per level'],
+    unlocked: false
+  },
+  {
+    id: 'advanced_crafting',
+    name: 'Advanced Crafting',
+    description: 'Unlock more crafting recipes',
+    category: SkillCategory.Crafting,
+    level: 1,
+    maxLevel: 3,
+    icon: '🔧',
+    requiredSkills: [],
+    requiredLevel: 0,
+    effects: ['Level 1: Unlock improved tools', 'Level 2: Unlock special items', 'Level 3: Unlock masterwork crafting'],
+    unlocked: true
+  },
+  {
+    id: 'resource_efficiency',
+    name: 'Resource Efficiency',
+    description: 'Chance to not consume materials when crafting',
+    category: SkillCategory.Crafting,
+    level: 0,
+    maxLevel: 3,
+    icon: '♻️',
+    requiredSkills: ['advanced_crafting'],
+    requiredLevel: 1,
+    effects: ['5% chance to save materials per level'],
+    unlocked: false
+  }
+];
+
+// Node positions for the skill tree visualization
+const SKILL_TREE_LAYOUT: SkillTreeNode[] = [
+  {
+    skill: SAMPLE_SKILLS.find(s => s.id === 'mining_efficiency')!,
+    position: { x: 100, y: 100 },
+    connections: ['ore_sense']
+  },
+  {
+    skill: SAMPLE_SKILLS.find(s => s.id === 'ore_sense')!,
+    position: { x: 250, y: 100 },
+    connections: []
+  },
+  {
+    skill: SAMPLE_SKILLS.find(s => s.id === 'melee_damage')!,
+    position: { x: 100, y: 250 },
+    connections: ['critical_strike']
+  },
+  {
+    skill: SAMPLE_SKILLS.find(s => s.id === 'critical_strike')!,
+    position: { x: 250, y: 250 },
+    connections: []
+  },
+  {
+    skill: SAMPLE_SKILLS.find(s => s.id === 'advanced_crafting')!,
+    position: { x: 100, y: 400 },
+    connections: ['resource_efficiency']
+  },
+  {
+    skill: SAMPLE_SKILLS.find(s => s.id === 'resource_efficiency')!,
+    position: { x: 250, y: 400 },
+    connections: []
+  }
+];
+
 const SkillTree: React.FC<SkillTreeProps> = ({ isOpen, onClose }) => {
-  // Selected category
-  const [selectedCategory, setSelectedCategory] = useState<SkillCategory>(SkillCategory.Combat);
+  const [selectedSkill, setSelectedSkill] = useState<Skill | null>(null);
+  const [skills, setSkills] = useState<Skill[]>(SAMPLE_SKILLS);
+  const [selectedCategory, setSelectedCategory] = useState<SkillCategory>(SkillCategory.Mining);
+  const [skillPoints, setSkillPoints] = useState(5); // Available skill points for the player
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   
-  // Player skills from game state
-  const [playerSkills, setPlayerSkills] = useState<Record<string, number>>({
-    // Default unlocked skills
-    'combat_basic': 1,
-    'mining_basic': 1,
-    'building_basic': 1
-  });
+  useEffect(() => {
+    if (isOpen && canvasRef.current && containerRef.current) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      
+      if (ctx) {
+        // Set canvas dimensions
+        canvas.width = containerRef.current.clientWidth;
+        canvas.height = 500;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw connections between nodes
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 2;
+        
+        SKILL_TREE_LAYOUT.forEach(node => {
+          node.connections.forEach(targetId => {
+            const targetNode = SKILL_TREE_LAYOUT.find(n => n.skill.id === targetId);
+            if (targetNode) {
+              ctx.beginPath();
+              ctx.moveTo(node.position.x + 30, node.position.y + 30);
+              ctx.lineTo(targetNode.position.x + 30, targetNode.position.y + 30);
+              
+              // Check if the connection is active (both nodes unlocked)
+              const sourceSkill = skills.find(s => s.id === node.skill.id);
+              const targetSkill = skills.find(s => s.id === targetId);
+              
+              if (sourceSkill?.unlocked && targetSkill?.unlocked) {
+                ctx.strokeStyle = '#4CAF50';
+              } else if (sourceSkill?.unlocked) {
+                ctx.strokeStyle = '#FFA726';
+              } else {
+                ctx.strokeStyle = '#666';
+              }
+              
+              ctx.stroke();
+            }
+          });
+        });
+      }
+    }
+  }, [isOpen, skills, selectedCategory]);
   
-  // Skill points available
-  const [skillPoints, setSkillPoints] = useState<number>(5);
-  
-  // Player level
-  const [playerLevel, setPlayerLevel] = useState<number>(10);
-  
-  // For real implementation, we'd get player skills from voxelGame state
-  const { updatePlayerSkills } = useVoxelGame(state => ({
-    updatePlayerSkills: state.updatePlayerSkills || (() => {})
-  }));
-  
-  // Check if a skill is unlockable
+  // Check if a skill can be unlocked based on prerequisites
   const canUnlockSkill = (skill: Skill): boolean => {
-    // Already unlocked to max level
-    if (playerSkills[skill.id] >= skill.maxLevel) return false;
-    
-    // Player doesn't have enough skill points
+    if (skill.level >= skill.maxLevel) return false;
     if (skillPoints <= 0) return false;
     
-    // Player level not high enough
-    if (playerLevel < skill.requiredLevel) return false;
-    
-    // Check if prerequisites are met
-    for (const requiredSkillId of skill.requiredSkills) {
-      if (!playerSkills[requiredSkillId]) return false;
-    }
-    
-    return true;
+    // Check if all required skills are unlocked and at required level
+    return skill.requiredSkills.every(reqId => {
+      const requiredSkill = skills.find(s => s.id === reqId);
+      return requiredSkill?.unlocked && requiredSkill.level >= skill.requiredLevel;
+    });
   };
   
-  // Unlock a skill
+  // Unlock or level up a skill
   const unlockSkill = (skillId: string) => {
-    const skill = ALL_SKILLS.find(s => s.id === skillId);
-    if (!skill) return;
+    const updatedSkills = skills.map(skill => {
+      if (skill.id === skillId) {
+        if (!skill.unlocked) {
+          // Unlock the skill
+          return { ...skill, unlocked: true, level: 1 };
+        } else if (skill.level < skill.maxLevel) {
+          // Level up the skill
+          return { ...skill, level: skill.level + 1 };
+        }
+      }
+      return skill;
+    });
     
-    // Check if we can unlock it
-    if (!canUnlockSkill(skill)) return;
-    
-    // Update player skills
-    const currentLevel = playerSkills[skillId] || 0;
-    setPlayerSkills(prev => ({
-      ...prev,
-      [skillId]: currentLevel + 1
-    }));
-    
-    // Update skill points
+    setSkills(updatedSkills);
     setSkillPoints(prev => prev - 1);
     
-    // In a real implementation, update the game state
-    // updatePlayerSkills(skillId, currentLevel + 1);
-    
-    console.log(`Unlocked skill: ${skill.name} to level ${currentLevel + 1}`);
-  };
-  
-  // Reset skills (for demonstration)
-  const resetSkills = () => {
-    setPlayerSkills({
-      'combat_basic': 1,
-      'mining_basic': 1,
-      'building_basic': 1
-    });
-    setSkillPoints(5);
+    // In a real app, you would save this to your game state
+    // useVoxelGame.getState().updatePlayerSkills(updatedSkills);
   };
   
   if (!isOpen) return null;
   
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
-      <div className="bg-gray-800 rounded-lg shadow-lg w-4/5 max-w-4xl h-4/5 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-70">
+      <div className="bg-gray-800 rounded-lg w-4/5 max-w-4xl h-5/6 overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gray-900 px-4 py-3 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-white">Skill Tree</h2>
-          <div className="flex items-center space-x-4">
-            <span className="text-yellow-400">
+        <div className="bg-gray-900 p-4 flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-white">Skill Tree</h2>
+          <div className="flex items-center">
+            <div className="mr-6 text-yellow-400 font-bold">
               Skill Points: {skillPoints}
-            </span>
-            <span className="text-blue-400">
-              Player Level: {playerLevel}
-            </span>
+            </div>
             <button 
               onClick={onClose}
               className="text-gray-400 hover:text-white"
             >
-              Close
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           </div>
         </div>
         
         {/* Category tabs */}
-        <div className="bg-gray-700 flex overflow-x-auto">
-          {Object.values(SkillCategory).map(category => (
+        <div className="bg-gray-900 px-4 flex gap-4 border-t border-gray-700">
+          {Object.values(SkillCategory).map((category) => (
             <button
               key={category}
-              className={`px-4 py-2 ${
-                selectedCategory === category
-                  ? 'bg-gray-800 text-white font-bold border-b-2 border-blue-500'
-                  : 'text-gray-300 hover:bg-gray-800'
-              }`}
+              className={`py-2 px-4 font-medium ${selectedCategory === category ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-400'}`}
               onClick={() => setSelectedCategory(category)}
             >
               {category.charAt(0).toUpperCase() + category.slice(1)}
@@ -438,100 +276,119 @@ const SkillTree: React.FC<SkillTreeProps> = ({ isOpen, onClose }) => {
           ))}
         </div>
         
-        {/* Skill tree content */}
-        <div className="flex-1 overflow-auto p-6 bg-gray-800 relative">
-          {/* Skill nodes */}
-          {SKILL_TREE_LAYOUT[selectedCategory].map((node) => {
-            const skill = node.skill;
-            const currentLevel = playerSkills[skill.id] || 0;
-            const isUnlocked = currentLevel > 0;
-            const isMaxLevel = currentLevel >= skill.maxLevel;
-            const canUnlock = canUnlockSkill(skill);
-            
-            return (
-              <div
-                key={skill.id}
-                className={`absolute w-24 h-24 transform -translate-x-1/2 -translate-y-1/2 rounded-full ${
-                  isUnlocked
-                    ? isMaxLevel
-                      ? 'bg-purple-700 border-2 border-purple-400'
-                      : 'bg-blue-600 border-2 border-blue-400'
-                    : canUnlock
-                    ? 'bg-green-600 border-2 border-green-400 cursor-pointer'
-                    : 'bg-gray-600 border-2 border-gray-500 opacity-70'
-                }`}
-                style={{ 
-                  left: `${node.position.x}%`, 
-                  top: `${node.position.y}%`,
-                }}
-                onClick={() => canUnlock && unlockSkill(skill.id)}
-              >
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-                  <div className="text-2xl">{skill.icon}</div>
-                  <div className="text-xs font-bold mt-1">{skill.name}</div>
-                  {currentLevel > 0 && (
-                    <div className="text-xs mt-1">
-                      Level: {currentLevel}/{skill.maxLevel}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-          
-          {/* Connection lines */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none">
-            {SKILL_TREE_LAYOUT[selectedCategory].map((node) => 
-              node.connections.map((targetId) => {
-                const targetNode = SKILL_TREE_LAYOUT[selectedCategory].find(
-                  n => n.skill.id === targetId
-                );
-                
-                if (!targetNode) return null;
-                
-                const sourceUnlocked = playerSkills[node.skill.id] > 0;
-                const targetUnlocked = playerSkills[targetId] > 0;
-                
+        {/* Main content */}
+        <div className="flex-1 p-6 flex gap-6 overflow-hidden">
+          {/* Skill tree visualization */}
+          <div 
+            ref={containerRef}
+            className="flex-1 relative border border-gray-700 rounded-lg bg-gray-900 overflow-hidden"
+          >
+            <canvas ref={canvasRef} className="absolute inset-0" />
+            {SKILL_TREE_LAYOUT
+              .filter(node => node.skill.category === selectedCategory)
+              .map(node => {
+                const skill = skills.find(s => s.id === node.skill.id) || node.skill;
                 return (
-                  <line
-                    key={`${node.skill.id}-${targetId}`}
-                    x1={`${node.position.x}%`}
-                    y1={`${node.position.y}%`}
-                    x2={`${targetNode.position.x}%`}
-                    y2={`${targetNode.position.y}%`}
-                    stroke={
-                      sourceUnlocked && targetUnlocked
-                        ? '#3b82f6' // blue-500
-                        : sourceUnlocked
-                        ? '#10b981' // green-500
-                        : '#6b7280' // gray-500
-                    }
-                    strokeWidth="4"
-                    strokeOpacity={sourceUnlocked ? '1' : '0.3'}
-                  />
+                  <div
+                    key={skill.id}
+                    className={`absolute w-16 h-16 flex flex-col items-center justify-center rounded-full cursor-pointer transform hover:scale-110 transition-transform 
+                      ${skill.unlocked 
+                        ? 'bg-gradient-to-br from-blue-600 to-blue-800 border-2 border-blue-400' 
+                        : 'bg-gradient-to-br from-gray-700 to-gray-900 border border-gray-600'
+                      }`}
+                    style={{
+                      left: node.position.x + 'px',
+                      top: node.position.y + 'px',
+                    }}
+                    onClick={() => setSelectedSkill(skill)}
+                  >
+                    <div className="text-2xl">{skill.icon}</div>
+                    {skill.level > 0 && (
+                      <div className="absolute -bottom-2 -right-2 bg-yellow-500 text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                        {skill.level}
+                      </div>
+                    )}
+                  </div>
                 );
-              })
+              })}
+          </div>
+          
+          {/* Skill details */}
+          <div className="w-72 bg-gray-900 rounded-lg border border-gray-700 p-4 overflow-y-auto">
+            {selectedSkill ? (
+              <div className="text-white">
+                <div className="text-3xl mb-2">{selectedSkill.icon}</div>
+                <h3 className="text-xl font-bold mb-1">{selectedSkill.name}</h3>
+                <div className="text-sm text-gray-400 mb-3">{selectedSkill.description}</div>
+                
+                <div className="mb-4">
+                  <div className="text-sm text-gray-400 mb-1">Progress</div>
+                  <div className="flex items-center">
+                    <div className="flex-1 h-2 bg-gray-700 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500"
+                        style={{ width: `${(selectedSkill.level / selectedSkill.maxLevel) * 100}%` }}
+                      />
+                    </div>
+                    <div className="ml-2 text-sm font-medium">
+                      {selectedSkill.level}/{selectedSkill.maxLevel}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mb-4">
+                  <div className="text-sm text-gray-400 mb-1">Effects</div>
+                  <ul className="list-disc list-inside text-sm">
+                    {selectedSkill.effects.map((effect, index) => (
+                      <li key={index} className={index < selectedSkill.level ? 'text-green-400' : 'text-gray-500'}>
+                        {effect}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                
+                {selectedSkill.requiredSkills.length > 0 && (
+                  <div className="mb-4">
+                    <div className="text-sm text-gray-400 mb-1">Requirements</div>
+                    <ul className="list-disc list-inside text-sm">
+                      {selectedSkill.requiredSkills.map(reqId => {
+                        const requiredSkill = skills.find(s => s.id === reqId);
+                        return (
+                          <li key={reqId} className={requiredSkill?.unlocked ? 'text-green-400' : 'text-red-400'}>
+                            {requiredSkill?.name || reqId} (Level {selectedSkill.requiredLevel})
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                
+                <button
+                  className={`w-full py-2 px-4 rounded-lg font-medium text-center 
+                    ${canUnlockSkill(selectedSkill)
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    }`}
+                  onClick={() => {
+                    if (canUnlockSkill(selectedSkill)) {
+                      unlockSkill(selectedSkill.id);
+                    }
+                  }}
+                  disabled={!canUnlockSkill(selectedSkill)}
+                >
+                  {selectedSkill.unlocked
+                    ? selectedSkill.level >= selectedSkill.maxLevel
+                      ? 'Maxed Out'
+                      : `Upgrade (${skillPoints} point${skillPoints !== 1 ? 's' : ''} left)`
+                    : `Unlock (${skillPoints} point${skillPoints !== 1 ? 's' : ''} left)`
+                  }
+                </button>
+              </div>
+            ) : (
+              <div className="text-gray-500 text-center py-10">
+                Select a skill to view details
+              </div>
             )}
-          </svg>
-        </div>
-        
-        {/* Skill description */}
-        <div className="bg-gray-900 p-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-lg font-bold text-white mb-2">Selected Skill</h3>
-              {/* Display selected skill info here */}
-              <button
-                onClick={resetSkills}
-                className="mt-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
-              >
-                Reset Skills (Demo)
-              </button>
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-white mb-2">Effects</h3>
-              {/* List effects for the current skill level and next level */}
-            </div>
           </div>
         </div>
       </div>

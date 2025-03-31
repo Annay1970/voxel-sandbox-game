@@ -1,92 +1,137 @@
 import React, { useState, useEffect } from 'react';
-import { useVoxelGame } from '../../lib/stores/useVoxelGame';
 
 interface TemperatureIndicatorProps {
-  className?: string;
+  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  showText?: boolean;
 }
 
-const TemperatureIndicator: React.FC<TemperatureIndicatorProps> = ({ className = '' }) => {
-  const { player } = useVoxelGame();
-  const { temperature, temperatureEffects } = player;
+enum TemperatureState {
+  FreezingCold = 'freezing-cold',
+  Cold = 'cold',
+  Cool = 'cool',
+  Normal = 'normal',
+  Warm = 'warm',
+  Hot = 'hot',
+  Scorching = 'scorching'
+}
+
+export default function TemperatureIndicator({
+  position = 'top-right',
+  showText = true
+}: TemperatureIndicatorProps) {
+  // In a real implementation, this would be connected to the game state
+  // const temperature = useVoxelGame(state => state.player.temperature);
+  const [temperatureValue, setTemperatureValue] = useState(72); // 0-100 range
+  const [trend, setTrend] = useState<'rising' | 'falling' | 'stable'>('stable');
   
-  // Convert temperature range (-1 to 1) to percentage (0 to 100)
-  const temperaturePercentage = ((temperature + 1) / 2) * 100;
-  
-  // Visual effects for extreme temperatures
-  const [showEffect, setShowEffect] = useState(false);
-  
+  // Simulate temperature changes
   useEffect(() => {
-    // Pulse the visual effect when active
-    if (temperatureEffects.visualEffect !== 'none') {
-      const interval = setInterval(() => {
-        setShowEffect(prev => !prev);
-      }, 500);
+    const interval = setInterval(() => {
+      // Small random fluctuation
+      const change = (Math.random() - 0.5) * 5;
       
-      return () => clearInterval(interval);
+      setTemperatureValue(prev => {
+        const newTemp = Math.max(0, Math.min(100, prev + change));
+        if (newTemp > prev + 1) setTrend('rising');
+        else if (newTemp < prev - 1) setTrend('falling');
+        else setTrend('stable');
+        return newTemp;
+      });
+    }, 3000);
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Determine temperature state
+  const getTemperatureState = (): TemperatureState => {
+    if (temperatureValue < 10) return TemperatureState.FreezingCold;
+    if (temperatureValue < 30) return TemperatureState.Cold;
+    if (temperatureValue < 45) return TemperatureState.Cool;
+    if (temperatureValue < 55) return TemperatureState.Normal;
+    if (temperatureValue < 70) return TemperatureState.Warm;
+    if (temperatureValue < 90) return TemperatureState.Hot;
+    return TemperatureState.Scorching;
+  };
+  
+  // Get icon based on temperature state
+  const getTemperatureIcon = (): string => {
+    const state = getTemperatureState();
+    switch (state) {
+      case TemperatureState.FreezingCold: return '❄️';
+      case TemperatureState.Cold: return '🧊';
+      case TemperatureState.Cool: return '🌡️';
+      case TemperatureState.Normal: return '😊';
+      case TemperatureState.Warm: return '☀️';
+      case TemperatureState.Hot: return '🔥';
+      case TemperatureState.Scorching: return '🌋';
+      default: return '🌡️';
     }
-  }, [temperatureEffects.visualEffect]);
+  };
+  
+  // Get display text
+  const getTemperatureText = (): string => {
+    const state = getTemperatureState();
+    return state.split('-').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+  };
+  
+  // Get color based on temperature
+  const getTemperatureColor = (): string => {
+    const state = getTemperatureState();
+    switch (state) {
+      case TemperatureState.FreezingCold: return 'bg-blue-800 text-blue-200';
+      case TemperatureState.Cold: return 'bg-blue-600 text-blue-100';
+      case TemperatureState.Cool: return 'bg-blue-400 text-gray-900';
+      case TemperatureState.Normal: return 'bg-green-500 text-green-900';
+      case TemperatureState.Warm: return 'bg-yellow-500 text-yellow-900';
+      case TemperatureState.Hot: return 'bg-red-500 text-white';
+      case TemperatureState.Scorching: return 'bg-red-800 text-red-100';
+      default: return 'bg-gray-500 text-white';
+    }
+  };
+  
+  // Get trend indicator
+  const getTrendIndicator = (): string => {
+    switch (trend) {
+      case 'rising': return '↑';
+      case 'falling': return '↓';
+      default: return '→';
+    }
+  };
+  
+  // Position classes
+  const positionClasses = {
+    'top-left': 'top-4 left-4',
+    'top-right': 'top-20 right-4',
+    'bottom-left': 'bottom-4 left-4',
+    'bottom-right': 'bottom-4 right-4'
+  };
   
   return (
-    <div className={`fixed top-24 right-4 flex flex-col items-center ${className}`}>
-      {/* Temperature meter */}
-      <div className="w-6 h-32 bg-gray-800 rounded-full overflow-hidden relative flex flex-col-reverse">
-        {/* Cold indicator (blue) */}
-        <div 
-          className="w-full bg-blue-500 transition-all duration-300"
-          style={{ 
-            height: `${Math.max(0, 50 - temperaturePercentage)}%`,
-            opacity: temperature < 0 ? Math.abs(temperature) : 0.3
-          }}
-        />
-        
-        {/* Neutral zone (green) */}
-        <div 
-          className="w-full bg-green-500 transition-all duration-300"
-          style={{ 
-            height: temperature > 0 && temperature < 0 ? '20%' : '10%',
-            opacity: Math.abs(temperature) < 0.2 ? 1 : 0.3
-          }}
-        />
-        
-        {/* Hot indicator (red) */}
-        <div 
-          className="w-full bg-red-500 transition-all duration-300"
-          style={{ 
-            height: `${Math.max(0, temperaturePercentage - 50)}%`,
-            opacity: temperature > 0 ? temperature : 0.3
-          }}
-        />
-        
-        {/* Indicator marker */}
-        <div 
-          className="absolute w-8 h-1 bg-white right-6 transform translate-y-1/2"
-          style={{ bottom: `${temperaturePercentage}%` }}
-        />
-      </div>
-      
-      {/* Temperature labels */}
-      <div className="text-white font-bold mt-2">
-        {temperature <= -0.7 ? (
-          <span className="text-blue-400">Freezing</span>
-        ) : temperature >= 0.7 ? (
-          <span className="text-red-400">Burning</span>
-        ) : (
-          <span className="text-green-400">Normal</span>
+    <div className={`fixed ${positionClasses[position]} z-10`}>
+      <div className={`flex items-center rounded-full ${getTemperatureColor()} px-3 py-1.5 shadow-lg backdrop-blur-sm transition-colors duration-500`}>
+        <span className="text-lg mr-2">{getTemperatureIcon()}</span>
+        {showText && (
+          <div className="flex flex-col">
+            <div className="text-xs font-medium">{getTemperatureText()}</div>
+            <div className="flex items-center text-xs">
+              <span>{Math.round(temperatureValue)}°</span>
+              <span className="ml-1">{getTrendIndicator()}</span>
+            </div>
+          </div>
         )}
       </div>
       
-      {/* Temperature effect overlay - only show if effect is active */}
-      {temperatureEffects.visualEffect !== 'none' && showEffect && (
-        <div className={`fixed inset-0 pointer-events-none z-10 ${
-          temperatureEffects.visualEffect === 'frost' 
-            ? 'bg-blue-500/10 border-8 border-blue-200/20' 
-            : 'bg-red-500/10 border-8 border-orange-200/20'
-        }`} style={{ 
-          opacity: temperatureEffects.effectIntensity * 0.7
-        }} />
+      {/* Effects when in extreme temperatures */}
+      {(getTemperatureState() === TemperatureState.FreezingCold || 
+        getTemperatureState() === TemperatureState.Scorching) && (
+        <div className={`mt-2 px-3 py-1 rounded-md text-xs font-medium animate-pulse ${
+          getTemperatureState() === TemperatureState.FreezingCold ? 'bg-blue-800 text-blue-200' : 'bg-red-800 text-red-200'
+        }`}>
+          {getTemperatureState() === TemperatureState.FreezingCold ? 'Losing health due to cold' : 'Losing health due to heat'}
+        </div>
       )}
     </div>
   );
-};
-
-export default TemperatureIndicator;
+}

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, Suspense } from "react";
+import React, { useRef, useEffect, useState, useMemo, Suspense } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
@@ -10,143 +10,178 @@ interface AncientRuinsProps {
   rotation?: [number, number, number];
 }
 
+// Preload the model
+useGLTF.preload('/models/ancient_ruins.glb');
+
 export default function AncientRuins({ 
   position, 
-  scale = [3, 3, 3], 
-  rotation = [0, 0, 0] 
+  scale = [1, 1, 1], 
+  rotation = [0, 0, 0]
 }: AncientRuinsProps) {
-  // Load the ruins model
+  // References
+  const ruinsRef = useRef<THREE.Group>(null);
+  const particlesRef = useRef<THREE.Points>(null);
+  
+  // Load the 3D model
   const { scene: ruinsModel } = useGLTF('/models/ancient_ruins.glb') as GLTF & {
     scene: THREE.Group
   };
   
-  // Track loading state
+  // Model loading state
   const [modelLoaded, setModelLoaded] = useState(false);
-  const modelRef = useRef<THREE.Group>(null);
   
-  // Particle system for mystical atmosphere
-  const particlesRef = useRef<THREE.Points>(null);
-  const particleCount = 100;
-  const particlePositions = useRef<Float32Array>(new Float32Array(particleCount * 3));
-  
-  // Update loading state
+  // Track when model is loaded
   useEffect(() => {
     if (ruinsModel) {
       setModelLoaded(true);
       console.log("Ancient Ruins model loaded successfully");
       
-      // Add some ambient glow to the ruins
+      // Find glowing elements in the model and make them emit light
       ruinsModel.traverse((child) => {
         if (child instanceof THREE.Mesh) {
-          // Make some parts of the ruins slightly glowing
-          if (Math.random() > 0.7) {
-            child.material = new THREE.MeshStandardMaterial({
-              color: new THREE.Color(0x88aaff),
-              emissive: new THREE.Color(0x225588),
-              emissiveIntensity: 0.3,
-              roughness: 0.5,
-              metalness: 0.7
-            });
+          // Check if this is a glowing part by name or material properties
+          const isGlowing = 
+            child.name.toLowerCase().includes('glow') || 
+            child.name.toLowerCase().includes('rune') ||
+            (child.material instanceof THREE.MeshStandardMaterial && 
+            child.material.emissive && 
+            child.material.emissiveIntensity > 0);
+          
+          if (isGlowing) {
+            // Make the material emit light
+            if (child.material instanceof THREE.MeshStandardMaterial) {
+              child.material.emissive = new THREE.Color(0x00ffff);
+              child.material.emissiveIntensity = 2;
+              child.material.needsUpdate = true;
+            }
           }
+          
+          // Cast and receive shadows for all meshes
+          child.castShadow = true;
+          child.receiveShadow = true;
         }
       });
     }
-    
-    // Initialize particle system
-    for (let i = 0; i < particleCount; i++) {
-      const i3 = i * 3;
-      // Randomize particle positions around the structure
-      particlePositions.current[i3] = (Math.random() * 10 - 5);
-      particlePositions.current[i3 + 1] = (Math.random() * 8);
-      particlePositions.current[i3 + 2] = (Math.random() * 10 - 5);
-    }
   }, [ruinsModel]);
   
-  // Preload the model
-  useGLTF.preload('/models/ancient_ruins.glb');
+  // Particle system for mystical effects
+  const particleCount = 300;
+  const particlePositions = useMemo(() => {
+    const positions = new Float32Array(particleCount * 3);
+    const radius = 5;
+    
+    for (let i = 0; i < particleCount; i++) {
+      const i3 = i * 3;
+      // Distribute particles in a sphere around the ruins
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const r = radius * Math.cbrt(Math.random()); // Cube root for more uniform distribution
+      
+      positions[i3] = r * Math.sin(phi) * Math.cos(theta);
+      positions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta) + 2; // Lift particles a bit
+      positions[i3 + 2] = r * Math.cos(phi);
+    }
+    
+    return positions;
+  }, []);
   
-  // Animate mystical particles
-  useFrame(({ clock }) => {
+  // Particle system animation
+  useFrame((state, delta) => {
     if (particlesRef.current) {
+      // Rotate particle system slowly
+      particlesRef.current.rotation.y += delta * 0.1;
+      
+      // Update particle positions for ethereal movement
       const positions = particlesRef.current.geometry.attributes.position.array as Float32Array;
       
       for (let i = 0; i < particleCount; i++) {
         const i3 = i * 3;
         
-        // Add gentle flowing motion to particles
-        positions[i3 + 1] += Math.sin(clock.getElapsedTime() * 0.5 + i * 0.1) * 0.01;
+        // Apply simplex noise or other pattern for interesting movement
+        const time = state.clock.elapsedTime;
+        positions[i3 + 1] += Math.sin(time * 0.5 + i * 0.1) * 0.01;
         
-        // Reset particles that fall too low
-        if (positions[i3 + 1] < 0) {
-          positions[i3 + 1] = 8;
-        } else if (positions[i3 + 1] > 8) {
-          positions[i3 + 1] = 0;
-        }
+        // Keep particles within bounds
+        if (positions[i3 + 1] > 6) positions[i3 + 1] = 0;
+        if (positions[i3 + 1] < 0) positions[i3 + 1] = 6;
       }
       
       particlesRef.current.geometry.attributes.position.needsUpdate = true;
     }
     
-    // Add very subtle movement to the ruins to make them feel magical
-    if (modelRef.current && modelLoaded) {
-      // Very slow, subtle oscillation
-      modelRef.current.rotation.y = rotation[1] + Math.sin(clock.getElapsedTime() * 0.05) * 0.01;
+    // Pulsate the glowing elements
+    if (ruinsRef.current && modelLoaded) {
+      ruinsRef.current.traverse((child) => {
+        if (child instanceof THREE.Mesh && 
+            child.material instanceof THREE.MeshStandardMaterial && 
+            child.material.emissiveIntensity > 0) {
+          
+          // Subtle pulsating effect
+          const intensity = 1.5 + Math.sin(state.clock.elapsedTime * 2) * 0.5;
+          child.material.emissiveIntensity = intensity;
+          child.material.needsUpdate = true;
+        }
+      });
     }
   });
   
   return (
     <group 
-      position={position}
+      position={position} 
       rotation={[rotation[0], rotation[1], rotation[2]]}
       scale={scale}
-      ref={modelRef}
     >
-      {/* Ancient Ruins model */}
-      {modelLoaded && ruinsModel ? (
-        <Suspense fallback={
-          <mesh castShadow>
-            <boxGeometry args={[3, 2, 3]} />
-            <meshStandardMaterial color="#6b6b6b" />
+      {/* The ruins structure */}
+      <group ref={ruinsRef}>
+        {modelLoaded && ruinsModel ? (
+          <Suspense fallback={
+            <mesh>
+              <boxGeometry args={[2, 1, 2]} />
+              <meshStandardMaterial color="#777777" />
+            </mesh>
+          }>
+            <primitive 
+              object={ruinsModel.clone()} 
+              castShadow 
+              receiveShadow 
+            />
+          </Suspense>
+        ) : (
+          // Fallback if model isn't loaded yet
+          <mesh>
+            <boxGeometry args={[2, 1, 2]} />
+            <meshStandardMaterial color="#777777" />
           </mesh>
-        }>
-          <primitive 
-            object={ruinsModel.clone()} 
-            castShadow 
-            receiveShadow
-          />
-        </Suspense>
-      ) : (
-        <mesh castShadow>
-          <boxGeometry args={[3, 2, 3]} />
-          <meshStandardMaterial color="#6b6b6b" />
-        </mesh>
-      )}
+        )}
+      </group>
       
-      {/* Mystical particle effects */}
+      {/* Particle effects */}
       <points ref={particlesRef}>
         <bufferGeometry>
-          <bufferAttribute
-            attach="attributes-position"
-            count={particleCount}
-            array={particlePositions.current}
-            itemSize={3}
+          <bufferAttribute 
+            attach="attributes-position" 
+            count={particleCount} 
+            array={particlePositions} 
+            itemSize={3} 
           />
         </bufferGeometry>
-        <pointsMaterial
-          size={0.2}
-          color="#88aaff"
-          transparent
+        <pointsMaterial 
+          size={0.1} 
+          color="#00ffff" 
+          transparent 
           opacity={0.6}
           blending={THREE.AdditiveBlending}
+          sizeAttenuation
         />
       </points>
       
-      {/* Add a soft point light to illuminate the ruins */}
-      <pointLight
-        position={[0, 3, 0]}
-        intensity={0.8}
-        distance={10}
-        color="#6688ff"
+      {/* Add subtle point light to illuminate the area */}
+      <pointLight 
+        position={[0, 3, 0]} 
+        color="#00ffff" 
+        intensity={0.8} 
+        distance={15}
+        castShadow
       />
     </group>
   );

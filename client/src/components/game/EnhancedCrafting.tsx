@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BlockType } from '../../lib/blocks';
-import { CraftingRecipe, RecipeCategory, canCraftRecipe } from '../../lib/crafting';
-import { useVoxelGame } from '../../lib/stores/useVoxelGame';
+import { CRAFTING_RECIPES, CraftingRecipe, RecipeCategory } from '../../lib/crafting';
 
-// Crafting quality enum
 export enum CraftingQuality {
   Poor = 'poor',
   Standard = 'standard',
@@ -12,46 +10,6 @@ export enum CraftingQuality {
   Masterwork = 'masterwork'
 }
 
-// Crafting quality modifiers
-const QUALITY_MODIFIERS: Record<CraftingQuality, { 
-  color: string, 
-  durabilityMod: number, 
-  effectMod: number,
-  chance: number // chance of creating this quality based on skill
-}> = {
-  [CraftingQuality.Poor]: { 
-    color: '#9ca3af', // gray-400
-    durabilityMod: 0.8, 
-    effectMod: 0.8,
-    chance: 0.1
-  },
-  [CraftingQuality.Standard]: { 
-    color: '#ffffff', // white
-    durabilityMod: 1.0, 
-    effectMod: 1.0,
-    chance: 0.6
-  },
-  [CraftingQuality.Superior]: { 
-    color: '#3b82f6', // blue-500
-    durabilityMod: 1.2, 
-    effectMod: 1.2,
-    chance: 0.2
-  },
-  [CraftingQuality.Exceptional]: { 
-    color: '#8b5cf6', // purple-500
-    durabilityMod: 1.5, 
-    effectMod: 1.5,
-    chance: 0.08
-  },
-  [CraftingQuality.Masterwork]: { 
-    color: '#f59e0b', // amber-500
-    durabilityMod: 2.0, 
-    effectMod: 2.0,
-    chance: 0.02
-  }
-};
-
-// Crafting station types
 export enum CraftingStationType {
   Portable = 'portable',     // On-the-go crafting with limitations
   Workbench = 'workbench',   // Basic crafting station
@@ -62,58 +20,6 @@ export enum CraftingStationType {
   Loom = 'loom'              // For textiles
 }
 
-// Crafting station modifiers
-const STATION_MODIFIERS: Record<CraftingStationType, {
-  name: string,
-  qualityBonus: number,
-  speedMultiplier: number,
-  specialEffect?: string
-}> = {
-  [CraftingStationType.Portable]: {
-    name: 'Portable Crafting',
-    qualityBonus: 0,
-    speedMultiplier: 0.8,
-    specialEffect: 'Can craft anywhere, but with limitations'
-  },
-  [CraftingStationType.Workbench]: {
-    name: 'Workbench',
-    qualityBonus: 0.05,
-    speedMultiplier: 1.0,
-    specialEffect: 'Allows crafting of basic items'
-  },
-  [CraftingStationType.Forge]: {
-    name: 'Forge',
-    qualityBonus: 0.1,
-    speedMultiplier: 1.2,
-    specialEffect: 'Required for metalworking, bonus to tool durability'
-  },
-  [CraftingStationType.Enchanter]: {
-    name: 'Enchanter',
-    qualityBonus: 0.15,
-    speedMultiplier: 0.7,
-    specialEffect: 'Enables magical properties on items'
-  },
-  [CraftingStationType.Laboratory]: {
-    name: 'Laboratory',
-    qualityBonus: 0.1,
-    speedMultiplier: 1.1,
-    specialEffect: 'Required for advanced potions and chemicals'
-  },
-  [CraftingStationType.Kiln]: {
-    name: 'Kiln',
-    qualityBonus: 0.08,
-    speedMultiplier: 0.9,
-    specialEffect: 'Required for pottery and glass'
-  },
-  [CraftingStationType.Loom]: {
-    name: 'Loom',
-    qualityBonus: 0.07,
-    speedMultiplier: 1.3,
-    specialEffect: 'Required for textiles and fabrics'
-  }
-};
-
-// Crafting materials quality
 export enum MaterialQuality {
   Raw = 'raw',
   Processed = 'processed',
@@ -121,40 +27,6 @@ export enum MaterialQuality {
   Pristine = 'pristine'
 }
 
-// Material quality modifiers
-const MATERIAL_QUALITY_MODIFIERS: Record<MaterialQuality, {
-  name: string,
-  qualityBonus: number,
-  resourceMultiplier: number, // how many resources needed compared to raw
-  color: string
-}> = {
-  [MaterialQuality.Raw]: {
-    name: 'Raw',
-    qualityBonus: 0,
-    resourceMultiplier: 1.0,
-    color: '#9ca3af' // gray-400
-  },
-  [MaterialQuality.Processed]: {
-    name: 'Processed',
-    qualityBonus: 0.1,
-    resourceMultiplier: 1.5,
-    color: '#ffffff' // white
-  },
-  [MaterialQuality.Refined]: {
-    name: 'Refined',
-    qualityBonus: 0.2,
-    resourceMultiplier: 2.0,
-    color: '#3b82f6' // blue-500
-  },
-  [MaterialQuality.Pristine]: {
-    name: 'Pristine',
-    qualityBonus: 0.35,
-    resourceMultiplier: 3.0,
-    color: '#8b5cf6' // purple-500
-  }
-};
-
-// Crafting result interface for items with quality
 export interface EnhancedCraftingResult {
   type: BlockType;
   count: number;
@@ -163,7 +35,6 @@ export interface EnhancedCraftingResult {
   effects?: string[];
 }
 
-// Material slot interface for the crafting grid
 interface MaterialSlot {
   type: BlockType | null;
   quality: MaterialQuality;
@@ -177,459 +48,687 @@ interface EnhancedCraftingProps {
   playerSkillLevel: number; // 0-100 crafting skill level
 }
 
-const EnhancedCrafting: React.FC<EnhancedCraftingProps> = ({
+export default function EnhancedCrafting({
   isOpen,
   onClose,
-  stationType = CraftingStationType.Workbench,
-  playerSkillLevel = 1
-}) => {
-  // State for crafting slots
-  const [craftingGrid, setCraftingGrid] = useState<MaterialSlot[][]>(
-    Array(3).fill(null).map(() => 
-      Array(3).fill(null).map(() => ({ 
-        type: null, 
-        quality: MaterialQuality.Raw,
-        count: 0
-      }))
-    )
-  );
+  stationType,
+  playerSkillLevel
+}: EnhancedCraftingProps) {
+  // Sample player inventory for demonstration
+  const [playerInventory, setPlayerInventory] = useState<{ type: BlockType, count: number }[]>([
+    { type: 'wood', count: 32 },
+    { type: 'stone', count: 18 },
+    { type: 'coal', count: 7 },
+    { type: 'ironOre', count: 5 },
+    { type: 'clay', count: 10 },
+    { type: 'flower', count: 3 },
+    { type: 'diamond', count: 1 },
+  ]);
   
-  // Selected recipe category
-  const [selectedCategory, setSelectedCategory] = useState<RecipeCategory>('Basic');
+  const [craftingSlots, setCraftingSlots] = useState<MaterialSlot[]>([
+    { type: null, quality: MaterialQuality.Raw, count: 0 },
+    { type: null, quality: MaterialQuality.Raw, count: 0 },
+    { type: null, quality: MaterialQuality.Raw, count: 0 },
+    { type: null, quality: MaterialQuality.Raw, count: 0 },
+  ]);
   
-  // Selected recipe
   const [selectedRecipe, setSelectedRecipe] = useState<CraftingRecipe | null>(null);
-  
-  // Crafting result
+  const [selectedCategory, setSelectedCategory] = useState<RecipeCategory>('Basic');
   const [craftingResult, setCraftingResult] = useState<EnhancedCraftingResult | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   
-  // Animation state for crafting
-  const [isCrafting, setIsCrafting] = useState(false);
+  // Available recipe categories
+  const recipeCategories: RecipeCategory[] = ['Basic', 'Tools', 'Weapons', 'Armor', 'Special', 'Building'];
   
-  // Crafting progress
-  const [craftingProgress, setCraftingProgress] = useState(0);
-  const [craftingTimer, setCraftingTimer] = useState<NodeJS.Timeout | null>(null);
-  
-  // Access voxel game state
-  const { 
-    inventory, 
-    recipes,
-    addPlayerHotbarItem,
-    removePlayerInventoryItem
-  } = useVoxelGame();
-  
-  // Filter recipes by category and station type
-  const filteredRecipes = React.useMemo(() => {
-    if (!recipes) return [];
-    
-    return recipes.filter(recipe => {
-      // Filter by category
-      if (recipe.category !== selectedCategory) return false;
-      
-      // Filter by station type
-      if (stationType === CraftingStationType.Portable && recipe.requiresCraftingTable) {
-        return false;
+  // Get recipes visible for the current station type
+  const getAvailableRecipes = (): CraftingRecipe[] => {
+    const allRecipes = CRAFTING_RECIPES; 
+
+    // Apply filters based on station type
+    let filteredRecipes = allRecipes.filter(recipe => {
+      // Portable crafting only allows basic recipes that don't require a crafting table
+      if (stationType === CraftingStationType.Portable) {
+        return !recipe.requiresCraftingTable;
       }
       
-      // Additional filters based on station type could be added here
-      
-      return true;
-    });
-  }, [recipes, selectedCategory, stationType]);
-  
-  // Determine if a recipe can be crafted
-  const canCraft = (recipe: CraftingRecipe) => {
-    if (!inventory) return false;
-    
-    // Check if player has required items
-    return canCraftRecipe(recipe, inventory);
-  };
-  
-  // Get the best material quality the player can use
-  const getBestMaterialQuality = (): MaterialQuality => {
-    if (playerSkillLevel >= 75) return MaterialQuality.Pristine;
-    if (playerSkillLevel >= 50) return MaterialQuality.Refined;
-    if (playerSkillLevel >= 25) return MaterialQuality.Processed;
-    return MaterialQuality.Raw;
-  };
-  
-  // Determine the quality of the crafted item based on materials, station, and skill
-  const determineResultQuality = (): CraftingQuality => {
-    // Base chance for quality based on skill
-    const skillFactor = Math.min(1, playerSkillLevel / 100);
-    
-    // Bonus from crafting station
-    const stationBonus = STATION_MODIFIERS[stationType].qualityBonus;
-    
-    // Calculate average material quality bonus
-    let totalMaterialBonus = 0;
-    let materialCount = 0;
-    
-    craftingGrid.forEach(row => {
-      row.forEach(slot => {
-        if (slot.type) {
-          totalMaterialBonus += MATERIAL_QUALITY_MODIFIERS[slot.quality].qualityBonus;
-          materialCount++;
-        }
-      });
+      // Other stations have their specialties
+      switch (stationType) {
+        case CraftingStationType.Forge:
+          return recipe.category === 'Tools' || recipe.category === 'Weapons' || 
+                 recipe.id.includes('iron') || recipe.id.includes('gold');
+          
+        case CraftingStationType.Enchanter:
+          return recipe.category === 'Special' || 
+                 recipe.id.includes('gem') || recipe.id.includes('magic');
+          
+        case CraftingStationType.Laboratory:
+          return recipe.id.includes('potion') || recipe.id.includes('chemical');
+          
+        case CraftingStationType.Kiln:
+          return recipe.id.includes('glass') || recipe.id.includes('pottery') ||
+                 recipe.id.includes('brick');
+                 
+        case CraftingStationType.Loom:
+          return recipe.id.includes('cloth') || recipe.id.includes('fabric') ||
+                 recipe.id.includes('leather');
+          
+        case CraftingStationType.Workbench:
+        default:
+          return true; // Workbench can craft anything
+      }
     });
     
-    const materialBonus = materialCount > 0 ? totalMaterialBonus / materialCount : 0;
-    
-    // Combined quality factor (0-1 range)
-    const qualityFactor = Math.min(1, skillFactor + stationBonus + materialBonus);
-    
-    // Determine quality based on random chance weighted by quality factor
-    const roll = Math.random();
-    
-    if (roll < QUALITY_MODIFIERS[CraftingQuality.Masterwork].chance * qualityFactor * 2) {
-      return CraftingQuality.Masterwork;
-    } else if (roll < QUALITY_MODIFIERS[CraftingQuality.Exceptional].chance * qualityFactor * 1.5) {
-      return CraftingQuality.Exceptional;
-    } else if (roll < QUALITY_MODIFIERS[CraftingQuality.Superior].chance * qualityFactor) {
-      return CraftingQuality.Superior;
-    } else if (roll < 0.1) { // Small chance for poor quality
-      return CraftingQuality.Poor;
+    // Apply category filter if selected
+    if (selectedCategory) {
+      filteredRecipes = filteredRecipes.filter(recipe => recipe.category === selectedCategory);
     }
     
-    // Default to standard quality
-    return CraftingQuality.Standard;
+    // Apply search term if any
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filteredRecipes = filteredRecipes.filter(recipe => 
+        recipe.name.toLowerCase().includes(term) || 
+        recipe.output.type.toLowerCase().includes(term)
+      );
+    }
+    
+    return filteredRecipes;
+  };
+  
+  // Check if a recipe can be crafted with current materials
+  const canCraft = (recipe: CraftingRecipe): boolean => {
+    // Check if we have enough materials
+    for (const ingredient of recipe.ingredients) {
+      // Get total count of this material across all slots
+      const existingMaterialCount = playerInventory.find(item => item.type === ingredient.type)?.count || 0;
+      
+      if (existingMaterialCount < ingredient.count) {
+        return false;
+      }
+    }
+    
+    return true;
+  };
+  
+  // Add material to a crafting slot
+  const addMaterialToSlot = (slotIndex: number, material: BlockType, count: number) => {
+    // Check if player has this material
+    const inventoryItem = playerInventory.find(item => item.type === material);
+    if (!inventoryItem || inventoryItem.count < count) return;
+    
+    // Update slots
+    const newSlots = [...craftingSlots];
+    newSlots[slotIndex] = {
+      type: material,
+      quality: MaterialQuality.Raw, // Default quality
+      count
+    };
+    setCraftingSlots(newSlots);
+    
+    // Update inventory
+    const newInventory = playerInventory.map(item => {
+      if (item.type === material) {
+        return { ...item, count: item.count - count };
+      }
+      return item;
+    });
+    setPlayerInventory(newInventory);
+  };
+  
+  // Remove material from a slot
+  const removeMaterialFromSlot = (slotIndex: number) => {
+    const slot = craftingSlots[slotIndex];
+    if (!slot.type || slot.count <= 0) return;
+    
+    // Return materials to inventory
+    const newInventory = [...playerInventory];
+    const existingItem = newInventory.find(item => item.type === slot.type);
+    
+    if (existingItem) {
+      existingItem.count += slot.count;
+    } else {
+      newInventory.push({ type: slot.type, count: slot.count });
+    }
+    
+    // Clear slot
+    const newSlots = [...craftingSlots];
+    newSlots[slotIndex] = { type: null, quality: MaterialQuality.Raw, count: 0 };
+    
+    setCraftingSlots(newSlots);
+    setPlayerInventory(newInventory);
+  };
+  
+  // Get the best quality of materials used
+  const getBestMaterialQuality = (): MaterialQuality => {
+    let bestQuality = MaterialQuality.Raw;
+    
+    for (const slot of craftingSlots) {
+      if (slot.type && slot.quality > bestQuality) {
+        bestQuality = slot.quality;
+      }
+    }
+    
+    return bestQuality;
+  };
+  
+  // Determine the quality of the crafting result based on skill and materials
+  const determineResultQuality = (): CraftingQuality => {
+    const materialQuality = getBestMaterialQuality();
+    const skillFactor = playerSkillLevel / 100; // 0-1 range
+    
+    // Base chance for each quality tier
+    const baseChances = {
+      [CraftingQuality.Poor]: 0.1,
+      [CraftingQuality.Standard]: 0.6,
+      [CraftingQuality.Superior]: 0.2,
+      [CraftingQuality.Exceptional]: 0.08,
+      [CraftingQuality.Masterwork]: 0.02
+    };
+    
+    // Adjust chances based on material quality
+    let qualityModifier = 0;
+    switch (materialQuality) {
+      case MaterialQuality.Pristine:
+        qualityModifier = 0.3;
+        break;
+      case MaterialQuality.Refined:
+        qualityModifier = 0.2;
+        break;
+      case MaterialQuality.Processed:
+        qualityModifier = 0.1;
+        break;
+      default:
+        qualityModifier = 0;
+    }
+    
+    // Adjust chances based on skill level
+    const skillModifier = skillFactor * 0.5;
+    
+    // Calculate final chances
+    const finalChances = {
+      [CraftingQuality.Poor]: Math.max(0, baseChances[CraftingQuality.Poor] - qualityModifier - skillModifier),
+      [CraftingQuality.Standard]: baseChances[CraftingQuality.Standard],
+      [CraftingQuality.Superior]: baseChances[CraftingQuality.Superior] + qualityModifier * 0.5 + skillModifier * 0.3,
+      [CraftingQuality.Exceptional]: baseChances[CraftingQuality.Exceptional] + qualityModifier * 0.3 + skillModifier * 0.4,
+      [CraftingQuality.Masterwork]: baseChances[CraftingQuality.Masterwork] + qualityModifier * 0.2 + skillModifier * 0.3
+    };
+    
+    // Normalize chances to sum to 1
+    const total = Object.values(finalChances).reduce((sum, chance) => sum + chance, 0);
+    Object.keys(finalChances).forEach(key => {
+      finalChances[key as CraftingQuality] /= total;
+    });
+    
+    // Roll for quality
+    const roll = Math.random();
+    let cumulativeChance = 0;
+    
+    for (const [quality, chance] of Object.entries(finalChances)) {
+      cumulativeChance += chance;
+      if (roll <= cumulativeChance) {
+        return quality as CraftingQuality;
+      }
+    }
+    
+    return CraftingQuality.Standard; // Fallback
+  };
+  
+  // Calculate durability based on quality
+  const calculateDurability = (baseValue: number, quality: CraftingQuality): number => {
+    const qualityMultipliers = {
+      [CraftingQuality.Poor]: 0.7,
+      [CraftingQuality.Standard]: 1.0,
+      [CraftingQuality.Superior]: 1.3,
+      [CraftingQuality.Exceptional]: 1.7,
+      [CraftingQuality.Masterwork]: 2.5
+    };
+    
+    return Math.round(baseValue * qualityMultipliers[quality]);
   };
   
   // Craft the selected recipe
   const craftItem = () => {
-    if (!selectedRecipe || !canCraft(selectedRecipe)) return;
+    if (!selectedRecipe) return;
     
-    // Start crafting animation
-    setIsCrafting(true);
-    setCraftingProgress(0);
+    // Check if we can craft it
+    if (!canCraft(selectedRecipe)) return;
     
-    // Calculate crafting speed based on station and skill
-    const baseTime = 2000; // 2 seconds base time
-    const stationSpeedMultiplier = STATION_MODIFIERS[stationType].speedMultiplier;
-    const skillSpeedBonus = 1 + (playerSkillLevel / 200); // Up to 50% bonus from skill
+    // Determine result quality
+    const quality = determineResultQuality();
     
-    const craftingTime = baseTime / (stationSpeedMultiplier * skillSpeedBonus);
+    // Create result
+    const result: EnhancedCraftingResult = {
+      type: selectedRecipe.output.type,
+      count: selectedRecipe.output.count,
+      quality
+    };
     
-    // Set up crafting timer
-    const timer = setInterval(() => {
-      setCraftingProgress(prev => {
-        const newProgress = prev + (100 / (craftingTime / 100));
-        
-        if (newProgress >= 100) {
-          // Crafting complete
-          clearInterval(timer);
-          setCraftingTimer(null);
-          
-          // Determine quality
-          const quality = determineResultQuality();
-          
-          // Create the result
-          const result: EnhancedCraftingResult = {
-            type: selectedRecipe.output.type,
-            count: selectedRecipe.output.count,
-            quality,
-            durability: 100 * QUALITY_MODIFIERS[quality].durabilityMod
-          };
-          
-          // Set crafting result
-          setCraftingResult(result);
-          
-          // Remove ingredients from inventory
-          selectedRecipe.ingredients.forEach(ingredient => {
-            removePlayerInventoryItem(ingredient.type, ingredient.count);
-          });
-          
-          // Add result to player's inventory
-          addPlayerHotbarItem(result.type, result.count);
-          
-          // Reset crafting animation
-          setIsCrafting(false);
-          return 0;
-        }
-        
-        return newProgress;
-      });
-    }, 100);
+    // Add durability for tools and weapons
+    if (selectedRecipe.category === 'Tools' || selectedRecipe.category === 'Weapons') {
+      result.durability = calculateDurability(100, quality);
+    }
     
-    setCraftingTimer(timer);
+    // Apply special effects based on quality and skill
+    if (quality === CraftingQuality.Exceptional || quality === CraftingQuality.Masterwork) {
+      result.effects = [
+        quality === CraftingQuality.Masterwork ? 'Unbreakable' : 'Extra Durable',
+        playerSkillLevel >= 70 ? 'Efficient' : ''
+      ].filter(Boolean);
+    }
+    
+    setCraftingResult(result);
+    
+    // Use up ingredients
+    const newInventory = [...playerInventory];
+    
+    for (const ingredient of selectedRecipe.ingredients) {
+      const inventoryItem = newInventory.find(item => item.type === ingredient.type);
+      if (inventoryItem) {
+        inventoryItem.count -= ingredient.count;
+      }
+    }
+    
+    setPlayerInventory(newInventory.filter(item => item.count > 0));
+    
+    // Reset crafting slots
+    setCraftingSlots(craftingSlots.map(() => ({ 
+      type: null, 
+      quality: MaterialQuality.Raw, 
+      count: 0 
+    })));
+    
+    // In a real app, this would add to inventory
+    // useVoxelGame.getState().recipes.addToInventory(result);
+    // useVoxelGame.getState().addPlayerHotbarItem(result.type, result.count);
+    // useVoxelGame.getState().removePlayerInventoryItem(ingredientType, ingredientCount);
   };
   
-  // Clear crafting timer on unmount
-  useEffect(() => {
-    return () => {
-      if (craftingTimer) clearInterval(craftingTimer);
-    };
-  }, [craftingTimer]);
+  // Collect the crafted item
+  const collectCraftedItem = () => {
+    if (!craftingResult) return;
+    
+    // Add to inventory
+    const newInventory = [...playerInventory];
+    const existingItem = newInventory.find(item => item.type === craftingResult.type);
+    
+    if (existingItem) {
+      existingItem.count += craftingResult.count;
+    } else {
+      newInventory.push({ 
+        type: craftingResult.type, 
+        count: craftingResult.count 
+      });
+    }
+    
+    setPlayerInventory(newInventory);
+    setCraftingResult(null);
+  };
   
-  // Handle closing the crafting window
-  const handleClose = () => {
-    if (craftingTimer) clearInterval(craftingTimer);
-    setCraftingTimer(null);
-    setIsCrafting(false);
-    onClose();
+  // Format quality for display
+  const formatQuality = (quality: CraftingQuality): string => {
+    return quality.charAt(0).toUpperCase() + quality.slice(1);
+  };
+  
+  // Get color based on quality
+  const getQualityColor = (quality: CraftingQuality): string => {
+    switch (quality) {
+      case CraftingQuality.Poor:
+        return 'text-gray-400';
+      case CraftingQuality.Standard:
+        return 'text-white';
+      case CraftingQuality.Superior:
+        return 'text-green-400';
+      case CraftingQuality.Exceptional:
+        return 'text-blue-400';
+      case CraftingQuality.Masterwork:
+        return 'text-purple-400';
+    }
+  };
+  
+  // Get icon for recipe categories
+  const getCategoryIcon = (category: RecipeCategory): string => {
+    switch (category) {
+      case 'Tools': return '🔨';
+      case 'Weapons': return '⚔️';
+      case 'Armor': return '🛡️';
+      case 'Building': return '🧱';
+      case 'Special': return '✨';
+      default: return '📦';
+    }
   };
   
   if (!isOpen) return null;
   
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70">
-      <div className="bg-gray-800 rounded-lg shadow-lg w-3/4 max-w-4xl overflow-hidden">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-70">
+      <div className="bg-gray-800 rounded-lg w-4/5 max-w-6xl h-5/6 overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-gray-900 p-4 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-white">
-            {STATION_MODIFIERS[stationType].name}
-          </h2>
+          <div className="flex items-center">
+            <h2 className="text-2xl font-bold text-white">Enhanced Crafting</h2>
+            <div className="ml-4 px-3 py-1 bg-blue-800 rounded-full text-sm text-blue-200">
+              {stationType.charAt(0).toUpperCase() + stationType.slice(1)}
+            </div>
+            <div className="ml-3 px-3 py-1 bg-green-800 rounded-full text-sm text-green-200">
+              Skill Level: {playerSkillLevel}
+            </div>
+          </div>
           <button 
-            onClick={handleClose}
+            onClick={onClose}
             className="text-gray-400 hover:text-white"
           >
-            Close
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
         
         {/* Main content */}
-        <div className="p-4 flex flex-col md:flex-row">
-          {/* Left: Recipe categories and list */}
-          <div className="w-full md:w-1/3 pr-4 mb-4 md:mb-0">
-            {/* Recipe categories */}
-            <div className="mb-4">
-              <h3 className="text-lg font-bold text-white mb-2">Categories</h3>
+        <div className="flex-1 grid grid-cols-12 gap-6 p-6 overflow-hidden">
+          {/* Recipe list */}
+          <div className="col-span-5 flex flex-col bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+            {/* Search and filter */}
+            <div className="p-4 bg-gray-800">
+              <div className="flex items-center mb-3">
+                <input
+                  type="text"
+                  placeholder="Search recipes..."
+                  className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
               <div className="flex flex-wrap gap-2">
-                {Object.values(RecipeCategory).map(category => (
+                {recipeCategories.map((category) => (
                   <button
                     key={category}
                     className={`px-3 py-1 rounded-full text-sm ${
                       selectedCategory === category
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-blue-700 text-white'
                         : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                     onClick={() => setSelectedCategory(category)}
                   >
-                    {category}
+                    {getCategoryIcon(category)} {category}
                   </button>
                 ))}
               </div>
             </div>
             
             {/* Recipe list */}
-            <div>
-              <h3 className="text-lg font-bold text-white mb-2">Recipes</h3>
-              <div className="bg-gray-700 rounded-lg max-h-60 overflow-y-auto">
-                {filteredRecipes.length > 0 ? (
-                  filteredRecipes.map(recipe => {
-                    const craftable = canCraft(recipe);
-                    return (
-                      <button
-                        key={recipe.id}
-                        className={`w-full text-left p-2 border-b border-gray-600 ${
-                          selectedRecipe?.id === recipe.id
-                            ? 'bg-blue-800'
-                            : craftable
-                            ? 'hover:bg-gray-600'
-                            : 'opacity-50'
-                        }`}
-                        onClick={() => setSelectedRecipe(recipe)}
-                        disabled={!craftable}
-                      >
-                        <div className="flex items-center">
-                          <div className="w-8 h-8 mr-2 flex items-center justify-center bg-gray-800 rounded">
-                            {/* Recipe icon or first ingredient icon */}
-                            {recipe.output.type.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div className="text-white font-medium">{recipe.name}</div>
-                            <div className="text-gray-400 text-xs">
-                              {recipe.output.count}x {recipe.output.type}
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <div className="p-4 text-gray-400 text-center">
-                    No recipes available in this category
+            <div className="flex-1 overflow-y-auto">
+              {getAvailableRecipes().map(recipe => (
+                <div
+                  key={recipe.id}
+                  className={`p-3 border-b border-gray-700 flex items-center hover:bg-gray-800 cursor-pointer ${
+                    selectedRecipe?.id === recipe.id ? 'bg-gray-700' : ''
+                  }`}
+                  onClick={() => setSelectedRecipe(recipe)}
+                >
+                  <div className="w-10 h-10 bg-gray-700 rounded-md flex items-center justify-center mr-3">
+                    <span className="text-xl">{recipe.id.includes('axe') ? '🪓' : 
+                                               recipe.id.includes('pick') ? '⛏️' : 
+                                               recipe.id.includes('sword') ? '🗡️' : 
+                                               recipe.id.includes('bow') ? '🏹' : 
+                                               recipe.id.includes('shovel') ? '🧹' : '📦'}</span>
                   </div>
-                )}
-              </div>
+                  <div className="flex-1">
+                    <div className="font-medium text-white">{recipe.name}</div>
+                    <div className="text-xs text-gray-400">
+                      Yields: {recipe.output.count}x {recipe.output.type}
+                    </div>
+                  </div>
+                  <div className={`px-2 py-1 rounded text-xs font-medium ${
+                    canCraft(recipe) ? 'bg-green-800 text-green-200' : 'bg-red-800 text-red-200'
+                  }`}>
+                    {canCraft(recipe) ? 'Available' : 'Missing Materials'}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
           
-          {/* Center: Crafting grid */}
-          <div className="w-full md:w-1/3 px-4">
-            <h3 className="text-lg font-bold text-white mb-2">Crafting</h3>
-            <div className="bg-gray-700 rounded-lg p-4">
-              {/* 3x3 Crafting grid */}
-              <div className="grid grid-cols-3 gap-2 mb-6">
-                {craftingGrid.map((row, rowIndex) => 
-                  row.map((slot, colIndex) => (
-                    <div 
-                      key={`${rowIndex}-${colIndex}`}
-                      className="w-full aspect-square bg-gray-800 rounded-lg border border-gray-600 flex items-center justify-center"
-                    >
-                      {slot.type ? (
-                        <div className="relative w-full h-full flex items-center justify-center">
-                          <div className="text-2xl">{slot.type.charAt(0).toUpperCase()}</div>
-                          <div 
-                            className="absolute bottom-0 right-0 text-xs px-1 rounded-tl"
-                            style={{ backgroundColor: MATERIAL_QUALITY_MODIFIERS[slot.quality].color }}
-                          >
-                            {slot.count}
-                          </div>
-                        </div>
-                      ) : null}
+          {/* Crafting area */}
+          <div className="col-span-4 flex flex-col bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+            <div className="p-4 bg-gray-800 border-b border-gray-700">
+              <h3 className="text-lg font-medium text-white">Crafting Station</h3>
+            </div>
+            
+            {/* Recipe details */}
+            {selectedRecipe ? (
+              <div className="p-4 border-b border-gray-700">
+                <div className="flex items-center mb-3">
+                  <div className="w-12 h-12 bg-gray-700 rounded-md flex items-center justify-center mr-3">
+                    <span className="text-2xl">{selectedRecipe.id.includes('axe') ? '🪓' : 
+                                               selectedRecipe.id.includes('pick') ? '⛏️' : 
+                                               selectedRecipe.id.includes('sword') ? '🗡️' : 
+                                               selectedRecipe.id.includes('bow') ? '🏹' : 
+                                               selectedRecipe.id.includes('shovel') ? '🧹' : '📦'}</span>
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-medium text-white">{selectedRecipe.name}</h4>
+                    <div className="text-sm text-gray-400">
+                      Yields: {selectedRecipe.output.count}x {selectedRecipe.output.type}
                     </div>
-                  ))
-                )}
+                  </div>
+                </div>
+                
+                <div className="mb-3">
+                  <h5 className="text-sm font-medium text-gray-400 mb-1">Required Materials:</h5>
+                  <div className="space-y-2">
+                    {selectedRecipe.ingredients.map((ingredient, idx) => {
+                      const inventoryItem = playerInventory.find(item => item.type === ingredient.type);
+                      const hasEnough = (inventoryItem?.count || 0) >= ingredient.count;
+                      
+                      return (
+                        <div key={idx} className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <div className="w-8 h-8 bg-gray-700 rounded-md flex items-center justify-center mr-2">
+                              <span className="text-lg">{ingredient.type.includes('wood') ? '🪵' : 
+                                                         ingredient.type.includes('stone') ? '🪨' : 
+                                                         ingredient.type.includes('iron') ? '⚙️' : 
+                                                         ingredient.type.includes('gold') ? '🔶' : 
+                                                         ingredient.type.includes('diamond') ? '💎' : '📦'}</span>
+                            </div>
+                            <span className="text-sm">{ingredient.type} x{ingredient.count}</span>
+                          </div>
+                          <span className={hasEnough ? 'text-green-400' : 'text-red-400'}>
+                            {inventoryItem?.count || 0}/{ingredient.count}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-              
-              {/* Auto-fill button */}
-              <button
-                className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg mb-4"
-                onClick={() => {
-                  if (!selectedRecipe) return;
-                  
-                  // Simple auto-fill (in a real implementation this would be more sophisticated)
-                  const newGrid = [...craftingGrid.map(row => [...row])];
-                  
-                  // Place ingredients in the grid
-                  selectedRecipe.ingredients.forEach((ingredient, index) => {
-                    const row = Math.floor(index / 3);
-                    const col = index % 3;
+            ) : (
+              <div className="p-4 text-center text-gray-500">
+                Select a recipe to start crafting
+              </div>
+            )}
+            
+            {/* Crafting slots */}
+            <div className="p-4 border-b border-gray-700">
+              <h5 className="text-sm font-medium text-gray-400 mb-2">Crafting Materials:</h5>
+              <div className="grid grid-cols-2 gap-4">
+                {craftingSlots.map((slot, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-gray-800 border border-gray-700 rounded-md p-2 flex items-center justify-between"
+                  >
+                    <div className="flex items-center">
+                      <div className="w-8 h-8 bg-gray-700 rounded-md flex items-center justify-center mr-2">
+                        <span className="text-lg">
+                          {slot.type 
+                            ? (slot.type.includes('wood') ? '🪵' : 
+                               slot.type.includes('stone') ? '🪨' : 
+                               slot.type.includes('iron') ? '⚙️' : 
+                               slot.type.includes('gold') ? '🔶' : 
+                               slot.type.includes('diamond') ? '💎' : '📦')
+                            : '➕'}
+                        </span>
+                      </div>
+                      <div>
+                        <div className="text-sm">{slot.type || 'Empty Slot'}</div>
+                        {slot.type && (
+                          <div className="text-xs text-gray-400">
+                            Qty: {slot.count} • {slot.quality}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     
-                    if (row < 3 && col < 3) {
-                      newGrid[row][col] = {
-                        type: ingredient.type,
-                        quality: getBestMaterialQuality(),
-                        count: ingredient.count
-                      };
-                    }
-                  });
-                  
-                  setCraftingGrid(newGrid);
-                }}
-                disabled={!selectedRecipe}
+                    {slot.type ? (
+                      <button
+                        className="ml-2 text-red-400 hover:text-red-300"
+                        onClick={() => removeMaterialFromSlot(idx)}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    ) : (
+                      selectedRecipe?.ingredients[idx] && (
+                        <button
+                          className="ml-2 px-2 py-1 bg-blue-800 text-blue-200 rounded-md text-xs"
+                          onClick={() => addMaterialToSlot(
+                            idx, 
+                            selectedRecipe.ingredients[idx].type, 
+                            selectedRecipe.ingredients[idx].count
+                          )}
+                        >
+                          Add
+                        </button>
+                      )
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Craft button */}
+            <div className="p-4">
+              <button
+                className={`w-full py-3 px-4 rounded-lg font-medium text-center ${
+                  selectedRecipe && canCraft(selectedRecipe)
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                    : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                }`}
+                onClick={craftItem}
+                disabled={!selectedRecipe || !canCraft(selectedRecipe)}
               >
-                Auto-fill
+                {selectedRecipe ? 'Craft Item' : 'Select a Recipe'}
               </button>
               
-              {/* Craft button */}
-              <div className="relative">
-                <button
-                  className={`w-full py-2 ${
-                    selectedRecipe && canCraft(selectedRecipe)
-                      ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-gray-600 cursor-not-allowed'
-                  } text-white rounded-lg`}
-                  onClick={craftItem}
-                  disabled={!selectedRecipe || !canCraft(selectedRecipe) || isCrafting}
-                >
-                  {isCrafting ? 'Crafting...' : 'Craft'}
-                </button>
-                
-                {/* Crafting progress bar */}
-                {isCrafting && (
-                  <div className="absolute left-0 bottom-0 h-1 bg-green-400" style={{ width: `${craftingProgress}%` }} />
-                )}
+              <div className="mt-2 text-xs text-center text-gray-500">
+                Crafting quality depends on your skill level and material quality
               </div>
             </div>
           </div>
           
-          {/* Right: Recipe details and result */}
-          <div className="w-full md:w-1/3 pl-4">
-            <h3 className="text-lg font-bold text-white mb-2">Recipe Details</h3>
-            <div className="bg-gray-700 rounded-lg p-4">
-              {selectedRecipe ? (
-                <>
-                  <h4 className="text-lg font-bold text-white">{selectedRecipe.name}</h4>
-                  
-                  <div className="mt-4">
-                    <h5 className="text-white font-medium mb-2">Ingredients:</h5>
-                    <ul className="space-y-1">
-                      {selectedRecipe.ingredients.map((ingredient, index) => (
-                        <li key={index} className="flex items-center text-gray-300">
-                          <span className="w-6 h-6 bg-gray-800 rounded-full flex items-center justify-center mr-2">
-                            {ingredient.type.charAt(0).toUpperCase()}
-                          </span>
-                          {ingredient.count}x {ingredient.type}
-                        </li>
-                      ))}
-                    </ul>
+          {/* Inventory area */}
+          <div className="col-span-3 flex flex-col bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+            <div className="p-4 bg-gray-800 border-b border-gray-700">
+              <h3 className="text-lg font-medium text-white">Your Inventory</h3>
+            </div>
+            
+            {/* Inventory list */}
+            <div className="flex-1 overflow-y-auto p-3">
+              {playerInventory.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="bg-gray-800 border border-gray-700 rounded-md p-2 flex items-center mb-2"
+                >
+                  <div className="w-8 h-8 bg-gray-700 rounded-md flex items-center justify-center mr-2">
+                    <span className="text-lg">{item.type.includes('wood') ? '🪵' : 
+                                             item.type.includes('stone') ? '🪨' : 
+                                             item.type.includes('iron') ? '⚙️' : 
+                                             item.type.includes('gold') ? '🔶' : 
+                                             item.type.includes('diamond') ? '💎' : 
+                                             item.type.includes('coal') ? '🖤' : 
+                                             item.type.includes('flower') ? '🌸' : 
+                                             item.type.includes('clay') ? '🧱' : '📦'}</span>
                   </div>
-                  
-                  <div className="mt-4">
-                    <h5 className="text-white font-medium mb-2">Result:</h5>
-                    <div className="flex items-center text-gray-300">
-                      <span className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center mr-2">
-                        {selectedRecipe.output.type.charAt(0).toUpperCase()}
-                      </span>
-                      {selectedRecipe.output.count}x {selectedRecipe.output.type}
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-white">{item.type}</div>
+                    <div className="text-xs text-gray-400">Quantity: {item.count}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Crafting result */}
+            {craftingResult && (
+              <div className="p-4 border-t border-gray-700 bg-gray-800">
+                <h4 className="text-lg font-medium text-white mb-2">Crafting Result</h4>
+                <div className="bg-gray-900 border border-gray-700 rounded-md p-3 mb-3">
+                  <div className="flex items-center mb-2">
+                    <div className="w-12 h-12 bg-gray-800 rounded-md flex items-center justify-center mr-3">
+                      <span className="text-2xl">{craftingResult.type.includes('axe') ? '🪓' : 
+                                               craftingResult.type.includes('pick') ? '⛏️' : 
+                                               craftingResult.type.includes('sword') ? '🗡️' : 
+                                               craftingResult.type.includes('bow') ? '🏹' : 
+                                               craftingResult.type.includes('shovel') ? '🧹' : '📦'}</span>
+                    </div>
+                    <div>
+                      <h5 className="font-medium text-white">{craftingResult.type} x{craftingResult.count}</h5>
+                      <div className={`text-sm ${getQualityColor(craftingResult.quality)}`}>
+                        {formatQuality(craftingResult.quality)} Quality
+                      </div>
                     </div>
                   </div>
                   
-                  {/* Crafting result display */}
-                  {craftingResult && (
-                    <div className="mt-4 p-3 rounded-lg" style={{ 
-                      backgroundColor: QUALITY_MODIFIERS[craftingResult.quality].color,
-                      opacity: 0.8
-                    }}>
-                      <h5 className="text-black font-bold">Crafted:</h5>
-                      <div className="flex items-center mt-1">
-                        <span className="w-8 h-8 bg-white bg-opacity-20 rounded flex items-center justify-center mr-2">
-                          {craftingResult.type.charAt(0).toUpperCase()}
-                        </span>
-                        <div>
-                          <div className="text-black font-medium">
-                            {craftingResult.quality} {craftingResult.type}
-                          </div>
-                          <div className="text-black text-xs">
-                            Durability: {craftingResult.durability?.toFixed(0)}%
-                          </div>
+                  {craftingResult.durability && (
+                    <div className="mb-2">
+                      <div className="text-xs text-gray-400 mb-1">Durability:</div>
+                      <div className="flex items-center">
+                        <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full ${
+                              craftingResult.quality === CraftingQuality.Poor ? 'bg-red-500' :
+                              craftingResult.quality === CraftingQuality.Superior ? 'bg-green-500' :
+                              craftingResult.quality === CraftingQuality.Exceptional ? 'bg-blue-500' :
+                              craftingResult.quality === CraftingQuality.Masterwork ? 'bg-purple-500' :
+                              'bg-gray-500'
+                            }`}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div className="ml-2 text-sm font-medium text-white">
+                          {craftingResult.durability}
                         </div>
                       </div>
                     </div>
                   )}
-                </>
-              ) : (
-                <div className="text-gray-400 italic text-center py-4">
-                  Select a recipe to see details
-                </div>
-              )}
-              
-              {/* Station quality bonus information */}
-              <div className="mt-4 pt-4 border-t border-gray-600">
-                <h5 className="text-white font-medium mb-2">Station Information:</h5>
-                <div className="text-gray-300 text-sm">
-                  <div>Quality Bonus: +{(STATION_MODIFIERS[stationType].qualityBonus * 100).toFixed(0)}%</div>
-                  <div>Crafting Speed: {(STATION_MODIFIERS[stationType].speedMultiplier * 100).toFixed(0)}%</div>
-                  {STATION_MODIFIERS[stationType].specialEffect && (
-                    <div className="mt-1 text-blue-300">
-                      {STATION_MODIFIERS[stationType].specialEffect}
+                  
+                  {craftingResult.effects && craftingResult.effects.length > 0 && (
+                    <div className="mb-2">
+                      <div className="text-xs text-gray-400 mb-1">Effects:</div>
+                      <div className="flex flex-wrap gap-1">
+                        {craftingResult.effects.map((effect, idx) => (
+                          <div 
+                            key={idx}
+                            className="px-2 py-1 rounded-full bg-blue-900 text-blue-200 text-xs"
+                          >
+                            {effect}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
+                
+                <button
+                  className="w-full py-2 px-4 rounded-lg font-medium text-center bg-green-600 hover:bg-green-700 text-white"
+                  onClick={collectCraftedItem}
+                >
+                  Collect Item
+                </button>
               </div>
-              
-              {/* Skill level information */}
-              <div className="mt-4 pt-4 border-t border-gray-600">
-                <h5 className="text-white font-medium mb-1">Crafting Skill:</h5>
-                <div className="w-full h-2 bg-gray-800 rounded-full">
-                  <div 
-                    className="h-full bg-blue-600 rounded-full"
-                    style={{ width: `${playerSkillLevel}%` }}
-                  />
-                </div>
-                <div className="text-right text-gray-300 text-xs mt-1">
-                  Level: {playerSkillLevel}/100
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
-};
-
-export default EnhancedCrafting;
+}
