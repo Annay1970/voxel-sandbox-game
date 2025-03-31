@@ -429,8 +429,9 @@ export default function Creature({
                 />
               </group>
             </Suspense>
-          ) : type === 'bee' ? (
-            // Fallback if model fails to load with bee-specific rendering
+          ) : (
+            // Fallback if model fails to load
+            {type === 'bee' ? (
               // Bee with rounded head and body
               <>
                 {/* Main body - ellipsoid shape */}
@@ -449,16 +450,6 @@ export default function Creature({
                 <mesh castShadow position={[0, 0.5, 0.6]}>
                   <sphereGeometry args={[0.4, 16, 16]} />
                   <meshStandardMaterial color={color} />
-                </mesh>
-                
-                {/* Bee features - eyes */}
-                <mesh castShadow position={[0.15, 0.55, 0.85]}>
-                  <sphereGeometry args={[0.05, 8, 8]} />
-                  <meshStandardMaterial color="black" />
-                </mesh>
-                <mesh castShadow position={[-0.15, 0.55, 0.85]}>
-                  <sphereGeometry args={[0.05, 8, 8]} />
-                  <meshStandardMaterial color="black" />
                 </mesh>
                 
                 {/* Wings */}
@@ -513,18 +504,9 @@ export default function Creature({
                   <sphereGeometry args={[0.3, 16, 16]} />
                   <meshStandardMaterial color={color} />
                 </mesh>
-                
-                {/* Animal features - eyes */}
-                <mesh castShadow position={[0.1, 0.9, -0.9]}>
-                  <sphereGeometry args={[0.05, 8, 8]} />
-                  <meshStandardMaterial color="black" />
-                </mesh>
-                <mesh castShadow position={[-0.1, 0.9, -0.9]}>
-                  <sphereGeometry args={[0.05, 8, 8]} />
-                  <meshStandardMaterial color="black" />
-                </mesh>
               </>
             )}
+          )}
           
           {/* Type indicator (label) */}
           <mesh position={[0, 1.2, 0]}>
@@ -590,20 +572,10 @@ export default function Creature({
                   <meshStandardMaterial color={color} />
                 </mesh>
                 
-                {/* Head - rounded for zombie */}
+                {/* Head */}
                 <mesh castShadow position={[0, 1.5, 0]}>
-                  <sphereGeometry args={[0.3, 16, 16]} />
+                  <boxGeometry args={[0.5, 0.5, 0.5]} />
                   <meshStandardMaterial color={color} />
-                </mesh>
-                
-                {/* Zombie features - eyes and mouth */}
-                <mesh castShadow position={[0.1, 1.55, 0.25]}>
-                  <sphereGeometry args={[0.05, 8, 8]} />
-                  <meshStandardMaterial color="red" emissive="red" emissiveIntensity={0.5} />
-                </mesh>
-                <mesh castShadow position={[-0.1, 1.55, 0.25]}>
-                  <sphereGeometry args={[0.05, 8, 8]} />
-                  <meshStandardMaterial color="red" emissive="red" emissiveIntensity={0.5} />
                 </mesh>
               </>
             )}
@@ -681,24 +653,14 @@ export default function Creature({
                   <boxGeometry args={[0.2, 0.6, 0.2]} />
                   <meshStandardMaterial color={color} />
                 </mesh>
-                
-                {/* Skeleton features - glowing eyes */}
-                <mesh castShadow position={[0.1, 1.55, 0.25]}>
-                  <sphereGeometry args={[0.05, 8, 8]} />
-                  <meshStandardMaterial color="#00FFFF" emissive="#00FFFF" emissiveIntensity={0.8} />
-                </mesh>
-                <mesh castShadow position={[-0.1, 1.55, 0.25]}>
-                  <sphereGeometry args={[0.05, 8, 8]} />
-                  <meshStandardMaterial color="#00FFFF" emissive="#00FFFF" emissiveIntensity={0.8} />
-                </mesh>
                 <mesh castShadow position={[-0.2, -0.5, 0]}>
                   <boxGeometry args={[0.2, 0.6, 0.2]} />
                   <meshStandardMaterial color={color} />
                 </mesh>
                 
-                {/* Head - rounded */}
+                {/* Head */}
                 <mesh castShadow position={[0, 1.5, 0]}>
-                  <sphereGeometry args={[0.3, 16, 16]} />
+                  <boxGeometry args={[0.5, 0.5, 0.5]} />
                   <meshStandardMaterial color={color} />
                 </mesh>
               </>
