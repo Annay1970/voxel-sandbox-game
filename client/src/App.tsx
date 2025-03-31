@@ -11,6 +11,7 @@ import WeatherInfo from './components/ui/WeatherInfo';
 import StaminaBar from './components/ui/StaminaBar';
 import TemperatureIndicator from './components/ui/TemperatureIndicator';
 import HungerBar from './components/ui/HungerBar';
+import StatusEffects from './components/ui/StatusEffects';
 import { useIsMobile } from './hooks/use-is-mobile';
 import { gamepadManager } from './lib/controls/GamepadManager';
 
@@ -170,6 +171,9 @@ function App() {
           
           {/* Hunger bar */}
           <HungerBar />
+          
+          {/* Status effects */}
+          <StatusEffects position="bottom-left" />
         </>
       )}
       

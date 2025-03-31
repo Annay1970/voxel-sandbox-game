@@ -9,6 +9,7 @@ import SkyDome from "./Sky";
 import Creature from "./Creature";
 import Weather from "./Weather";
 import Watchtower from "./Watchtower";
+import AncientRuins from "./AncientRuins";
 
 // Enhanced World component with dynamic chunk loading
 export default function World() {
@@ -233,6 +234,9 @@ export default function World() {
       
       {/* Landmark: Watchtower */}
       <Watchtower position={[30, 0, 30]} scale={[2.5, 2.5, 2.5]} />
+      
+      {/* Landmark: Ancient Ruins */}
+      <AncientRuins position={[-40, 0, -40]} scale={[3, 3, 3]} />
       
       {/* Improved ambient light */}
       <ambientLight intensity={0.6} />
