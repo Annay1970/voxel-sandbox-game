@@ -5,6 +5,9 @@ import * as THREE from 'three';
 import { GLTF } from 'three-stdlib';
 import { useAudio } from '../../lib/stores/useAudio';
 
+// Preload common models to improve performance (only preload zombie for now)
+useGLTF.preload('/models/zombie.glb');
+
 // No preloading - simplified for performance
 
 interface CreatureProps {
@@ -54,42 +57,37 @@ export default function Creature({
   // Single model reference with proper typing
   const [model, setModel] = useState<THREE.Group | null>(null);
   
-  // Load model based on creature type
+  // Load model based on creature type - optimized to avoid async loading within component
   useEffect(() => {
     // Skip loading if we already tried or got an error
     if (modelLoaded || modelError) return;
     
-    // Only attempt to load models for these creature types
-    if (['zombie', 'wraith', 'skeleton'].includes(type)) {
+    // OPTIMIZATION: Use a fallback for all non-zombie creatures for now
+    if (type === 'zombie') {
       try {
-        // Load the appropriate model based on type
-        const modelPath = `/models/${type}.glb`;
+        // SIMPLIFIED: Use synchronous loading with preloaded model
+        const modelPath = '/models/zombie.glb';
         
-        // Use a function to load the model
-        const loadModel = async () => {
-          try {
-            // Use dynamic import to load only when needed
-            const gltf = await useGLTF(modelPath) as GLTF & {
-              scene: THREE.Group
-            };
-            
-            // Store the model and update state
-            setModel(gltf.scene);
-            setModelLoaded(true);
-            console.log(`${type} model loaded successfully`);
-          } catch (err) {
-            console.warn(`Failed to load ${type} model, using fallback:`, err);
-            setModelError(true);
-          }
-        };
-        
-        // Start loading
-        loadModel();
-        
+        // Since we preloaded the zombie model, this should be quick
+        try {
+          const gltf = useGLTF(modelPath) as GLTF & {
+            scene: THREE.Group
+          };
+          
+          // Store the model and update state
+          setModel(gltf.scene);
+          setModelLoaded(true);
+        } catch (err) {
+          console.warn(`Failed to load ${type} model, using fallback`);
+          setModelError(true);
+        }
       } catch (error) {
-        console.warn(`Error loading ${type} model:`, error);
+        console.warn(`Error initializing model for ${type}`);
         setModelError(true);
       }
+    } else {
+      // For now, just use the fallback for other creature types
+      setModelError(true);
     }
   }, [type, modelLoaded, modelError]);
   

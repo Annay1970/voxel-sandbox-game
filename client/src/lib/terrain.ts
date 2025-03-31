@@ -4,25 +4,22 @@ import { CHUNK_SIZE } from '../components/game/Chunk';
 
 // Generate initial terrain for the world
 export function generateTerrain() {
-  console.log("Generating terrain...");
+  console.log("Generating terrain with ultra-lite settings...");
   
   try {
     // Create noise generators with seeds for reproducibility 
     const seed1 = Math.random();
     const seed2 = Math.random();
-    const seed3 = Math.random();
-    console.log(`Using terrain seeds: ${seed1.toFixed(4)}, ${seed2.toFixed(4)}, ${seed3.toFixed(4)}`);
+    console.log(`Using terrain seeds: ${seed1.toFixed(4)}, ${seed2.toFixed(4)}`);
     
     const simplex = new SimplexNoise(seed1);
     const simplex2 = new SimplexNoise(seed2);
-    const simplex3 = new SimplexNoise(seed3);
   
-    // Terrain parameters - REDUCED for better performance
-    const WORLD_SIZE = 6; // in chunks (16x16 each) - significantly reduced for performance
-    const WATER_LEVEL = 10;
-    const MOUNTAIN_HEIGHT = 60; // Higher mountains but reduced from 80
-    const BASE_HEIGHT = 20;
-    const CAVE_FREQUENCY = 0.01; // Reduced cave frequency to improve performance
+    // ULTRA-LITE terrain parameters for guaranteed performance
+    const WORLD_SIZE = 4; // Extremely small world size (4 chunks = 64x64 blocks total)
+    const WATER_LEVEL = 8;
+    const MOUNTAIN_HEIGHT = 30; // Smaller mountains 
+    const BASE_HEIGHT = 15;
     
     // Data structures to store generated world
     const chunks: Record<string, { x: number, z: number }> = {};
@@ -30,6 +27,12 @@ export function generateTerrain() {
     
     // Generate chunks around origin
     const chunkRadius = Math.floor(WORLD_SIZE / 2);
+  
+    // Track total operations for progress updates
+    const totalOperations = (2 * chunkRadius + 1) * (2 * chunkRadius + 1) * CHUNK_SIZE * CHUNK_SIZE;
+    let completedOperations = 0;
+    
+    console.log(`Generating ${(2 * chunkRadius + 1) * (2 * chunkRadius + 1)} chunks...`);
   
     for (let cx = -chunkRadius; cx <= chunkRadius; cx++) {
       for (let cz = -chunkRadius; cz <= chunkRadius; cz++) {
@@ -44,228 +47,93 @@ export function generateTerrain() {
             const worldX = cx * CHUNK_SIZE + x;
             const worldZ = cz * CHUNK_SIZE + z;
             
-            // Get height map using multiple noise functions
-            const frequency1 = 0.01;
-            const frequency2 = 0.05;
-            const frequency3 = 0.002;
-          
-            // Base continent shape (large features)
-            const continentValue = simplex.noise2D(worldX * frequency3, worldZ * frequency3);
-            const continentHeight = Math.pow(continentValue * 0.5 + 0.5, 2) * MOUNTAIN_HEIGHT;
+            // SIMPLIFIED height calculation with fewer noise samples
+            const frequency1 = 0.01; // Primary terrain frequency
             
-            // Add hills (medium features)
-            const hillValue = simplex2.noise2D(worldX * frequency1, worldZ * frequency1);
-            const hillHeight = hillValue * 10;
+            // Simplified terrain shape with just one noise function for hills
+            const hillValue = simplex.noise2D(worldX * frequency1, worldZ * frequency1);
             
-            // Add roughness (small features)
-            const roughValue = simplex3.noise2D(worldX * frequency2, worldZ * frequency2);
-            const roughHeight = roughValue * 3;
-            
-            // Combine all height factors
-            let height = BASE_HEIGHT + continentHeight + hillHeight + roughHeight;
+            // Generate altitude using simplified formula
+            let height = BASE_HEIGHT + (hillValue * MOUNTAIN_HEIGHT);
             height = Math.max(1, Math.floor(height)); // Ensure at least 1 block of ground
-          
-            // Biome determination
-            const temperatureNoise = simplex.noise2D(worldX * 0.005, worldZ * 0.005);
-            const humidityNoise = simplex2.noise2D(worldX * 0.005, worldZ * 0.005);
             
-            const temperature = (temperatureNoise + 1) / 2; // 0-1
-            const humidity = (humidityNoise + 1) / 2; // 0-1
+            // Simplified biome with just one noise function
+            const biomeValue = simplex2.noise2D(worldX * 0.005, worldZ * 0.005);
+            const biomeType = (biomeValue + 1) / 2; // 0-1 range
             
-            // Determine biome type
-            let biome: 'plains' | 'desert' | 'forest' | 'mountains' | 'beach' | 'snow' | 'cactus';
+            // Extremely simplified biome determination (just 3 biomes)
+            let biome: 'plains' | 'desert' | 'forest';
             
-            if (height < WATER_LEVEL + 2) {
-              biome = 'beach';
-            } else if (temperature > 0.8 && humidity < 0.3) {
+            if (biomeType < 0.33) {
               biome = 'desert';
-            } else if (temperature < 0.2) {
-              biome = 'snow'; // Add snow biome for cold areas
-            } else if (temperature > 0.7 && humidity < 0.5) {
-              biome = 'cactus'; // Add cactus biome for hot, moderate humidity areas
-            } else if (humidity > 0.6) {
-              biome = 'forest';
-            } else if (height > BASE_HEIGHT + 20) {
-              biome = 'mountains';
-            } else {
+            } else if (biomeType < 0.66) {
               biome = 'plains';
+            } else {
+              biome = 'forest';
             }
-          
-            // Generate blocks for this column
-            // Start with bedrock at bottom
+            
+            // SIMPLIFIED: Base layer is always stone
             blocks[`${worldX},0,${worldZ}`] = 'stone';
             
-            // Fill with stone up to near surface
-            for (let y = 1; y < height - 3; y++) {
-              // Create rare lava pools in deep regions
-              if (y < 15 && Math.random() < 0.002) { // Very rare lava pools
-                // Generate a small lava pool
-                const lavaRadius = Math.floor(Math.random() * 2) + 2;
-                const lavaHeight = Math.floor(Math.random() * 2) + 2;
-                
-                for (let lx = -lavaRadius; lx <= lavaRadius; lx++) {
-                  for (let lz = -lavaRadius; lz <= lavaRadius; lz++) {
-                    for (let ly = 0; ly < lavaHeight; ly++) {
-                      const dist = Math.sqrt(lx*lx + lz*lz);
-                      if (dist <= lavaRadius) {
-                        const lavaX = worldX + lx;
-                        const lavaY = y + ly;
-                        const lavaZ = worldZ + lz;
-                        blocks[`${lavaX},${lavaY},${lavaZ}`] = 'lava';
-                      }
-                    }
-                  }
-                }
-                
-                // Skip over the lava pool area
-                y += lavaHeight;
-              } else {
-                blocks[`${worldX},${y},${worldZ}`] = 'stone';
-              }
+            // OPTIMIZED: Skip generating internal blocks we can't see
+            // Only create stone below terrain surface - 3 blocks deep
+            blocks[`${worldX},${height-3},${worldZ}`] = 'stone';
+            blocks[`${worldX},${height-2},${worldZ}`] = 'stone';
+            
+            // Just one layer of dirt/sand
+            let underSurfaceBlock: BlockType = 'dirt';
+            if (biome === 'desert') {
+              underSurfaceBlock = 'sand';
+            }
+            blocks[`${worldX},${height-1},${worldZ}`] = underSurfaceBlock;
+            
+            // Top layer depends on biome (extremely simplified)
+            let surfaceBlock: BlockType = 'grass';
+            if (biome === 'desert') {
+              surfaceBlock = 'sand';
             }
             
-            // Surface blocks depend on biome
-            for (let y = Math.max(1, height - 3); y < height; y++) {
-              let blockType: BlockType = 'dirt';
-              
-              // Deeper dirt/sand/etc.
-              if (biome === 'desert') {
-                blockType = 'sand';
-              } else if (biome === 'beach') {
-                blockType = 'sand';
-              } else {
-                blockType = 'dirt';
-              }
-              
-              blocks[`${worldX},${y},${worldZ}`] = blockType;
-            }
+            // Set the surface block
+            blocks[`${worldX},${height},${worldZ}`] = surfaceBlock;
             
-            // Top layer depends on biome
-            if (height > WATER_LEVEL) {
-              let surfaceBlock: BlockType = 'grass';
-              
-              switch (biome) {
-                case 'desert':
-                  surfaceBlock = 'sand';
-                  break;
-                case 'beach':
-                  surfaceBlock = 'sand';
-                  break;
-                case 'snow':
-                  surfaceBlock = 'snow';
-                  // Add ice lakes in snow biomes
-                  if (Math.random() < 0.1 && height < BASE_HEIGHT + 5) {
-                    // Create small ice lakes
-                    const lakeRadius = Math.floor(Math.random() * 3) + 2;
-                    const lakeDepth = Math.floor(Math.random() * 2) + 1;
-                    
-                    for (let lx = -lakeRadius; lx <= lakeRadius; lx++) {
-                      for (let lz = -lakeRadius; lz <= lakeRadius; lz++) {
-                        const dist = Math.sqrt(lx*lx + lz*lz);
-                        if (dist <= lakeRadius) {
-                          const lakeX = worldX + lx;
-                          const lakeZ = worldZ + lz;
-                          
-                          // Replace surface block with ice
-                          blocks[`${lakeX},${height},${lakeZ}`] = 'ice';
-                          
-                          // Add water underneath ice
-                          for (let d = 1; d <= lakeDepth; d++) {
-                            blocks[`${lakeX},${height-d},${lakeZ}`] = 'water';
-                          }
-                        }
-                      }
-                    }
-                  }
-                  break;
-                case 'cactus':
-                  surfaceBlock = 'sand';
-                  // Add occasional cacti in the cactus biome
-                  if (Math.random() < 0.1) {
-                    const cactusHeight = Math.floor(Math.random() * 3) + 2;
-                    for (let y = height + 1; y <= height + cactusHeight; y++) {
-                      blocks[`${worldX},${y},${worldZ}`] = 'cactus';
-                    }
-                  }
-                  break;
-                case 'mountains':
-                  // Higher mountains have stone tops
-                  // Very high mountains get snow caps
-                  if (height > BASE_HEIGHT + 40) {
-                    surfaceBlock = 'snow';
-                  } else if (height > BASE_HEIGHT + 25) {
-                    surfaceBlock = 'stone';
-                  } else {
-                    surfaceBlock = 'grass';
-                  }
-                  break;
-                default:
-                  surfaceBlock = 'grass';
-              }
-              
-              blocks[`${worldX},${height},${worldZ}`] = surfaceBlock;
-            }
-          
             // Add water where height is below water level
-            for (let y = height + 1; y <= WATER_LEVEL; y++) {
-              blocks[`${worldX},${y},${worldZ}`] = 'water';
+            if (height < WATER_LEVEL) {
+              blocks[`${worldX},${WATER_LEVEL},${worldZ}`] = 'water';
             }
             
-            // Add trees in forests and occasionally in plains - increased frequency
-            if ((biome === 'forest' && Math.random() < 0.12) || // More trees in forests
-                (biome === 'plains' && Math.random() < 0.03) || // More trees in plains
-                (biome === 'mountains' && height < BASE_HEIGHT + 35 && Math.random() < 0.02)) { // Some trees on mountain slopes
+            // SIMPLIFIED: Very rare tree generation 
+            if (biome === 'forest' && Math.random() < 0.03 && height > WATER_LEVEL) {
+              // Fixed height trees to reduce complexity
+              const treeHeight = 4;
               
-              // Only place trees on grass or dirt
-              if (height > WATER_LEVEL && 
-                 (blocks[`${worldX},${height},${worldZ}`] === 'grass' || 
-                  blocks[`${worldX},${height},${worldZ}`] === 'dirt')) {
-                
-                // Varied tree heights based on biome
-                let treeHeight;
-                if (biome === 'forest') {
-                  treeHeight = Math.floor(Math.random() * 4) + 5; // 5-8 blocks for forest
-                } else if (biome === 'mountains') {
-                  treeHeight = Math.floor(Math.random() * 2) + 3; // 3-4 blocks for mountains
-                } else {
-                  treeHeight = Math.floor(Math.random() * 3) + 4; // 4-6 blocks for plains
-                }
-                
-                // Trunk
-                for (let y = height + 1; y < height + treeHeight; y++) {
-                  blocks[`${worldX},${y},${worldZ}`] = 'wood';
-                }
-                
-                // Leaves
-                const leafRadius = 2;
-                for (let lx = -leafRadius; lx <= leafRadius; lx++) {
-                  for (let ly = -leafRadius; ly <= leafRadius; ly++) {
-                    for (let lz = -leafRadius; lz <= leafRadius; lz++) {
-                      // Skip trunk space
-                      if (lx === 0 && lz === 0 && ly <= 0) continue;
-                      
-                      // Make spherical-ish leaf arrangement
-                      const dist = Math.sqrt(lx * lx + ly * ly + lz * lz);
-                      if (dist <= leafRadius + 0.5) {
-                        const leafX = worldX + lx;
-                        const leafY = height + treeHeight + ly;
-                        const leafZ = worldZ + lz;
-                        
-                        // Don't overwrite existing blocks
-                        const leafKey = `${leafX},${leafY},${leafZ}`;
-                        if (!blocks[leafKey]) {
-                          blocks[leafKey] = 'leaves';
-                        }
-                      }
-                    }
+              // Simple trunk
+              for (let y = height + 1; y < height + treeHeight; y++) {
+                blocks[`${worldX},${y},${worldZ}`] = 'wood';
+              }
+              
+              // Minimal cube of leaves
+              for (let lx = -1; lx <= 1; lx++) {
+                for (let ly = 0; ly <= 1; ly++) {
+                  for (let lz = -1; lz <= 1; lz++) {
+                    // Skip trunk space
+                    if (lx === 0 && lz === 0) continue;
+                    
+                    const leafX = worldX + lx;
+                    const leafY = height + treeHeight + ly;
+                    const leafZ = worldZ + lz;
+                    
+                    blocks[`${leafX},${leafY},${leafZ}`] = 'leaves';
                   }
                 }
               }
             }
+            
+            // Update progress counter
+            completedOperations++;
+          }
         }
       }
     }
-  }
   
     console.log(`Generated ${Object.keys(chunks).length} chunks with ${Object.keys(blocks).length} blocks`);
     
@@ -279,19 +147,17 @@ export function generateTerrain() {
     };
     const fallbackBlocks: Record<string, BlockType> = {};
     
-    // Create a small 16x16 flat platform at y=20
+    // Create a small 16x16 flat platform at y=15
     for (let x = 0; x < CHUNK_SIZE; x++) {
       for (let z = 0; z < CHUNK_SIZE; z++) {
         // Add stone base
-        for (let y = 15; y < 19; y++) {
-          fallbackBlocks[`${x},${y},${z}`] = 'stone';
-        }
+        fallbackBlocks[`${x},13,${z}`] = 'stone';
         
         // Add dirt layer
-        fallbackBlocks[`${x},19,${z}`] = 'dirt';
+        fallbackBlocks[`${x},14,${z}`] = 'dirt';
         
         // Add grass top
-        fallbackBlocks[`${x},20,${z}`] = 'grass';
+        fallbackBlocks[`${x},15,${z}`] = 'grass';
       }
     }
     
