@@ -5,10 +5,14 @@ import * as THREE from 'three';
 import { GLTF } from 'three-stdlib';
 import { useAudio } from '../../lib/stores/useAudio';
 
-// OPTIMIZATION: Disable model preloading to improve initial load time
-// useGLTF.preload('/models/zombie.glb');
-
-// No preloading - simplified for performance
+// Preload all creature models for faster loading
+useGLTF.preload('/models/zombie.glb');
+useGLTF.preload('/models/skeleton.glb');
+useGLTF.preload('/models/wraith.glb');
+useGLTF.preload('/models/cow.glb');
+useGLTF.preload('/models/sheep.glb');
+useGLTF.preload('/models/pig.glb');
+useGLTF.preload('/models/chicken.glb');
 
 interface CreatureProps {
   type: string;
@@ -66,7 +70,11 @@ export default function Creature({
     const modelMap: Record<string, string> = {
       'zombie': '/models/zombie.glb',
       'skeleton': '/models/skeleton.glb',
-      'wraith': '/models/wraith.glb'
+      'wraith': '/models/wraith.glb',
+      'cow': '/models/cow.glb',
+      'sheep': '/models/sheep.glb',
+      'pig': '/models/pig.glb',
+      'chicken': '/models/chicken.glb'
     };
     
     const modelPath = modelMap[type];
@@ -236,6 +244,72 @@ export default function Creature({
           groupRef.current.rotation.x = Math.sin(Date.now() * 0.02) * 0.1;
         }
       }
+      else if (type === 'cow') {
+        // Cow animations
+        if (animationState === 'idle') {
+          // Gentle bobbing for idle cow
+          groupRef.current.position.y = Math.sin(Date.now() * 0.0008) * 0.02;
+          // Occasional head movement
+          if (Math.sin(Date.now() * 0.0003) > 0.9) {
+            groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.001) * 0.1;
+          }
+        } else if (animationState === 'walk') {
+          // Walking animation with slight head bobbing
+          groupRef.current.position.y = Math.sin(Date.now() * 0.008) * 0.03;
+          groupRef.current.rotation.z = Math.sin(Date.now() * 0.008) * 0.01;
+        }
+      }
+      else if (type === 'sheep') {
+        // Sheep animations
+        if (animationState === 'idle') {
+          // Subtle wool jiggling
+          groupRef.current.scale.x = 2.0 + Math.sin(Date.now() * 0.002) * 0.01;
+          groupRef.current.scale.z = 2.0 + Math.sin(Date.now() * 0.002) * 0.01;
+          // Occasional head movement
+          if (Math.sin(Date.now() * 0.0004) > 0.9) {
+            groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.002) * 0.08;
+          }
+        } else if (animationState === 'walk') {
+          // Walking animation
+          groupRef.current.position.y = Math.sin(Date.now() * 0.01) * 0.02;
+        }
+      }
+      else if (type === 'pig') {
+        // Pig animations
+        if (animationState === 'idle') {
+          // Subtle oinking motion
+          groupRef.current.scale.y = 2.0 + Math.sin(Date.now() * 0.003) * 0.02;
+          // Occasional head movement
+          if (Math.sin(Date.now() * 0.0005) > 0.9) {
+            groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.003) * 0.1;
+          }
+        } else if (animationState === 'walk') {
+          // Waddling animation
+          groupRef.current.position.y = Math.sin(Date.now() * 0.012) * 0.03;
+          groupRef.current.rotation.z = Math.sin(Date.now() * 0.012) * 0.02;
+        }
+      }
+      else if (type === 'chicken') {
+        // Chicken animations
+        if (animationState === 'idle') {
+          // Pecking motion
+          if (Math.sin(Date.now() * 0.002) > 0.95) {
+            groupRef.current.rotation.x = Math.sin(Date.now() * 0.05) * 0.1;
+          } else {
+            groupRef.current.rotation.x = 0;
+          }
+          // Random head movements
+          if (Math.sin(Date.now() * 0.0007) > 0.9) {
+            groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.002) * 0.15;
+          }
+        } else if (animationState === 'walk') {
+          // Waddling walk animation
+          groupRef.current.position.y = Math.sin(Date.now() * 0.03) * 0.03;
+          groupRef.current.rotation.z = Math.sin(Date.now() * 0.03) * 0.03;
+          // Head bob while walking
+          groupRef.current.rotation.x = Math.sin(Date.now() * 0.03) * 0.04;
+        }
+      }
     }
   });
   
@@ -283,38 +357,61 @@ export default function Creature({
         </mesh>
       )}
       
-      {type === 'cow' || type === 'pig' || type === 'sheep' ? (
-        // Passive mobs - box with legs
+      {type === 'cow' || type === 'pig' || type === 'sheep' || type === 'chicken' ? (
+        // Passive mobs with 3D models if available
         <group>
-          {/* Main body */}
-          <mesh castShadow position={[0, 0.5, 0]}>
-            <boxGeometry args={[0.8, 0.6, 1.2]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          
-          {/* Legs */}
-          <mesh castShadow position={[0.3, 0, 0.4]}>
-            <boxGeometry args={[0.2, 0.6, 0.2]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          <mesh castShadow position={[-0.3, 0, 0.4]}>
-            <boxGeometry args={[0.2, 0.6, 0.2]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          <mesh castShadow position={[0.3, 0, -0.4]}>
-            <boxGeometry args={[0.2, 0.6, 0.2]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          <mesh castShadow position={[-0.3, 0, -0.4]}>
-            <boxGeometry args={[0.2, 0.6, 0.2]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          
-          {/* Head */}
-          <mesh castShadow position={[0, 0.8, -0.7]}>
-            <boxGeometry args={[0.6, 0.4, 0.4]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
+          {modelLoaded && model ? (
+            <Suspense fallback={
+              // Fallback to simple model while loading
+              <mesh castShadow>
+                <boxGeometry args={[0.8, 0.6, 1.0]} />
+                <meshStandardMaterial color={color} />
+              </mesh>
+            }>
+              <group ref={groupRef}>
+                <primitive 
+                  object={model.clone()} 
+                  scale={[2.0, 2.0, 2.0]} 
+                  position={[0, -1.5, 0]}
+                  rotation={[0, Math.PI - rotation.y, 0]} 
+                  castShadow 
+                />
+              </group>
+            </Suspense>
+          ) : (
+            // Fallback if model fails to load
+            <>
+              {/* Main body */}
+              <mesh castShadow position={[0, 0.5, 0]}>
+                <boxGeometry args={[0.8, 0.6, 1.2]} />
+                <meshStandardMaterial color={color} />
+              </mesh>
+              
+              {/* Legs */}
+              <mesh castShadow position={[0.3, 0, 0.4]}>
+                <boxGeometry args={[0.2, 0.6, 0.2]} />
+                <meshStandardMaterial color={color} />
+              </mesh>
+              <mesh castShadow position={[-0.3, 0, 0.4]}>
+                <boxGeometry args={[0.2, 0.6, 0.2]} />
+                <meshStandardMaterial color={color} />
+              </mesh>
+              <mesh castShadow position={[0.3, 0, -0.4]}>
+                <boxGeometry args={[0.2, 0.6, 0.2]} />
+                <meshStandardMaterial color={color} />
+              </mesh>
+              <mesh castShadow position={[-0.3, 0, -0.4]}>
+                <boxGeometry args={[0.2, 0.6, 0.2]} />
+                <meshStandardMaterial color={color} />
+              </mesh>
+              
+              {/* Head */}
+              <mesh castShadow position={[0, 0.8, -0.7]}>
+                <boxGeometry args={[0.6, 0.4, 0.4]} />
+                <meshStandardMaterial color={color} />
+              </mesh>
+            </>
+          )}
           
           {/* Type indicator (label) */}
           <mesh position={[0, 1.2, 0]}>
