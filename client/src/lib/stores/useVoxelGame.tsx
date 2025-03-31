@@ -188,7 +188,7 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     'cow1': {
       id: 'cow1',
       type: 'cow',
-      position: { x: 5, y: 5, z: 5 },
+      position: { x: 2, y: 0, z: 3 },
       rotation: { y: 0 },
       state: 'idle',
       mood: 'calm',
@@ -200,7 +200,7 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     'sheep1': {
       id: 'sheep1',
       type: 'sheep',
-      position: { x: 8, y: 5, z: 8 },
+      position: { x: 4, y: 0, z: 4 },
       rotation: { y: 0 },
       state: 'idle',
       mood: 'calm',
@@ -212,7 +212,7 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     'pig1': {
       id: 'pig1',
       type: 'pig',
-      position: { x: 12, y: 5, z: 12 },
+      position: { x: 6, y: 0, z: 2 },
       rotation: { y: 0 },
       state: 'idle',
       mood: 'calm',
@@ -224,7 +224,7 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     'zombie1': {
       id: 'zombie1',
       type: 'zombie',
-      position: { x: -5, y: 5, z: -5 },
+      position: { x: -3, y: 0, z: -4 },
       rotation: { y: 0 },
       state: 'idle',
       mood: 'aggressive',
@@ -236,10 +236,34 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     'chicken1': {
       id: 'chicken1',
       type: 'chicken',
-      position: { x: 15, y: 5, z: 3 },
+      position: { x: 8, y: 0, z: 3 },
       rotation: { y: 0 },
       state: 'idle',
       mood: 'calm',
+      animationState: 'idle',
+      animationSpeed: 1,
+      animationProgress: 0,
+      leader: false
+    },
+    'skeleton1': {
+      id: 'skeleton1',
+      type: 'skeleton',
+      position: { x: -5, y: 0, z: -2 },
+      rotation: { y: 0 },
+      state: 'idle',
+      mood: 'aggressive',
+      animationState: 'idle',
+      animationSpeed: 1,
+      animationProgress: 0,
+      leader: false
+    },
+    'wraith1': {
+      id: 'wraith1',
+      type: 'wraith',
+      position: { x: -6, y: 0, z: -6 },
+      rotation: { y: 0 },
+      state: 'idle',
+      mood: 'aggressive',
       animationState: 'idle',
       animationSpeed: 1,
       animationProgress: 0,

@@ -323,7 +323,7 @@ export default function Creature({
   return (
     <mesh 
       ref={meshRef}
-      position={[position.x, position.y + 1, position.z]} // Added +1 to Y to lift creatures up 
+      position={[position.x, position.y + 0.5, position.z]} // Add offset to Y to place creatures on ground
       rotation={[0, rotation.y, 0]}
       castShadow
       scale={1.5} // Make creatures bigger
@@ -372,7 +372,7 @@ export default function Creature({
                 <primitive 
                   object={model.clone()} 
                   scale={[2.0, 2.0, 2.0]} 
-                  position={[0, -1.5, 0]}
+                  position={[0, -0.7, 0]}
                   rotation={[0, Math.PI - rotation.y, 0]} 
                   castShadow 
                 />
@@ -436,7 +436,7 @@ export default function Creature({
                   <primitive 
                     object={model.clone()} 
                     scale={[2.5, 2.5, 2.5]} 
-                    position={[0, -1.5, 0]}
+                    position={[0, -0.7, 0]}
                     rotation={[0, Math.PI - rotation.y, 0]} 
                     castShadow 
                   />
@@ -506,7 +506,7 @@ export default function Creature({
                   <primitive 
                     object={model.clone()} 
                     scale={[2.5, 2.5, 2.5]} 
-                    position={[0, -1.5, 0]}
+                    position={[0, -0.7, 0]}
                     rotation={[0, Math.PI - rotation.y, 0]} 
                     castShadow 
                   />
@@ -592,7 +592,7 @@ export default function Creature({
                   <primitive 
                     object={model.clone()} 
                     scale={[2.5, 2.5, 2.5]} 
-                    position={[0, -1.5, 0]}
+                    position={[0, -0.7, 0]}
                     rotation={[0, Math.PI - rotation.y, 0]} 
                     castShadow 
                   />
