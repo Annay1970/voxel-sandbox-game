@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import { Sky, KeyboardControls, Stars, Loader } from '@react-three/drei';
 import GamepadDisplay from './components/game/GamepadDisplay';
 import Player from './components/game/Player';
+import BlockInteraction from './components/game/BlockInteraction';
 import { useIsMobile } from './hooks/use-is-mobile';
 import { gamepadManager } from './lib/controls/GamepadManager';
 
@@ -41,27 +42,7 @@ const LoadingScreen = ({ progress }: LoadingScreenProps) => {
   );
 };
 
-// Placeholder for the game world component
-const GameWorld = () => {
-  return (
-    <>
-      <ambientLight intensity={0.5} />
-      <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
-      
-      {/* Ground plane */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -0.5, 0]}>
-        <planeGeometry args={[100, 100]} />
-        <meshStandardMaterial color="#3b8c3b" />
-      </mesh>
-      
-      {/* Demo cube */}
-      <mesh position={[0, 0.5, 0]} castShadow>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="#964B00" />
-      </mesh>
-    </>
-  );
-};
+// We're using Block components from BlockInteraction instead
 
 // We now have an actual Player component imported from './components/game/Player'
 
@@ -123,8 +104,16 @@ function App() {
               <Suspense fallback={null}>
                 <Sky sunPosition={[10, 5, 10]} />
                 <Stars radius={100} depth={50} count={5000} factor={4} />
-                <GameWorld />
+                <ambientLight intensity={0.5} />
+                <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
                 <Player position={[0, 1, 0]} />
+                <BlockInteraction />
+                
+                {/* Ground plane as a fallback */}
+                <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -0.5, 0]}>
+                  <planeGeometry args={[100, 100]} />
+                  <meshStandardMaterial color="#3b8c3b" />
+                </mesh>
               </Suspense>
             </Canvas>
           </KeyboardControls>

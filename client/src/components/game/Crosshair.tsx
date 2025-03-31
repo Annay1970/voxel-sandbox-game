@@ -7,68 +7,45 @@ interface CrosshairProps {
   gap?: number;
 }
 
-export function Crosshair({ 
-  size = 20, 
-  color = 'white', 
+/**
+ * Renders a simple crosshair in the center of the screen
+ */
+export default function Crosshair({ 
+  size = 16, 
+  color = "white", 
   thickness = 2,
   gap = 4
 }: CrosshairProps) {
-  const halfSize = size / 2;
-  const halfThickness = thickness / 2;
-  
   return (
-    <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-      {/* Horizontal line */}
-      <div 
-        className="absolute bg-current"
-        style={{
-          width: halfSize - gap,
-          height: thickness,
-          right: `calc(50% + ${gap/2}px)`,
-          backgroundColor: color
-        }}
-      />
-      <div 
-        className="absolute bg-current"
-        style={{
-          width: halfSize - gap,
-          height: thickness,
-          left: `calc(50% + ${gap/2}px)`,
-          backgroundColor: color
-        }}
-      />
-      
-      {/* Vertical line */}
-      <div 
-        className="absolute bg-current"
-        style={{
-          width: thickness,
-          height: halfSize - gap,
-          bottom: `calc(50% + ${gap/2}px)`,
-          backgroundColor: color
-        }}
-      />
-      <div 
-        className="absolute bg-current"
-        style={{
-          width: thickness,
-          height: halfSize - gap,
-          top: `calc(50% + ${gap/2}px)`,
-          backgroundColor: color
-        }}
-      />
-      
-      {/* Center dot (optional) */}
-      <div 
-        className="absolute rounded-full bg-current"
-        style={{
-          width: thickness * 1.5,
-          height: thickness * 1.5,
-          backgroundColor: color
-        }}
-      />
+    <div className="fixed inset-0 pointer-events-none flex items-center justify-center">
+      <div className="relative" style={{ width: size, height: size }}>
+        {/* Horizontal line */}
+        <div 
+          className="absolute top-1/2"
+          style={{ 
+            backgroundColor: color,
+            height: thickness,
+            left: 0,
+            right: 0,
+            marginLeft: gap,
+            marginRight: gap,
+            transform: 'translateY(-50%)'
+          }}
+        />
+        {/* Vertical line */}
+        <div 
+          className="absolute left-1/2"
+          style={{ 
+            backgroundColor: color,
+            width: thickness,
+            top: 0,
+            bottom: 0,
+            marginTop: gap,
+            marginBottom: gap,
+            transform: 'translateX(-50%)'
+          }}
+        />
+      </div>
     </div>
   );
 }
-
-export default Crosshair;

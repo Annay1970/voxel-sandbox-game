@@ -1,11 +1,15 @@
-// Block types
+/**
+ * Block types supported in the game
+ */
 export type BlockType = 
   'air' | 'grass' | 'dirt' | 'stone' | 'sand' | 'wood' | 'leaves' | 'water' |
   'log' | 'stick' | 'craftingTable' | 'woodenPickaxe' | 'stonePickaxe' |
   'woodenAxe' | 'woodenShovel' | 'coal' | 'torch' | 'ice' | 'lava' | 
   'snow' | 'cactus' | 'glass';
-
-// Block properties
+  
+/**
+ * Properties of each block type
+ */
 export interface BlockProperties {
   solid: boolean;
   transparent: boolean;
@@ -17,7 +21,9 @@ export interface BlockProperties {
   stackSize: number;
 }
 
-// Block definitions
+/**
+ * Block properties for each block type
+ */
 export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
   'air': {
     solid: false,
@@ -31,6 +37,7 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     transparent: false,
     liquid: false,
     tool: 'shovel',
+    minToolLevel: 0,
     hardness: 0.6,
     drops: 'dirt',
     stackSize: 64
@@ -40,6 +47,7 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     transparent: false,
     liquid: false,
     tool: 'shovel',
+    minToolLevel: 0,
     hardness: 0.5,
     stackSize: 64
   },
@@ -48,7 +56,7 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     transparent: false,
     liquid: false,
     tool: 'pickaxe',
-    minToolLevel: 1,
+    minToolLevel: 1, // Needs at least wooden pickaxe
     hardness: 1.5,
     drops: 'stone',
     stackSize: 64
@@ -58,6 +66,7 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     transparent: false,
     liquid: false,
     tool: 'shovel',
+    minToolLevel: 0,
     hardness: 0.5,
     stackSize: 64
   },
@@ -66,7 +75,8 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     transparent: false,
     liquid: false,
     tool: 'axe',
-    hardness: 2,
+    minToolLevel: 0,
+    hardness: 2.0,
     stackSize: 64
   },
   'leaves': {
@@ -75,8 +85,8 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     liquid: false,
     hardness: 0.2,
     drops: [
-      { type: 'stick', chance: 0.05 },
-      { type: 'leaves', chance: 0.1 }
+      { type: 'stick', chance: 0.1 },
+      { type: 'leaves', chance: 0.05 }
     ],
     stackSize: 64
   },
@@ -84,7 +94,7 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     solid: false,
     transparent: true,
     liquid: true,
-    hardness: 100, // Cannot mine water
+    hardness: 100, // Cannot be mined
     stackSize: 0
   },
   'log': {
@@ -92,14 +102,15 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     transparent: false,
     liquid: false,
     tool: 'axe',
-    hardness: 2,
+    minToolLevel: 0,
+    hardness: 2.0,
     stackSize: 64
   },
   'stick': {
     solid: false,
     transparent: false,
     liquid: false,
-    hardness: 0,
+    hardness: 0.5,
     stackSize: 64
   },
   'craftingTable': {
@@ -107,42 +118,45 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     transparent: false,
     liquid: false,
     tool: 'axe',
+    minToolLevel: 0,
     hardness: 2.5,
-    stackSize: 64
+    stackSize: 1
   },
   'woodenPickaxe': {
     solid: false,
     transparent: false,
     liquid: false,
-    hardness: 0,
+    hardness: 0.5,
     stackSize: 1
   },
   'stonePickaxe': {
     solid: false,
     transparent: false,
     liquid: false,
-    hardness: 0,
+    hardness: 0.5,
     stackSize: 1
   },
   'woodenAxe': {
     solid: false,
     transparent: false,
     liquid: false,
-    hardness: 0,
+    hardness: 0.5,
     stackSize: 1
   },
   'woodenShovel': {
     solid: false,
     transparent: false,
     liquid: false,
-    hardness: 0,
+    hardness: 0.5,
     stackSize: 1
   },
   'coal': {
-    solid: false,
+    solid: true,
     transparent: false,
     liquid: false,
-    hardness: 0,
+    tool: 'pickaxe',
+    minToolLevel: 1,
+    hardness: 3.0,
     stackSize: 64
   },
   'torch': {
@@ -156,82 +170,78 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     solid: true,
     transparent: true,
     liquid: false,
-    hardness: 0.5,
     tool: 'pickaxe',
-    drops: [], // Ice breaks into water when mined
+    minToolLevel: 0,
+    hardness: 0.5,
+    drops: 'water', // Ice turns to water when broken without silk touch
     stackSize: 64
-    // Special properties:
-    // - Players slide on ice (increased movement speed)
-    // - Can see through ice (transparency)
-    // - Melts into water in hot biomes
   },
   'lava': {
     solid: false,
     transparent: true,
     liquid: true,
-    hardness: 100, // Cannot mine lava
+    hardness: 100, // Cannot be mined
     stackSize: 0
-    // Special properties:
-    // - Damages player on contact
-    // - Emits light (illuminates surrounding area)
-    // - Slowly flows and spreads
-    // - Turns into stone or obsidian when contacting water
   },
   'snow': {
     solid: true,
     transparent: false,
     liquid: false,
     tool: 'shovel',
-    hardness: 0.2,
-    drops: 'snow',
+    minToolLevel: 0,
+    hardness: 0.1,
     stackSize: 64
-    // Special properties:
-    // - Slows player movement slightly
-    // - Makes softer sound when walked on
-    // - Can accumulate in layers during snowfall
-    // - Melts in hot biomes
   },
   'cactus': {
     solid: true,
-    transparent: true,
+    transparent: false,
     liquid: false,
     hardness: 0.4,
-    drops: 'cactus',
     stackSize: 64
-    // Special properties:
-    // - Damages player on contact
-    // - Can only be placed on sand
-    // - Grows over time if on sand
-    // - Destroys items that touch it
   },
   'glass': {
     solid: true,
     transparent: true,
     liquid: false,
     tool: 'pickaxe',
+    minToolLevel: 0,
     hardness: 0.3,
     drops: [], // Glass doesn't drop anything when broken
     stackSize: 64
   }
 };
 
-// Helper functions
+/**
+ * Check if a block is solid (can be collided with)
+ */
 export function isBlockSolid(type: BlockType): boolean {
   return BLOCK_PROPERTIES[type]?.solid || false;
 }
 
+/**
+ * Check if a block is transparent (can see through)
+ */
 export function isBlockTransparent(type: BlockType): boolean {
   return BLOCK_PROPERTIES[type]?.transparent || false;
 }
 
+/**
+ * Check if a block is a liquid (has flowing behavior)
+ */
 export function isBlockLiquid(type: BlockType): boolean {
   return BLOCK_PROPERTIES[type]?.liquid || false;
 }
 
+/**
+ * Get the hardness of a block (how long it takes to mine)
+ */
 export function getBlockHardness(type: BlockType): number {
   return BLOCK_PROPERTIES[type]?.hardness || 0;
 }
 
+/**
+ * Get the tool required to mine a block
+ */
 export function getRequiredTool(type: BlockType): { tool?: string, level: number } {
   const props = BLOCK_PROPERTIES[type];
   return {
@@ -240,68 +250,51 @@ export function getRequiredTool(type: BlockType): { tool?: string, level: number
   };
 }
 
+/**
+ * Get the drops from breaking a block
+ */
 export function getBlockDrops(type: BlockType): { type: BlockType, count: number }[] {
   const props = BLOCK_PROPERTIES[type];
-  
-  if (!props?.drops) {
-    // Default to dropping itself
-    return [{ type, count: 1 }];
-  }
-  
-  if (typeof props.drops === 'string') {
-    // Single drop
-    return [{ type: props.drops, count: 1 }];
-  }
-  
-  // Multiple drops with chances
   const drops: { type: BlockType, count: number }[] = [];
   
-  props.drops.forEach(drop => {
-    if (Math.random() < drop.chance) {
-      drops.push({ type: drop.type, count: 1 });
+  if (!props) return drops;
+  
+  if (!props.drops) {
+    // If no drops specified, block drops itself
+    drops.push({ type, count: 1 });
+  } else if (typeof props.drops === 'string') {
+    // If drops is a string, it's a single block type
+    drops.push({ type: props.drops, count: 1 });
+  } else if (Array.isArray(props.drops)) {
+    // If drops is an array, it's a list of possible drops with chances
+    for (const drop of props.drops) {
+      if (Math.random() <= drop.chance) {
+        drops.push({ type: drop.type, count: 1 });
+      }
     }
-  });
+  }
   
   return drops;
 }
 
-// Special block property detection functions
-
 /**
- * Check if a block is damaging to players on contact and get damage values
- * Returns an object with damage information
+ * Check if a block causes damage to the player
  */
-export function isBlockDamaging(type: BlockType): { 
-  isDamaging: boolean, 
-  damage: number, 
-  cooldown: number, // in milliseconds
-  damageSound?: string 
-} {
-  switch (type) {
-    case 'lava':
-      return { 
-        isDamaging: true, 
-        damage: 4, // Higher damage for lava
-        cooldown: 750, // Faster damage tick rate
-        damageSound: 'player_burn' 
-      };
-    case 'cactus':
-      return { 
-        isDamaging: true, 
-        damage: 1, // Less damage for cactus
-        cooldown: 1000, // Standard damage tick rate
-        damageSound: 'player_damage' 
-      };
-    default:
-      return { isDamaging: false, damage: 0, cooldown: 1000 };
+export function isBlockDamaging(type: BlockType): { damage: number, cooldown: number } | null {
+  if (type === 'lava') {
+    return { damage: 4, cooldown: 750 }; // 4 damage every 0.75 seconds
   }
+  if (type === 'cactus') {
+    return { damage: 1, cooldown: 1000 }; // 1 damage every second
+  }
+  return null;
 }
 
 /**
  * Check if a block emits light
  */
 export function isBlockLightEmitter(type: BlockType): boolean {
-  return type === 'lava' || type === 'torch';
+  return type === 'torch' || type === 'lava';
 }
 
 /**
@@ -309,21 +302,20 @@ export function isBlockLightEmitter(type: BlockType): boolean {
  * Returns an object with movement properties
  */
 export function getBlockMovementEffect(type: BlockType): { 
-  speedMultiplier: number,
-  slippery: boolean 
+  slowdown?: number, 
+  bounce?: number,
+  slippery?: boolean
 } {
-  switch (type) {
-    case 'ice':
-      return { speedMultiplier: 1.5, slippery: true };
-    case 'snow':
-      return { speedMultiplier: 0.8, slippery: false };
-    case 'water':
-      return { speedMultiplier: 0.5, slippery: false };
-    case 'lava':
-      return { speedMultiplier: 0.25, slippery: false };
-    default:
-      return { speedMultiplier: 1.0, slippery: false };
+  if (type === 'water') {
+    return { slowdown: 0.5 }; // Slows down player by 50%
   }
+  if (type === 'ice') {
+    return { slippery: true };
+  }
+  if (type === 'snow') {
+    return { slowdown: 0.2 }; // Slows down player by 20%
+  }
+  return {};
 }
 
 /**
@@ -344,14 +336,21 @@ export function isBlockGrowable(type: BlockType): boolean {
  * Check if a block has placement restrictions
  */
 export function getBlockPlacementRestrictions(type: BlockType): { 
-  validSurfaces: BlockType[]
+  mustBeOnSolid?: boolean,
+  cannotBeUnderWater?: boolean,
+  cannotBeNextToSolid?: boolean
 } {
-  switch (type) {
-    case 'cactus':
-      return { validSurfaces: ['sand'] };
-    case 'torch':
-      return { validSurfaces: ['stone', 'dirt', 'grass', 'wood', 'log', 'sand', 'snow'] };
-    default:
-      return { validSurfaces: [] }; // No restrictions
+  if (type === 'torch') {
+    return { 
+      mustBeOnSolid: true,
+      cannotBeUnderWater: true
+    };
   }
+  if (type === 'cactus') {
+    return {
+      mustBeOnSolid: true,
+      cannotBeNextToSolid: true
+    };
+  }
+  return {};
 }

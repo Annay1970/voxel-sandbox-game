@@ -1,378 +1,136 @@
-import { useRef, useEffect, useState } from 'react';
+import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { BlockType, isBlockTransparent } from '../../lib/blocks';
-import { useVoxelGame } from '../../lib/stores/useVoxelGame';
-import { textureManager } from '../../lib/utils/textureManager';
 
 interface BlockProps {
   position: [number, number, number];
   type: BlockType;
-  texture?: THREE.Texture;
+  neighbors?: {
+    front?: BlockType;
+    back?: BlockType;
+    left?: BlockType;
+    right?: BlockType;
+    top?: BlockType;
+    bottom?: BlockType;
+  };
+  onClick?: (e: THREE.Intersection) => void;
+  onRightClick?: (e: THREE.Intersection) => void;
+  selected?: boolean;
 }
 
-export default function Block({ position, type, texture }: BlockProps) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const [blockTexture, setBlockTexture] = useState<THREE.Texture | null>(null);
-  const [color, setColor] = useState<string>('#FFFFFF');
-  const selectedBlock = useVoxelGame(state => state.selectedBlock);
-  const [isSelected, setIsSelected] = useState(false);
-  
-  // Block dimensions
-  const size = 1;
+// Block colors
+const blockColors: Record<BlockType, string> = {
+  'air': 'transparent',
+  'grass': '#5db85d',
+  'dirt': '#8B4513',
+  'stone': '#818181',
+  'sand': '#f2d398',
+  'wood': '#966F33',
+  'leaves': '#228B22',
+  'water': '#1e90ff',
+  'log': '#6d4c41',
+  'stick': '#a1887f',
+  'craftingTable': '#6d4c41',
+  'woodenPickaxe': '#a1887f',
+  'stonePickaxe': '#757575',
+  'woodenAxe': '#a1887f',
+  'woodenShovel': '#a1887f',
+  'coal': '#2d2d2d',
+  'torch': '#ffd54f',
+  'ice': '#add8e6',
+  'lava': '#ff4500',
+  'snow': '#f5f5f5',
+  'cactus': '#2e7d32',
+  'glass': '#e0f7fa'
+};
 
-  // Use effect to load or get texture
-  useEffect(() => {
-    // Use provided texture if available
-    if (texture) {
-      setBlockTexture(texture);
-      return;
-    }
-    
-    // Otherwise get texture from manager
-    const blockTexture = textureManager.getTexture(type);
-    if (blockTexture) {
-      setBlockTexture(blockTexture);
-    }
-    
-    // Set a fallback color for each block type
-    switch (type) {
-      case 'grass': setColor('#4CAF50'); break;
-      case 'dirt': setColor('#795548'); break;
-      case 'stone': setColor('#9E9E9E'); break;
-      case 'sand': setColor('#FDD835'); break;
-      case 'wood': setColor('#8D6E63'); break;
-      case 'leaves': setColor('#81C784'); break;
-      case 'water': setColor('#2196F3'); break;
-      case 'log': setColor('#5D4037'); break;
-      case 'coal': setColor('#263238'); break;
-      case 'torch': setColor('#FFB300'); break;
-      case 'ice': setColor('#A5D6F6'); break;
-      case 'lava': setColor('#FF5722'); break;
-      case 'snow': setColor('#FAFAFA'); break;
-      case 'cactus': setColor('#2E7D32'); break;
-      case 'glass': setColor('#E0F7FA'); break;
-      default: setColor('#FFFFFF');
-    }
-  }, [type, texture]);
+// Function to get color with transparency
+const getBlockColor = (type: BlockType): THREE.Color | null => {
+  if (type === 'air') return null;
+  return new THREE.Color(blockColors[type] || '#ffffff');
+};
+
+// Function to determine opacity
+const getBlockOpacity = (type: BlockType): number => {
+  if (type === 'air') return 0;
+  if (type === 'glass' || type === 'water' || type === 'ice') return 0.7;
+  return 1;
+};
+
+export default function Block({ 
+  position, 
+  type,
+  neighbors,
+  onClick,
+  onRightClick,
+  selected = false
+}: BlockProps) {
+  // Reference to the mesh
+  const meshRef = useRef<THREE.Mesh>(null);
   
-  // Handle selection highlighting
-  useEffect(() => {
-    if (!selectedBlock) {
-      setIsSelected(false);
-      return;
-    }
-    
-    const [sx, sy, sz] = selectedBlock;
-    const [px, py, pz] = position;
-    setIsSelected(sx === px && sy === py && sz === pz);
-  }, [selectedBlock, position]);
-  
-  // Skip rendering for air blocks
-  if (type === 'air') {
-    return null;
-  }
-  
-  // Special rendering for water
-  if (type === 'water') {
-    return (
-      <mesh position={position} receiveShadow castShadow>
-        <boxGeometry args={[size, size * 0.9, size]} /> {/* Water is slightly shorter */}
-        <meshStandardMaterial 
-          color="#2196F3" 
-          transparent={true}
-          opacity={0.7}
-          roughness={0.1}
-          metalness={0.3}
-          map={blockTexture || undefined}
-        />
-      </mesh>
-    );
-  }
-  
-  // Special rendering for torch
-  if (type === 'torch') {
-    return (
-      <group position={position}>
-        {/* Torch stick */}
-        <mesh position={[0, -0.3, 0]} castShadow>
-          <boxGeometry args={[0.1, 0.7, 0.1]} />
-          <meshStandardMaterial color="#8D6E63" map={blockTexture || undefined} />
-        </mesh>
-        
-        {/* Torch fire */}
-        <mesh position={[0, 0.2, 0]} castShadow>
-          <boxGeometry args={[0.2, 0.2, 0.2]} />
-          <meshStandardMaterial 
-            color="#FFEB3B" 
-            emissive="#FF9800"
-            emissiveIntensity={1}
-          />
-          
-          {/* Point light for torch */}
-          <pointLight
-            position={[0, 0, 0]}
-            distance={7}
-            intensity={1}
-            color="#FF9800"
-          />
-        </mesh>
-      </group>
-    );
-  }
-  
-  // Special rendering for leaves (transparent)
-  if (type === 'leaves') {
-    return (
-      <mesh position={position} ref={meshRef} receiveShadow castShadow>
-        <boxGeometry args={[size, size, size]} />
-        <meshStandardMaterial 
-          color={color}
-          transparent={true}
-          opacity={0.9}
-          map={blockTexture || undefined}
-        />
-      </mesh>
-    );
-  }
-  
-  // Special rendering for lava
-  if (type === 'lava') {
-    // Create animated lava effect
-    const lavaRef = useRef<THREE.Mesh>(null);
-    const bubbleRefs = useRef<THREE.Mesh[]>([]);
-    
-    // Create bubble positions for animation
-    const [bubbles] = useState(() => {
-      return Array(5).fill(0).map(() => ({
-        x: (Math.random() - 0.5) * 0.7,
-        z: (Math.random() - 0.5) * 0.7,
-        speed: 0.2 + Math.random() * 0.3,
-        delay: Math.random() * 5,
-        size: 0.05 + Math.random() * 0.1
-      }));
-    });
-    
-    useFrame(({ clock }) => {
-      if (lavaRef.current) {
-        // Gentle pulsing emission effect
-        const emission = 0.8 + Math.sin(clock.getElapsedTime() * 2) * 0.2;
-        (lavaRef.current.material as THREE.MeshStandardMaterial).emissiveIntensity = emission;
-        
-        // Bubbles animation
-        bubbleRefs.current.forEach((bubble, i) => {
-          if (bubble) {
-            const time = clock.getElapsedTime() - bubbles[i].delay;
-            // Cycle the animation
-            const cycleTime = time % 4;
-            // Move bubble up and fade out at top
-            const y = (cycleTime * bubbles[i].speed) - 0.4;
-            const opacity = y > 0.3 ? 1 - (y - 0.3) * 3 : 1;
-            
-            bubble.position.y = y;
-            (bubble.material as THREE.MeshStandardMaterial).opacity = opacity;
-          }
-        });
+  // Highlight the block when selected
+  useFrame(() => {
+    if (meshRef.current && selected) {
+      const time = Date.now() * 0.001;
+      const hue = (Math.sin(time) * 0.1) + 0.5;
+      // Make sure we're dealing with a MeshStandardMaterial
+      if (meshRef.current.material instanceof THREE.MeshStandardMaterial) {
+        meshRef.current.material.emissive = new THREE.Color(hue, hue, hue);
       }
-    });
-    
-    return (
-      <group position={position}>
-        <mesh ref={lavaRef} receiveShadow castShadow>
-          <boxGeometry args={[size, size * 0.9, size]} />
-          <meshStandardMaterial
-            color="#FF5722"
-            emissive="#FFEB3B"
-            emissiveIntensity={0.8}
-            transparent={true}
-            opacity={0.9}
-            map={blockTexture || undefined}
-          />
-        </mesh>
-        
-        {/* Lava bubbles */}
-        {bubbles.map((bubble, i) => (
-          <mesh 
-            key={`bubble-${i}`}
-            position={[bubble.x, -0.3, bubble.z]}
-            ref={el => {
-              if (el) bubbleRefs.current[i] = el;
-            }}
-          >
-            <sphereGeometry args={[bubble.size, 8, 8]} />
-            <meshStandardMaterial
-              color="#FFCC80"
-              emissive="#FFEB3B"
-              emissiveIntensity={1}
-              transparent={true}
-              opacity={0.8}
-            />
-          </mesh>
-        ))}
-        
-        {/* Lava light */}
-        <pointLight
-          position={[0, 0.5, 0]}
-          distance={8}
-          intensity={0.7}
-          color="#FF9800"
-        />
-      </group>
-    );
-  }
+    } else if (meshRef.current && meshRef.current.material instanceof THREE.MeshStandardMaterial) {
+      meshRef.current.material.emissive = new THREE.Color(0, 0, 0);
+    }
+  });
   
-  // Special rendering for ice
-  if (type === 'ice') {
-    const iceRef = useRef<THREE.Mesh>(null);
-    
-    useFrame(({ clock }) => {
-      if (iceRef.current) {
-        // Subtle shimmer effect
-        const shimmer = 0.75 + Math.sin(clock.getElapsedTime() * 1.5) * 0.1;
-        (iceRef.current.material as THREE.MeshStandardMaterial).opacity = shimmer;
-        
-        // Slight color variation
-        const hue = 0.6 + Math.sin(clock.getElapsedTime() * 0.5) * 0.05;
-        (iceRef.current.material as THREE.MeshStandardMaterial).color.setHSL(hue, 0.5, 0.7);
-      }
-    });
-    
-    return (
-      <group position={position}>
-        {/* Base ice block */}
-        <mesh ref={iceRef} receiveShadow castShadow>
-          <boxGeometry args={[size, size, size]} />
-          <meshStandardMaterial
-            color="#A5D6F6"
-            transparent={true}
-            opacity={0.8}
-            roughness={0.1}
-            metalness={0.2}
-            map={blockTexture || undefined}
-          />
-        </mesh>
-        
-        {/* Internal "crystalline" structure */}
-        <mesh position={[0, 0, 0]}>
-          <boxGeometry args={[size * 0.7, size * 0.7, size * 0.7]} />
-          <meshStandardMaterial
-            color="#E1F5FE"
-            transparent={true}
-            opacity={0.4}
-            roughness={0}
-            metalness={0.5}
-          />
-        </mesh>
-      </group>
-    );
-  }
+  // Skip rendering air blocks
+  if (type === 'air') return null;
   
-  // Special rendering for glass
-  if (type === 'glass') {
-    return (
-      <mesh position={position} receiveShadow castShadow>
-        <boxGeometry args={[size, size, size]} />
-        <meshStandardMaterial
-          color="#E0F7FA"
-          transparent={true}
-          opacity={0.3}
-          roughness={0.05}
-          metalness={0.1}
-          map={blockTexture || undefined}
-        />
-      </mesh>
-    );
-  }
+  // Get color for this block type
+  const color = getBlockColor(type);
+  if (!color) return null;
   
-  // Special rendering for snow
-  if (type === 'snow') {
-    const snowRef = useRef<THREE.Mesh>(null);
-    
-    // Create snow particles/flakes on the surface
-    const [snowflakes] = useState(() => {
-      return Array(20).fill(0).map(() => ({
-        x: (Math.random() - 0.5) * 0.9,
-        y: 0.5 + Math.random() * 0.1, // Slightly above surface
-        z: (Math.random() - 0.5) * 0.9,
-        size: 0.02 + Math.random() * 0.04,
-      }));
-    });
-    
-    return (
-      <group position={position}>
-        {/* Main snow block - slightly shorter */}
-        <mesh ref={snowRef} receiveShadow castShadow>
-          <boxGeometry args={[size, size * 0.95, size]} />
-          <meshStandardMaterial
-            color="#FAFAFA"
-            roughness={0.9}
-            metalness={0.1}
-            map={blockTexture || undefined}
-          />
-        </mesh>
-        
-        {/* Snow flakes on top - for visual detail */}
-        {snowflakes.map((flake, i) => (
-          <mesh 
-            key={`flake-${i}`} 
-            position={[flake.x, flake.y, flake.z]}
-          >
-            <sphereGeometry args={[flake.size, 6, 6]} />
-            <meshStandardMaterial 
-              color="#FFFFFF" 
-              transparent={true}
-              opacity={0.8}
-              roughness={0.3}
-            />
-          </mesh>
-        ))}
-      </group>
-    );
-  }
+  // Get opacity
+  const opacity = getBlockOpacity(type);
+  const transparent = opacity < 1 || isBlockTransparent(type);
   
-  // Special rendering for cactus
-  if (type === 'cactus') {
-    return (
-      <group position={position}>
-        {/* Main cactus body */}
-        <mesh position={[0, 0, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.8, size, 0.8]} />
-          <meshStandardMaterial 
-            color="#2E7D32"
-            map={blockTexture || undefined} 
-          />
-        </mesh>
-        
-        {/* Cactus spikes */}
-        {[0, 90, 180, 270].map((rotation, i) => (
-          <mesh 
-            key={`spike-${i}`}
-            position={[
-              Math.sin(rotation * Math.PI / 180) * 0.45,
-              0,
-              Math.cos(rotation * Math.PI / 180) * 0.45
-            ]} 
-            castShadow
-          >
-            <boxGeometry args={[0.1, 0.1, 0.1]} />
-            <meshStandardMaterial color="#BDBDBD" />
-          </mesh>
-        ))}
-      </group>
-    );
-  }
+  // Special cases for different block types
+  const renderWater = type === 'water';
+  const renderFire = type === 'lava';
   
-  // Regular block rendering
   return (
-    <mesh position={position} ref={meshRef} receiveShadow castShadow>
-      <boxGeometry args={[size, size, size]} />
+    <mesh 
+      ref={meshRef}
+      position={position}
+      castShadow
+      receiveShadow
+      onClick={onClick}
+      onContextMenu={onRightClick}
+    >
+      <boxGeometry args={[1, 1, 1]} />
       <meshStandardMaterial 
-        color={isSelected ? '#FFFFFF' : color} 
-        emissive={isSelected ? '#FFEB3B' : undefined}
-        emissiveIntensity={isSelected ? 0.5 : 0}
-        transparent={isBlockTransparent(type)}
-        map={blockTexture || undefined}
+        color={color} 
+        transparent={transparent}
+        opacity={opacity}
+        // Special material properties for different block types
+        emissive={renderFire ? new THREE.Color('#ff2000') : undefined}
+        emissiveIntensity={renderFire ? 0.5 : 0}
+        metalness={type === 'stone' || type === 'stonePickaxe' ? 0.1 : 0}
+        roughness={type === 'ice' || type === 'glass' ? 0.1 : 0.8}
+        wireframe={false}
       />
+      
+      {/* Additional elements for special block types */}
+      {renderWater && (
+        <mesh position={[0, -0.4, 0]} scale={[0.99, 0.2, 0.99]}>
+          <boxGeometry />
+          <meshStandardMaterial
+            color="#1e90ff"
+            transparent={true}
+            opacity={0.7}
+          />
+        </mesh>
+      )}
     </mesh>
   );
 }
