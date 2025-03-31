@@ -8,6 +8,7 @@ import Chunk from "./Chunk";
 import SkyDome from "./Sky";
 import Creature from "./Creature";
 import Weather from "./Weather";
+import Watchtower from "./Watchtower";
 
 // Enhanced World component with dynamic chunk loading
 export default function World() {
@@ -229,6 +230,9 @@ export default function World() {
       
       {/* Player */}
       <Player />
+      
+      {/* Landmark: Watchtower */}
+      <Watchtower position={[30, 0, 30]} scale={[2.5, 2.5, 2.5]} />
       
       {/* Improved ambient light */}
       <ambientLight intensity={0.6} />

@@ -7,6 +7,7 @@ import MobileControls from './components/game/MobileControls';
 import Player from './components/game/Player';
 import BlockInteraction from './components/game/BlockInteraction';
 import DemoCreatures from './components/game/DemoCreatures';
+import WeatherInfo from './components/ui/WeatherInfo';
 import { useIsMobile } from './hooks/use-is-mobile';
 import { gamepadManager } from './lib/controls/GamepadManager';
 
@@ -154,6 +155,9 @@ function App() {
           
           {/* Mobile controls for touch devices */}
           {isMobile && <MobileControls />}
+          
+          {/* Weather information display */}
+          <WeatherInfo position="top-right" detailed={true} />
         </>
       )}
       

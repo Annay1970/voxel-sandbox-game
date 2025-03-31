@@ -4,6 +4,7 @@ import { useKeyboardControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { Controls } from '../../App'; // Import the Controls enum from App.tsx
 import { useGamepadControls } from '../../lib/controls/useGamepadControls';
+import { useVoxelGame, WeatherType } from '../../lib/stores/useVoxelGame';
 
 // Player configuration
 const PLAYER_SPEED = 5;
@@ -13,6 +14,16 @@ const GRAVITY = 25;
 const CAMERA_DISTANCE = 5;
 const CAMERA_HEIGHT = 2.5;
 const CAMERA_LERP_FACTOR = 0.1;
+
+// Weather impact on movement
+const WEATHER_MOVEMENT_MODIFIERS: Record<WeatherType, number> = {
+  'clear': 1.0,
+  'cloudy': 0.9,
+  'rain': 0.8,
+  'thunderstorm': 0.6,
+  'fog': 0.7,
+  'snow': 0.5
+};
 
 interface PlayerProps {
   position?: [number, number, number];
@@ -28,6 +39,9 @@ function Player({ position = [0, 1, 0] }: PlayerProps) {
   const [onGround, setOnGround] = useState(true);
   const [cameraMode, setCameraMode] = useState<'first-person' | 'third-person'>('third-person');
   const [toggleCameraPressed, setToggleCameraPressed] = useState(false);
+  
+  // Get weather from game state
+  const weatherSystem = useVoxelGame(state => state.weatherSystem);
   
   // Controls using subscribe method to avoid re-renders
   const [subscribeKeys, getKeys] = useKeyboardControls<Controls>();
@@ -112,8 +126,16 @@ function Player({ position = [0, 1, 0] }: PlayerProps) {
       player.rotation.x = verticalRotation;
     }
     
-    // Apply speed based on sprint
-    const speed = PLAYER_SPEED * (sprintInput ? PLAYER_SPRINT_MULTIPLIER : 1);
+    // Apply weather movement modifier
+    const weatherModifier = weatherSystem.effects.movementModifier;
+    
+    // Apply speed based on sprint and weather conditions
+    const speed = PLAYER_SPEED * (sprintInput ? PLAYER_SPRINT_MULTIPLIER : 1) * weatherModifier;
+    
+    // Add visual feedback for movement in extreme weather
+    if (weatherModifier < 0.7) {
+      console.log(`Movement slowed by ${weatherSystem.currentWeather} (${(1 - weatherModifier) * 100}% reduction)`);
+    }
     
     // Create movement direction vector
     const direction = new THREE.Vector3();
@@ -150,8 +172,19 @@ function Player({ position = [0, 1, 0] }: PlayerProps) {
     
     // Jump if on ground
     if (onGround && jumpInput) {
-      velocity.y = PLAYER_JUMP_FORCE;
+      // Apply weather effects to jump height (reduce in rain/snow, extra height in clear weather)
+      const jumpModifier = weatherSystem.currentWeather === 'snow' ? 0.7 :
+                          weatherSystem.currentWeather === 'rain' ? 0.8 :
+                          weatherSystem.currentWeather === 'thunderstorm' ? 0.6 :
+                          weatherSystem.currentWeather === 'clear' ? 1.1 : 1.0;
+      
+      velocity.y = PLAYER_JUMP_FORCE * jumpModifier;
       setOnGround(false);
+      
+      // Log jumping in extreme weather
+      if (jumpModifier !== 1.0) {
+        console.log(`Jump ${jumpModifier < 1 ? 'hindered' : 'enhanced'} by ${weatherSystem.currentWeather} weather`);
+      }
     }
     
     // Apply gravity
