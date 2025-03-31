@@ -1,10 +1,12 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, Suspense } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { useKeyboardControls } from '@react-three/drei';
+import { useKeyboardControls, useGLTF, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { Controls } from '../../App'; // Import the Controls enum from App.tsx
 import { useGamepadControls } from '../../lib/controls/useGamepadControls';
 import { useVoxelGame, WeatherType } from '../../lib/stores/useVoxelGame';
+import { getBlockTemperatureEffect } from '../../lib/blocks';
+import { GLTF } from 'three-stdlib';
 
 // Player configuration
 const PLAYER_SPEED = 5;
@@ -29,19 +31,44 @@ interface PlayerProps {
   position?: [number, number, number];
 }
 
+// Preload the model
+useGLTF.preload('/models/player.glb');
+
 function Player({ position = [0, 1, 0] }: PlayerProps) {
   // References
   const playerRef = useRef<THREE.Group>(null);
+  const modelRef = useRef<THREE.Group>(null);
   const velocityRef = useRef(new THREE.Vector3());
   const cameraRef = useRef(new THREE.Vector3(0, CAMERA_HEIGHT, CAMERA_DISTANCE));
+  
+  // Load the 3D model
+  const { scene: playerModel } = useGLTF('/models/player.glb') as GLTF & {
+    scene: THREE.Group
+  };
+  
+  // Model loading state
+  const [modelLoaded, setModelLoaded] = useState(false);
+  
+  // Track when model is loaded
+  useEffect(() => {
+    if (playerModel) {
+      setModelLoaded(true);
+      console.log("Player model loaded successfully");
+    }
+  }, [playerModel]);
   
   // State
   const [onGround, setOnGround] = useState(true);
   const [cameraMode, setCameraMode] = useState<'first-person' | 'third-person'>('third-person');
   const [toggleCameraPressed, setToggleCameraPressed] = useState(false);
+  const [lastTemperatureUpdate, setLastTemperatureUpdate] = useState(0);
   
-  // Get weather from game state
+  // Get state from voxel game
   const weatherSystem = useVoxelGame(state => state.weatherSystem);
+  const blocks = useVoxelGame(state => state.blocks);
+  const updatePlayerStamina = useVoxelGame(state => state.updatePlayerStamina);
+  const setPlayerSprinting = useVoxelGame(state => state.setPlayerSprinting);
+  const updatePlayerTemperature = useVoxelGame(state => state.updatePlayerTemperature);
   
   // Controls using subscribe method to avoid re-renders
   const [subscribeKeys, getKeys] = useKeyboardControls<Controls>();
@@ -114,6 +141,9 @@ function Player({ position = [0, 1, 0] }: PlayerProps) {
     const jumpInput = getInput(Controls.jump, gamepad.jump);
     const sprintInput = getInput(Controls.sprint, gamepad.sprint);
     
+    // Update sprinting state in the game store
+    setPlayerSprinting(sprintInput > 0);
+    
     // Apply camera rotation from gamepad right stick
     if (Math.abs(gamepad.cameraX) > 0.1 || Math.abs(gamepad.cameraY) > 0.1) {
       player.rotation.y -= gamepad.cameraX * delta * 3;
@@ -128,6 +158,20 @@ function Player({ position = [0, 1, 0] }: PlayerProps) {
     
     // Apply weather movement modifier
     const weatherModifier = weatherSystem.effects.movementModifier;
+    
+    // Handle stamina for sprinting
+    if (sprintInput) {
+      // Reduce stamina when sprinting (more reduction in adverse weather)
+      const staminaReduction = -15 * delta * (2 - weatherModifier); // More stamina used in bad weather
+      updatePlayerStamina(staminaReduction);
+    } else {
+      // Regenerate stamina when not sprinting
+      const now = Date.now();
+      if (now - lastTemperatureUpdate > 500) { // Update every 500ms to avoid too frequent updates
+        updatePlayerStamina(10 * delta); // Regenerate stamina over time
+        setLastTemperatureUpdate(now);
+      }
+    }
     
     // Apply speed based on sprint and weather conditions
     const speed = PLAYER_SPEED * (sprintInput ? PLAYER_SPRINT_MULTIPLIER : 1) * weatherModifier;
@@ -181,6 +225,9 @@ function Player({ position = [0, 1, 0] }: PlayerProps) {
       velocity.y = PLAYER_JUMP_FORCE * jumpModifier;
       setOnGround(false);
       
+      // Consume stamina on jump
+      updatePlayerStamina(-5);
+      
       // Log jumping in extreme weather
       if (jumpModifier !== 1.0) {
         console.log(`Jump ${jumpModifier < 1 ? 'hindered' : 'enhanced'} by ${weatherSystem.currentWeather} weather`);
@@ -203,6 +250,65 @@ function Player({ position = [0, 1, 0] }: PlayerProps) {
     player.position.x += velocity.x * delta;
     player.position.y += velocity.y * delta;
     player.position.z += velocity.z * delta;
+    
+    // Check for nearby blocks that affect temperature
+    const now = Date.now();
+    if (now - lastTemperatureUpdate > 1000) { // Update every second
+      setLastTemperatureUpdate(now);
+      
+      // Base temperature modifier from weather
+      let temperatureModifier = weatherSystem.effects.temperatureModifier;
+      
+      // Check blocks in a radius around the player
+      const checkRadius = 5;
+      const playerPos = [
+        Math.floor(player.position.x),
+        Math.floor(player.position.y),
+        Math.floor(player.position.z)
+      ];
+      
+      // Check nearby blocks for temperature effects
+      for (let x = playerPos[0] - checkRadius; x <= playerPos[0] + checkRadius; x++) {
+        for (let y = playerPos[1] - checkRadius; y <= playerPos[1] + checkRadius; y++) {
+          for (let z = playerPos[2] - checkRadius; z <= playerPos[2] + checkRadius; z++) {
+            const blockKey = `${x},${y},${z}`;
+            const blockType = blocks[blockKey];
+            
+            if (blockType) {
+              const temperatureEffect = getBlockTemperatureEffect(blockType);
+              if (temperatureEffect) {
+                // Calculate distance
+                const distance = Math.sqrt(
+                  Math.pow(x - playerPos[0], 2) +
+                  Math.pow(y - playerPos[1], 2) +
+                  Math.pow(z - playerPos[2], 2)
+                );
+                
+                // Only apply effect if within the block's radius
+                if (distance <= temperatureEffect.radius) {
+                  // Calculate effect based on distance (closer = stronger)
+                  const distanceFactor = 1 - (distance / temperatureEffect.radius);
+                  const effectStrength = temperatureEffect.effect * 
+                                        distanceFactor * 
+                                        temperatureEffect.intensity;
+                  
+                  // Add to the total temperature modifier
+                  temperatureModifier += effectStrength;
+                  
+                  // Debug log for significant temperature changes
+                  if (Math.abs(effectStrength) > 0.05) {
+                    console.log(`Temperature ${effectStrength > 0 ? 'increased' : 'decreased'} by ${blockType} block at distance ${distance.toFixed(1)}`);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Apply the temperature change to the player
+      updatePlayerTemperature(temperatureModifier * 0.1); // Scale down to make changes gradual
+    }
     
     // Update camera position
     if (cameraMode === 'third-person') {
@@ -246,21 +352,42 @@ function Player({ position = [0, 1, 0] }: PlayerProps) {
       ref={playerRef} 
       position={position instanceof Array ? position : [0, 1, 0]}
     >
-      {/* Player mesh - only visible in third person */}
+      {/* Only show player model in third-person mode */}
       {cameraMode === 'third-person' && (
-        <>
-          {/* Player body */}
-          <mesh position={[0, 0.9, 0]} castShadow>
-            <boxGeometry args={[0.6, 1.8, 0.6]} />
-            <meshStandardMaterial color="#4287f5" />
-          </mesh>
-          
-          {/* Player head */}
-          <mesh position={[0, 1.9, 0]} castShadow>
-            <boxGeometry args={[0.5, 0.5, 0.5]} />
-            <meshStandardMaterial color="#ffe6cc" />
-          </mesh>
-        </>
+        <group ref={modelRef} scale={[1, 1, 1]}>
+          {modelLoaded && playerModel ? (
+            <Suspense fallback={
+              <mesh castShadow>
+                <boxGeometry args={[0.6, 1.8, 0.6]} />
+                <meshStandardMaterial color="#4287f5" />
+              </mesh>
+            }>
+              <primitive 
+                object={playerModel.clone()} 
+                position={[0, 0, 0]}
+                rotation={[0, Math.PI, 0]} // Rotate to face correct direction
+                scale={[2.5, 2.5, 2.5]}    // Scale up the model to match player size
+                castShadow 
+                receiveShadow 
+              />
+            </Suspense>
+          ) : (
+            // Fallback mesh if model isn't loaded yet
+            <>
+              {/* Player body */}
+              <mesh position={[0, 0.9, 0]} castShadow>
+                <boxGeometry args={[0.6, 1.8, 0.6]} />
+                <meshStandardMaterial color="#4287f5" />
+              </mesh>
+              
+              {/* Player head */}
+              <mesh position={[0, 1.9, 0]} castShadow>
+                <boxGeometry args={[0.5, 0.5, 0.5]} />
+                <meshStandardMaterial color="#ffe6cc" />
+              </mesh>
+            </>
+          )}
+        </group>
       )}
     </group>
   );

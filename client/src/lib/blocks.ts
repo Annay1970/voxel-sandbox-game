@@ -609,3 +609,72 @@ export function getBlockPlacementRestrictions(type: BlockType): {
   }
   return {};
 }
+
+/**
+ * Get temperature effect on the player from a block
+ * Returns a value that should be applied to player's temperature (-1 to 1 scale)
+ * Negative values cool the player, positive values heat the player
+ */
+export function getBlockTemperatureEffect(type: BlockType): { 
+  effect: number,
+  radius: number,
+  intensity: number
+} | null {
+  if (type === 'lava') {
+    return { 
+      effect: 0.2, // Strong heating effect
+      radius: 4,  // Affects player from 4 blocks away
+      intensity: 1.0 // Full intensity
+    };
+  }
+  if (type === 'magmaStone') {
+    return { 
+      effect: 0.12,
+      radius: 3,
+      intensity: 0.8
+    };
+  }
+  if (type === 'hotObsidian') {
+    return { 
+      effect: 0.15,
+      radius: 3,
+      intensity: 0.9
+    };
+  }
+  if (type === 'volcanicAsh') {
+    return { 
+      effect: 0.05,
+      radius: 2,
+      intensity: 0.5
+    };
+  }
+  if (type === 'torch') {
+    return { 
+      effect: 0.03, // Mild heating effect
+      radius: 2,
+      intensity: 0.4
+    };
+  }
+  if (type === 'ice') {
+    return { 
+      effect: -0.1, // Cooling effect
+      radius: 3,
+      intensity: 0.7
+    };
+  }
+  if (type === 'snow') {
+    return { 
+      effect: -0.05, // Mild cooling effect
+      radius: 1,
+      intensity: 0.5
+    };
+  }
+  if (type === 'water') {
+    return { 
+      effect: -0.07, // Cooling effect when in water
+      radius: 0, // Only affects when inside block
+      intensity: 1.0
+    };
+  }
+  return null; // No temperature effect
+}

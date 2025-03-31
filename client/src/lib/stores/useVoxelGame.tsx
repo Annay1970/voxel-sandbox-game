@@ -67,6 +67,19 @@ export interface PlayerState {
   maxHunger: number;
   oxygen: number;
   maxOxygen: number;
+  stamina: number;
+  maxStamina: number;
+  staminaRegenRate: number;
+  staminaRegenDelay: number;
+  lastStaminaUseTime: number;
+  isSprinting: boolean;
+  temperature: number; // -1.0 to 1.0, where 0 is neutral, -1 is freezing, 1 is burning
+  temperatureEffects: {
+    freezing: boolean;
+    overheating: boolean;
+    visualEffect: 'none' | 'frost' | 'heat';
+    effectIntensity: number; // 0.0 to 1.0
+  };
   experience: number;
   level: number;
   flying: boolean;
@@ -168,6 +181,21 @@ export interface VoxelGameState {
   toggleInventory: () => void;
   toggleCrafting: () => void;
   setPlayerTakingBlockDamage: (isTakingDamage: boolean) => void;
+  updateBlockDamageState: (isTakingDamage: boolean) => void;
+  
+  // Stamina system
+  updatePlayerStamina: (amount: number) => void;
+  setPlayerSprinting: (isSprinting: boolean) => void;
+  getStaminaPercentage: () => number;
+  
+  // Temperature system
+  updatePlayerTemperature: (amount: number) => void;
+  setPlayerTemperatureEffects: (effects: {
+    freezing: boolean;
+    overheating: boolean;
+    visualEffect: 'none' | 'frost' | 'heat';
+    effectIntensity: number;
+  }) => void;
   
   // Crafting
   craftItem: (type: BlockType, count: number, ingredients: { type: BlockType, count: number }[]) => boolean;
@@ -295,6 +323,19 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     maxHunger: 20,
     oxygen: 20,
     maxOxygen: 20,
+    stamina: 100,
+    maxStamina: 100,
+    staminaRegenRate: 5, // Amount of stamina regenerated per second
+    staminaRegenDelay: 1000, // Time in ms to wait after stamina use before regeneration starts
+    lastStaminaUseTime: 0,
+    isSprinting: false,
+    temperature: 0, // Neutral temperature (range from -1 to 1)
+    temperatureEffects: {
+      freezing: false,
+      overheating: false,
+      visualEffect: 'none',
+      effectIntensity: 0
+    },
     experience: 0,
     level: 1,
     flying: false,
@@ -1219,17 +1260,7 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     });
   },
   
-  setPlayerTakingBlockDamage: (isTakingDamage) => {
-    set((state) => {
-      return {
-        ...state,
-        player: {
-          ...state.player,
-          takingBlockDamage: isTakingDamage
-        }
-      };
-    });
-  },
+  // This section has been corrected and a proper implementation has been added at the end of the file
   
   setCameraMode: (mode) => {
     set((state) => ({
@@ -1317,5 +1348,113 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
     // This is usually handled by the PlayerControls component
     // Here we only log the rotation for debugging
     console.log(`Camera rotation: x=${x}, y=${y}`);
+  },
+  
+  // Stamina system
+  updatePlayerStamina: (amount) => {
+    set((state) => {
+      // Clamp stamina value between 0 and maxStamina
+      const newStamina = Math.max(0, Math.min(state.player.maxStamina, state.player.stamina + amount));
+      
+      // Update last stamina use time if decreasing stamina
+      const lastStaminaUseTime = amount < 0 ? Date.now() : state.player.lastStaminaUseTime;
+      
+      return {
+        ...state,
+        player: {
+          ...state.player,
+          stamina: newStamina,
+          lastStaminaUseTime
+        }
+      };
+    });
+  },
+  
+  setPlayerSprinting: (isSprinting) => {
+    set((state) => ({
+      ...state,
+      player: {
+        ...state.player,
+        isSprinting
+      }
+    }));
+  },
+  
+  getStaminaPercentage: () => {
+    const { player } = get();
+    return (player.stamina / player.maxStamina) * 100;
+  },
+  
+  // Temperature system
+  updatePlayerTemperature: (amount) => {
+    set((state) => {
+      // Clamp temperature between -1 and 1
+      const newTemperature = Math.max(-1, Math.min(1, state.player.temperature + amount));
+      
+      // Determine temperature effects based on new temperature
+      const temperatureEffects = {
+        ...state.player.temperatureEffects
+      };
+      
+      // Update freezing/overheating states
+      if (newTemperature <= -0.7) {
+        temperatureEffects.freezing = true;
+        temperatureEffects.overheating = false;
+        temperatureEffects.visualEffect = 'frost';
+        temperatureEffects.effectIntensity = Math.abs((newTemperature + 0.7) / 0.3); // Range 0-1 based on -0.7 to -1.0
+      } else if (newTemperature >= 0.7) {
+        temperatureEffects.freezing = false;
+        temperatureEffects.overheating = true;
+        temperatureEffects.visualEffect = 'heat';
+        temperatureEffects.effectIntensity = (newTemperature - 0.7) / 0.3; // Range 0-1 based on 0.7 to 1.0
+      } else {
+        temperatureEffects.freezing = false;
+        temperatureEffects.overheating = false;
+        temperatureEffects.visualEffect = 'none';
+        temperatureEffects.effectIntensity = 0;
+      }
+      
+      return {
+        ...state,
+        player: {
+          ...state.player,
+          temperature: newTemperature,
+          temperatureEffects
+        }
+      };
+    });
+  },
+  
+  setPlayerTemperatureEffects: (effects) => {
+    set((state) => ({
+      ...state,
+      player: {
+        ...state.player,
+        temperatureEffects: effects
+      }
+    }));
+  },
+  
+  // Player block damage tracking
+  setPlayerTakingBlockDamage: (isTakingDamage) => {
+    set((state) => ({
+      ...state,
+      player: {
+        ...state.player,
+        takingBlockDamage: isTakingDamage
+      }
+    }));
+  },
+  
+  // Alternative implementation for tracking block damage state
+  updateBlockDamageState: (isTakingDamage) => {
+    set((state) => ({
+      ...state,
+      player: {
+        ...state.player,
+        takingBlockDamage: isTakingDamage
+      }
+    }));
+    console.log(`Player block damage state: ${isTakingDamage ? 'taking damage' : 'not taking damage'}`);
   }
 }));
