@@ -178,6 +178,62 @@ export default function Player() {
     }
   };
   
+  // Handle block placement
+  const handlePlace = () => {
+    if (placeCooldown) return;
+    
+    // Set cooldown
+    setPlaceCooldown(true);
+    setTimeout(() => setPlaceCooldown(false), 250);
+    
+    // Get the currently selected block face
+    const selectedBlockFace = useVoxelGame.getState().selectedBlockFace;
+    if (!selectedBlockFace) return;
+    
+    const [x, y, z, face] = selectedBlockFace;
+    
+    // Calculate the position of the new block based on the face
+    let newX = x;
+    let newY = y;
+    let newZ = z;
+    
+    switch (face) {
+      case 'top': newY += 1; break;
+      case 'bottom': newY -= 1; break;
+      case 'north': newZ -= 1; break;
+      case 'south': newZ += 1; break;
+      case 'east': newX += 1; break;
+      case 'west': newX -= 1; break;
+    }
+    
+    // Get currently selected block type from inventory
+    const inventory = useVoxelGame.getState().inventory;
+    const selectedInventorySlot = useVoxelGame.getState().selectedInventorySlot;
+    const selectedBlockType = inventory[selectedInventorySlot]?.type;
+    if (!selectedBlockType || selectedBlockType === 'air') return;
+    
+    // Check if the position is valid (not intersecting with the player)
+    const playerBox = new THREE.Box3().setFromObject(playerRef.current!);
+    const blockBox = new THREE.Box3(
+      new THREE.Vector3(newX, newY, newZ),
+      new THREE.Vector3(newX + 1, newY + 1, newZ + 1)
+    );
+    
+    if (playerBox.intersectsBox(blockBox)) {
+      console.log("Can't place block inside player");
+      return;
+    }
+    
+    // Place the block
+    placeBlock(newX, newY, newZ, selectedBlockType);
+    
+    // Play sound
+    playBlockPlaceSound(selectedBlockType);
+    
+    // Grant building XP
+    addXp('building', 2);
+  };
+
   // Process interactions with the world
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
@@ -187,20 +243,118 @@ export default function Player() {
       if (e.button === 0) {
         handleAttack();
       }
+      
+      // Right click to place blocks
+      if (e.button === 2) {
+        handlePlace();
+      }
     };
     
     // Add event listeners
     document.addEventListener('mousedown', handleMouseDown);
     
+    // Add right-click prevention
+    const preventContextMenu = (e: Event) => e.preventDefault();
+    document.addEventListener('contextmenu', preventContextMenu);
+    
     // Cleanup
     return () => {
       document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('contextmenu', preventContextMenu);
     };
-  }, [attackCooldown, blocks, removeBlock, addXp, playBlockBreakSound]);
+  }, [attackCooldown, placeCooldown, blocks, removeBlock, placeBlock, addXp, playBlockBreakSound, playBlockPlaceSound]);
+  
+  // Raycast to find blocks
+  const performRaycast = () => {
+    if (!cameraRef.current) return;
+    
+    // Get current camera position and direction
+    const cameraPosition = new THREE.Vector3();
+    cameraRef.current.getWorldPosition(cameraPosition);
+    
+    const cameraDirection = new THREE.Vector3();
+    cameraRef.current.getWorldDirection(cameraDirection);
+    
+    // Set up raycaster
+    raycasterRef.current.set(cameraPosition, cameraDirection);
+    
+    // Maximum distance to check for blocks
+    const maxDistance = 5;
+    
+    // Check for intersections with blocks
+    let closestBlock: [number, number, number] | null = null;
+    let closestBlockFace: [number, number, number, string] | null = null;
+    let closestDistance = maxDistance;
+    
+    // Check each block in range
+    for (let x = Math.floor(cameraPosition.x - maxDistance); x <= Math.floor(cameraPosition.x + maxDistance); x++) {
+      for (let y = Math.floor(cameraPosition.y - maxDistance); y <= Math.floor(cameraPosition.y + maxDistance); y++) {
+        for (let z = Math.floor(cameraPosition.z - maxDistance); z <= Math.floor(cameraPosition.z + maxDistance); z++) {
+          const blockType = getBlockAt(x, y, z);
+          
+          // Skip non-solid blocks
+          if (blockType === 'air' || blockType === 'water') {
+            continue;
+          }
+          
+          // Simple box for each block
+          const blockBox = new THREE.Box3(
+            new THREE.Vector3(x, y, z),
+            new THREE.Vector3(x + 1, y + 1, z + 1)
+          );
+          
+          // Calculate ray intersection
+          const intersectionPoint = new THREE.Vector3();
+          const intersected = raycasterRef.current.ray.intersectBox(blockBox, intersectionPoint);
+          
+          if (intersected) {
+            // Calculate distance to intersection
+            const distance = cameraPosition.distanceTo(intersectionPoint);
+            
+            // If this is the closest block so far, update
+            if (distance < closestDistance) {
+              closestDistance = distance;
+              closestBlock = [x, y, z];
+              
+              // Determine which face was hit
+              const eps = 0.001;
+              let face: string = 'top';
+              
+              if (Math.abs(intersectionPoint.x - x) < eps) face = 'west';
+              else if (Math.abs(intersectionPoint.x - (x + 1)) < eps) face = 'east';
+              else if (Math.abs(intersectionPoint.y - y) < eps) face = 'bottom';
+              else if (Math.abs(intersectionPoint.y - (y + 1)) < eps) face = 'top';
+              else if (Math.abs(intersectionPoint.z - z) < eps) face = 'north';
+              else if (Math.abs(intersectionPoint.z - (z + 1)) < eps) face = 'south';
+              
+              closestBlockFace = [x, y, z, face];
+            }
+          }
+        }
+      }
+    }
+    
+    // Update selected block in game state
+    if (closestBlock) {
+      useVoxelGame.getState().setSelectedBlock(closestBlock);
+    } else {
+      useVoxelGame.getState().setSelectedBlock(null);
+    }
+    
+    // Update selected block face in game state
+    if (closestBlockFace) {
+      useVoxelGame.getState().setSelectedBlockFace(closestBlockFace);
+    } else {
+      useVoxelGame.getState().setSelectedBlockFace(null);
+    }
+  };
   
   // Physics and movement update
   useFrame(() => {
     if (!playerRef.current) return;
+    
+    // Perform raycast for block selection
+    performRaycast();
     
     // Get current position
     const [px, py, pz] = position;

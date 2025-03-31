@@ -113,6 +113,7 @@ export interface VoxelGameState {
   
   // Player interaction
   selectedBlock: [number, number, number] | null; // Currently targeted block
+  selectedBlockFace: [number, number, number, string] | null; // Block face for placement
   
   // Inventory
   inventory: InventoryItem[];
@@ -134,6 +135,7 @@ export interface VoxelGameState {
   placeBlock: (x: number, y: number, z: number, type: BlockType) => void;
   removeBlock: (x: number, y: number, z: number) => void;
   setSelectedBlock: (coords: [number, number, number] | null) => void;
+  setSelectedBlockFace: (coords: [number, number, number, string] | null) => void;
   setSelectedInventorySlot: (slot: number) => void;
   addToInventory: (type: BlockType, count: number) => void;
   removeFromInventory: (type: BlockType, count: number) => void;
@@ -284,6 +286,7 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   
   // Player interaction
   selectedBlock: null,
+  selectedBlockFace: null,
   
   // Inventory - start with some basic blocks
   inventory: [
@@ -443,6 +446,10 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   
   setSelectedBlock: (coords) => {
     set({ selectedBlock: coords });
+  },
+  
+  setSelectedBlockFace: (coords) => {
+    set({ selectedBlockFace: coords });
   },
   
   setSelectedInventorySlot: (slot) => {
