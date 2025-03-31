@@ -5,8 +5,8 @@ import * as THREE from 'three';
 import { GLTF } from 'three-stdlib';
 import { useAudio } from '../../lib/stores/useAudio';
 
-// Preload common models to improve performance (only preload zombie for now)
-useGLTF.preload('/models/zombie.glb');
+// OPTIMIZATION: Disable model preloading to improve initial load time
+// useGLTF.preload('/models/zombie.glb');
 
 // No preloading - simplified for performance
 

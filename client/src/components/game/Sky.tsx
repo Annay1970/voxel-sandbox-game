@@ -278,85 +278,32 @@ export default function SkyDome({ timeOfDay: propTimeOfDay, weather: propWeather
   const moonGlowScale = isBloodMoonActive ? 30 + (bloodMoonIntensity * 15) : 30;
   const moonGlowOpacity = isBloodMoonActive ? 0.3 + (bloodMoonIntensity * 0.3) : 0.3;
 
+  // OPTIMIZATION: Simplify sky rendering to improve performance
   return (
     <group>
       {/* Apply sky color to renderer background */}
       <color attach="background" args={[skyColor]} />
       
-      {/* Add fog */}
-      <fog attach="fog" args={[fogColor.getHex(), 5, 100]} />
+      {/* Simplified fog with reduced range */}
+      <fog attach="fog" args={[fogColor.getHex(), 10, 70]} />
       
-      {/* Sun (visible during day) */}
-      <mesh 
-        visible={timeOfDay > 0.25 && timeOfDay < 0.75}
-        position={[sunPosition[0], sunPosition[1], sunPosition[2]]}
-      >
-        <sphereGeometry args={[15, 16, 16]} />
-        <meshBasicMaterial color="#FFFF77" />
-      </mesh>
-      
-      {/* Sun glow */}
-      <sprite 
-        visible={timeOfDay > 0.25 && timeOfDay < 0.75} 
-        scale={50}
-        position={[sunPosition[0], sunPosition[1], sunPosition[2]]}
-      >
-        <spriteMaterial attach="material" map={null} transparent opacity={0.4} color="#FFFFA0" />
-      </sprite>
-      
-      {/* Moon (visible during night) */}
-      <mesh 
-        visible={timeOfDay < 0.25 || timeOfDay > 0.75}
-        position={[moonPosition[0], moonPosition[1], moonPosition[2]]}
-      >
-        <sphereGeometry args={[8, 16, 16]} />
-        <meshBasicMaterial color={moonColor} />
-      </mesh>
-      
-      {/* Moon glow */}
-      <sprite 
-        visible={timeOfDay < 0.25 || timeOfDay > 0.75} 
-        scale={moonGlowScale}
-        position={[moonPosition[0], moonPosition[1], moonPosition[2]]}
-      >
-        <spriteMaterial attach="material" map={null} transparent opacity={moonGlowOpacity} color={moonGlowColor} />
-      </sprite>
-      
-      {/* Blood Moon particles (only visible during Blood Moon night) */}
-      {isBloodMoonActive && (timeOfDay < 0.25 || timeOfDay > 0.75) && (
-        <>
-          {/* Create a subtle red particle effect around the moon */}
-          <points>
-            <bufferGeometry>
-              <bufferAttribute
-                attach="attributes-position"
-                count={200}
-                array={Float32Array.from(Array(600).fill(0).map((_, i) => {
-                  // Generate positions in a sphere around the moon
-                  if (i % 3 === 0) {
-                    return moonPosition[0] + (Math.random() - 0.5) * 50;
-                  } else if (i % 3 === 1) {
-                    return moonPosition[1] + (Math.random() - 0.5) * 50;
-                  } else {
-                    return moonPosition[2] + (Math.random() - 0.5) * 10;
-                  }
-                }))}
-                itemSize={3}
-              />
-            </bufferGeometry>
-            <pointsMaterial
-              attach="material"
-              color="#FF0000"
-              size={2}
-              transparent
-              opacity={0.4 * bloodMoonIntensity}
-              sizeAttenuation
-            />
-          </points>
-        </>
+      {/* Simplified sun - only visible during day, reduced geometry */}
+      {timeOfDay > 0.25 && timeOfDay < 0.75 && (
+        <mesh position={[sunPosition[0], sunPosition[1], sunPosition[2]]}>
+          <sphereGeometry args={[15, 8, 8]} />
+          <meshBasicMaterial color="#FFFF77" />
+        </mesh>
       )}
       
-      {/* Directional light from sun/moon - Position set directly */}
+      {/* Simplified moon - only visible during night, reduced geometry */}
+      {(timeOfDay < 0.25 || timeOfDay > 0.75) && (
+        <mesh position={[moonPosition[0], moonPosition[1], moonPosition[2]]}>
+          <sphereGeometry args={[8, 8, 8]} />
+          <meshBasicMaterial color={moonColor} />
+        </mesh>
+      )}
+      
+      {/* Directional light from sun/moon with optimized settings */}
       <directionalLight 
         position={[
           (timeOfDay > 0.25 && timeOfDay < 0.75 ? sunPosition[0] : moonPosition[0]),
@@ -366,30 +313,26 @@ export default function SkyDome({ timeOfDay: propTimeOfDay, weather: propWeather
         intensity={sunLightIntensity} 
         color={sunLightColor.getHex()} 
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-far={500}
-        shadow-camera-left={-100}
-        shadow-camera-right={-100}
-        shadow-camera-top={100}
-        shadow-camera-bottom={-100}
+        shadow-mapSize-width={1024} // Reduced shadow resolution
+        shadow-mapSize-height={1024}
+        shadow-camera-far={300} // Reduced shadow distance
+        shadow-camera-left={-75}
+        shadow-camera-right={75}
+        shadow-camera-top={75}
+        shadow-camera-bottom={-75}
       />
       
-      {/* Ambient light */}
+      {/* Essential lighting */}
       <ambientLight intensity={ambientIntensity} />
+      <hemisphereLight args={[colors.topColor.getHex(), colors.bottomColor.getHex(), 0.6]} />
       
-      {/* Hemisphere light (sky/ground contrast) */}
-      <hemisphereLight
-        args={[colors.topColor.getHex(), colors.bottomColor.getHex(), 0.6]}
-      />
-      
-      {/* Additional red light during Blood Moon night */}
+      {/* Add Blood Moon effect only if active and at night - simplified */}
       {isBloodMoonActive && (timeOfDay < 0.25 || timeOfDay > 0.75) && (
         <pointLight
           position={[moonPosition[0], moonPosition[1], moonPosition[2]]}
           color="#FF0000"
-          intensity={0.2 * bloodMoonIntensity}
-          distance={500}
+          intensity={0.3 * bloodMoonIntensity}
+          distance={300}
         />
       )}
     </group>

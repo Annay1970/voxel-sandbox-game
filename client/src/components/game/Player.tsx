@@ -1,26 +1,11 @@
-import { useRef, useEffect, useState, Suspense } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { 
-  PointerLockControls, 
-  useKeyboardControls, 
-  OrbitControls,
-  useGLTF
-} from '@react-three/drei';
+import { PointerLockControls, useKeyboardControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { GLTF } from 'three-stdlib';
-import { 
-  BlockType, 
-  getBlockMovementEffect, 
-  isBlockDamaging,
-  isBlockTemperatureReactive
-} from '../../lib/blocks';
+import { BlockType, getBlockMovementEffect, isBlockDamaging } from '../../lib/blocks';
 import { useVoxelGame } from '../../lib/stores/useVoxelGame';
 import { useSkills } from '../../lib/stores/useSkills';
 import { useAudio } from '../../lib/stores/useAudio';
-
-// Preload the player models
-useGLTF.preload('/models/player.glb');
-useGLTF.preload('/models/steve.glb');
 
 // Controls mapping
 enum Controls {
@@ -49,10 +34,6 @@ export default function Player() {
   const placeBlock = useVoxelGame(state => state.placeBlock);
   const removeBlock = useVoxelGame(state => state.removeBlock);
   const setSelectedBlock = useVoxelGame(state => state.setSelectedBlock);
-  const inventory = useVoxelGame(state => state.inventory);
-  const selectedInventorySlot = useVoxelGame(state => state.selectedInventorySlot);
-  // Get weather system to apply effects to player movement and visuals
-  const weatherSystem = useVoxelGame(state => state.weatherSystem);
   
   // Get character stats from skills
   const characterSpeed = useSkills(state => state.characterSpeed);
@@ -61,9 +42,11 @@ export default function Player() {
   // Get audio functions from audio store
   const playFootsteps = useAudio(state => state.playFootsteps);
   const stopFootsteps = useAudio(state => state.stopFootsteps);
-  const playWaterSounds = useAudio(state => state.playWaterSounds);
   const playBlockBreakSound = useAudio(state => state.playBlockBreakSound);
   const playBlockPlaceSound = useAudio(state => state.playBlockPlaceSound);
+  
+  // Camera mode state from the game store
+  const cameraMode = useVoxelGame(state => state.player.cameraMode);
   
   // Get the three.js camera
   const { camera } = useThree();
@@ -80,8 +63,6 @@ export default function Player() {
   const right = useKeyboardControls<Controls>(state => state.right);
   const jump = useKeyboardControls<Controls>(state => state.jump);
   const sprint = useKeyboardControls<Controls>(state => state.sprint);
-  const attack = useKeyboardControls<Controls>(state => state.attack);
-  const place = useKeyboardControls<Controls>(state => state.place);
   
   // Movement parameters
   const speed = 0.15 * characterSpeed; // Base movement speed
@@ -97,25 +78,14 @@ export default function Player() {
   const [attackCooldown, setAttackCooldown] = useState<boolean>(false);
   const [placeCooldown, setPlaceCooldown] = useState<boolean>(false);
   
-  // Get player eye height
-  const playerHeight = 1.6; // Player is 1.6 blocks tall
-  const eyeHeight = playerHeight * 0.9; // Eyes are slightly below the top of the head
-  
   // Animation flags
   const [swingingTool, setSwingingTool] = useState(false);
   const [attackAnimProgress, setAttackAnimProgress] = useState(0);
-  const attackAnimRef = useRef<number | null>(null);
   
-  // Weather effect flags
-  const [isExposedToWeather, setIsExposedToWeather] = useState(false);
-  
-  // Weather particle references for animation
-  const rainParticlesRef = useRef<THREE.Group>(null);
-  const snowParticlesRef = useRef<THREE.Group>(null);
-  const stormParticlesRef = useRef<THREE.Group>(null);
-  
-  // Player dimensions for collision detection
-  const playerWidth = 0.6; // Player is 0.6 blocks wide (3 pixels in Minecraft)
+  // Player dimensions
+  const playerHeight = 1.6; // Player is 1.6 blocks tall
+  const eyeHeight = playerHeight * 0.9; // Eyes are slightly below the top of the head
+  const playerWidth = 0.6; // Player is 0.6 blocks wide
   const playerDepth = 0.6; // Player is 0.6 blocks deep
   
   // Get block at position
@@ -146,7 +116,6 @@ export default function Player() {
           }
           
           // Simplified AABB collision check
-          // Each block is a 1x1x1 cube, so we just need to check if the player's AABB intersects
           const blockMinX = x;
           const blockMaxX = x + 1;
           const blockMinY = y;
@@ -168,7 +137,47 @@ export default function Player() {
     return false; // No collision
   };
   
-  // Process interactions with the world (attacking, placing blocks)
+  // Handle attack (break blocks)
+  const handleAttack = () => {
+    if (attackCooldown) return;
+    
+    // Set cooldown
+    setAttackCooldown(true);
+    setTimeout(() => setAttackCooldown(false), 250);
+    
+    // Show attack animation
+    setSwingingTool(true);
+    setTimeout(() => setSwingingTool(false), 200);
+    
+    // Get the currently selected block
+    const selectedBlock = useVoxelGame.getState().selectedBlock;
+    if (!selectedBlock) return;
+    
+    const [x, y, z] = selectedBlock;
+    
+    // Try to remove the block
+    const blockKey = `${x},${y},${z}`;
+    const blockType = blocks[blockKey];
+    
+    if (blockType && blockType !== 'air') {
+      // Remove the block
+      removeBlock(x, y, z);
+      
+      // Play sound
+      playBlockBreakSound(blockType);
+      
+      // Grant mining XP
+      if (blockType === 'stone' || blockType === 'coal') {
+        addXp('mining', 5);
+      } else if (blockType === 'dirt' || blockType === 'grass' || blockType === 'sand') {
+        addXp('farming', 2);
+      } else if (blockType === 'wood' || blockType === 'log' || blockType === 'leaves') {
+        addXp('woodcutting', 5);
+      }
+    }
+  };
+  
+  // Process interactions with the world
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
       if (!controlsRef.current?.isLocked) return;
@@ -177,296 +186,17 @@ export default function Player() {
       if (e.button === 0) {
         handleAttack();
       }
-      // Right click to place blocks
-      else if (e.button === 2) {
-        handlePlace();
-      }
-    };
-    
-    // Set up controls for looking around
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!controlsRef.current?.isLocked) return;
-      
-      // Raycast to update selected block
-      updateRaycast();
-    };
-    
-    // Raycast in the direction the player is looking
-    const updateRaycast = () => {
-      if (!cameraRef.current) return;
-      
-      const raycaster = raycasterRef.current;
-      const camera = cameraRef.current;
-      
-      // Origin is camera position
-      raycaster.set(
-        camera.position, 
-        new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize()
-      );
-      
-      // Maximum interaction distance (5 blocks)
-      raycaster.far = 5;
-      
-      // Check for intersections with blocks
-      const [px, py, pz] = position;
-      const rayOrigin = new THREE.Vector3(px, py + eyeHeight, pz);
-      
-      // Calculate all block positions within reach
-      const nearbyBlocks: THREE.Object3D[] = [];
-      for (let x = Math.floor(px - 5); x <= Math.floor(px + 5); x++) {
-        for (let y = Math.floor(py - 5); y <= Math.floor(py + 5); y++) {
-          for (let z = Math.floor(pz - 5); z <= Math.floor(pz + 5); z++) {
-            const blockKey = `${x},${y},${z}`;
-            const blockType = blocks[blockKey];
-            
-            // Skip air blocks for performance
-            if (!blockType || blockType === 'air') {
-              continue;
-            }
-            
-            // Create a temporary object to represent this block
-            const blockObj = new THREE.Mesh(
-              new THREE.BoxGeometry(1, 1, 1),
-              new THREE.MeshBasicMaterial()
-            );
-            blockObj.position.set(x + 0.5, y + 0.5, z + 0.5);
-            blockObj.userData = { x, y, z, type: blockType };
-            nearbyBlocks.push(blockObj);
-          }
-        }
-      }
-      
-      // Find the closest intersection
-      const direction = new THREE.Vector3(0, 0, -1)
-        .applyQuaternion(camera.quaternion)
-        .normalize();
-      
-      raycaster.set(rayOrigin, direction);
-      const intersects = raycaster.intersectObjects(nearbyBlocks);
-      
-      // Clean up temporary objects
-      nearbyBlocks.length = 0;
-      
-      if (intersects.length > 0) {
-        const closest = intersects[0];
-        const blockData = closest.object.userData;
-        
-        // Update the selected block
-        setSelectedBlock([blockData.x, blockData.y, blockData.z]);
-      } else {
-        // No block selected
-        setSelectedBlock(null);
-      }
-    };
-    
-    // Handle block breaking action
-    const handleAttack = () => {
-      if (attackCooldown) return;
-      
-      // Set cooldown
-      setAttackCooldown(true);
-      setTimeout(() => setAttackCooldown(false), 250); // 250ms cooldown
-      
-      // Show attack animation
-      setSwingingTool(true);
-      setTimeout(() => setSwingingTool(false), 200);
-      
-      // Get the currently selected block
-      const selectedBlock = useVoxelGame.getState().selectedBlock;
-      if (!selectedBlock) return;
-      
-      const [x, y, z] = selectedBlock;
-      
-      // Try to remove the block
-      const blockKey = `${x},${y},${z}`;
-      const blockType = blocks[blockKey];
-      
-      if (blockType && blockType !== 'air') {
-        // Remove the block
-        removeBlock(x, y, z);
-        
-        // Play appropriate sound effect for block breaking
-        playBlockBreakSound(blockType);
-        
-        // Grant mining XP
-        if (blockType === 'stone' || blockType === 'coal') {
-          addXp('mining', 5);
-        } else if (blockType === 'dirt' || blockType === 'grass' || blockType === 'sand') {
-          addXp('farming', 2);
-        } else if (blockType === 'wood' || blockType === 'log' || blockType === 'leaves') {
-          addXp('woodcutting', 5);
-        }
-        
-        console.log(`Removed ${blockType} block at ${x},${y},${z}`);
-      }
-    };
-    
-    // Handle block placement action
-    const handlePlace = () => {
-      if (placeCooldown) return;
-      
-      // Set cooldown
-      setPlaceCooldown(true);
-      setTimeout(() => setPlaceCooldown(false), 250); // 250ms cooldown
-      
-      // Show placement animation
-      setSwingingTool(true);
-      setTimeout(() => setSwingingTool(false), 200);
-      
-      // Get the currently selected block
-      const selectedBlock = useVoxelGame.getState().selectedBlock;
-      if (!selectedBlock) return;
-      
-      const [x, y, z] = selectedBlock;
-      
-      // Get the block to place from inventory
-      const inventorySlot = useVoxelGame.getState().selectedInventorySlot;
-      const inventoryItem = useVoxelGame.getState().inventory[inventorySlot];
-      
-      if (!inventoryItem || inventoryItem.count <= 0) {
-        console.log("No block selected in inventory");
-        return;
-      }
-      
-      // Find placement position
-      const blockType = getBlockAt(x, y, z);
-      if (blockType === 'air') return; // Can't place against air
-      
-      // Get placement face based on intersection normal
-      // For simplicity, always place on the "top" face for now
-      const placeX = x;
-      const placeY = y + 1;
-      const placeZ = z;
-      
-      // Check if the place position is already occupied
-      if (getBlockAt(placeX, placeY, placeZ) !== 'air') {
-        console.log("Cannot place block - position occupied");
-        return;
-      }
-      
-      // Place the block
-      placeBlock(placeX, placeY, placeZ, inventoryItem.type as BlockType);
-      
-      // Play the placement sound
-      playBlockPlaceSound(inventoryItem.type);
-      
-      // Grant building XP
-      addXp('building', 2);
-      
-      console.log(`Placed ${inventoryItem.type} block at ${placeX},${placeY},${placeZ}`);
     };
     
     // Add event listeners
     document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mousemove', handleMouseMove);
     
     // Cleanup
     return () => {
       document.removeEventListener('mousedown', handleMouseDown);
-      document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [position, attackCooldown, placeCooldown, blocks, removeBlock, placeBlock, setSelectedBlock, addXp, playBlockBreakSound, playBlockPlaceSound]);
+  }, [attackCooldown, blocks, removeBlock, addXp, playBlockBreakSound]);
   
-  // Camera mode state from the game store
-  const cameraMode = useVoxelGame(state => state.player.cameraMode);
-  const toggleCameraMode = useVoxelGame(state => state.toggleCameraMode);
-  
-  // Third person camera orbit control ref
-  const orbitControlsRef = useRef<any>(null);
-  
-  // Load the player 3D model with error handling
-  const [modelLoaded, setModelLoaded] = useState(false);
-  const [modelError, setModelError] = useState(false);
-  
-  // Try to load the models, but handle errors gracefully
-  let playerModel: THREE.Group | null = null;
-  let steveModel: THREE.Group | null = null;
-
-  // Load the primary player model
-  try {
-    // Using useGLTF within a try/catch won't work properly due to React hooks rules,
-    // so we'll use a state to track loading status
-    const { scene: playerScene } = useGLTF('/models/steve.glb') as GLTF & {
-      scene: THREE.Group;
-    };
-    steveModel = playerScene;
-    
-    // If Steve model loaded successfully, use that
-    if (!modelLoaded && steveModel) {
-      setModelLoaded(true);
-      playerModel = steveModel;
-      console.log("Steve model loaded successfully");
-    }
-  } catch (error) {
-    console.warn("Failed to load Steve model, trying fallback:", error);
-    
-    // Try to load the fallback model
-    try {
-      const { scene: fallbackScene } = useGLTF('/models/player.glb') as GLTF & {
-        scene: THREE.Group;
-      };
-      playerModel = fallbackScene;
-      
-      // If we got here, loading the fallback was successful
-      if (!modelLoaded) {
-        setModelLoaded(true);
-        console.log("Fallback player model loaded successfully");
-      }
-    } catch (fallbackError) {
-      if (!modelError) {
-        console.warn("Failed to load all player models, using basic shape:", fallbackError);
-        setModelError(true);
-      }
-    }
-  }
-  
-  // Set up keyboard events for inventory selection and camera mode
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Number keys 1-9 select inventory slots
-      if (e.key >= '1' && e.key <= '9') {
-        const slot = parseInt(e.key) - 1;
-        useVoxelGame.getState().setSelectedInventorySlot(slot);
-      }
-      
-      // F key for attacking (in addition to left click)
-      if (e.key === 'f' || e.key === 'F') {
-        if (!attackCooldown) {
-          // This simulates a left mouse click
-          const event = new MouseEvent('mousedown', { button: 0 });
-          document.dispatchEvent(event);
-        }
-      }
-      
-      // V key to toggle camera mode
-      if (e.key === 'v' || e.key === 'V') {
-        toggleCameraMode();
-        console.log(`Camera mode switched to ${useVoxelGame.getState().player.cameraMode}`);
-        
-        // Play sound
-        useAudio.getState().playUISound('click');
-      }
-    };
-    
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [attackCooldown, toggleCameraMode]);
-  
-  // Handle sword animation
-  useFrame(({ clock }) => {
-    // When attack is triggered, animate the sword
-    if (swingingTool) {
-      setAttackAnimProgress((prev) => {
-        // Normalize animation to run once from 0 to 1 in 200ms
-        const newProgress = Math.min(1, prev + 0.1);
-        return newProgress;
-      });
-    } else {
-      // Reset attack animation when not swinging
-      setAttackAnimProgress(0);
-    }
-  });
-
   // Physics and movement update
   useFrame(() => {
     if (!playerRef.current) return;
@@ -523,86 +253,8 @@ export default function Player() {
       }
     }
     
-    // Apply speed to movement, affected by weather conditions and block effects
+    // Apply speed to movement
     let moveSpeed = sprint ? speed * sprintMultiplier : speed;
-    let isSlippery = false;
-    let isPlayerDamaged = false;
-    
-    // Apply weather movement modifiers
-    if (weatherSystem) {
-      // Slow down in bad weather (rain, snow, etc.)
-      moveSpeed *= weatherSystem.effects.movementModifier;
-      
-      // Debug weather effects on movement
-      if (weatherSystem.effects.movementModifier < 0.9) {
-        console.log(`Weather slowing movement: ${weatherSystem.currentWeather} (modifier: ${weatherSystem.effects.movementModifier.toFixed(2)})`);
-      }
-    }
-    
-    // Apply block effects to movement and player state
-    // Reuse the variables from above to avoid redeclaration errors
-    
-    // Check block player is standing on
-    const standingOnBlockKey = `${Math.floor(currentPosition.x)},${Math.floor(currentPosition.y - 0.1)},${Math.floor(currentPosition.z)}`;
-    const standingOnBlock = blocks[standingOnBlockKey];
-    
-    // Check block at player's feet level
-    const blockAtFeetLevelKey = `${Math.floor(currentPosition.x)},${Math.floor(currentPosition.y)},${Math.floor(currentPosition.z)}`;
-    const blockAtFeetLevel = blocks[blockAtFeetLevelKey];
-    
-    // Apply special block movement effects
-    if (standingOnBlock) {
-      const movementEffect = getBlockMovementEffect(standingOnBlock);
-      moveSpeed *= movementEffect.speedMultiplier;
-      isSlippery = movementEffect.slippery;
-      
-      // Display debug info for special block effects
-      if (movementEffect.speedMultiplier !== 1.0) {
-        console.log(`Block affecting movement: ${standingOnBlock} (speed: ${movementEffect.speedMultiplier.toFixed(2)}, slippery: ${isSlippery})`);
-      }
-    }
-    
-    // Check for damaging blocks
-    if (blockAtFeetLevel) {
-      // Get damage info from the block
-      const damageInfo = isBlockDamaging(blockAtFeetLevel);
-      
-      if (damageInfo.isDamaging) {
-        isPlayerDamaged = true;
-        
-        // Apply damage based on cooldown
-        if (!useVoxelGame.getState().player.takingBlockDamage) {
-          useVoxelGame.getState().setPlayerTakingBlockDamage(true);
-          
-          // Use damage amount from block configuration
-          const damageAmount = damageInfo.damage;
-          let soundVolume = 0.7;
-          
-          // Log appropriate message based on block type
-          if (blockAtFeetLevel === 'lava') {
-            console.log(`🔥 Player burning in lava! Taking ${damageAmount} damage`);
-            soundVolume = 0.8;
-            // Add burning particles effect (for future implementation)
-          } else if (blockAtFeetLevel === 'cactus') {
-            console.log(`🌵 Player pricked by cactus! Taking ${damageAmount} damage`);
-          } else {
-            console.log(`Player taking damage from ${blockAtFeetLevel} block: ${damageAmount} damage`);
-          }
-          
-          // Apply damage
-          useVoxelGame.getState().damagePlayer(damageAmount);
-          
-          // Play sound based on block type
-          // Use a known sound for damage
-          useAudio.getState().playSound('damageSound', { volume: soundVolume });
-          
-          // Use cooldown time from block configuration
-          setTimeout(() => {
-            useVoxelGame.getState().setPlayerTakingBlockDamage(false);
-          }, damageInfo.cooldown);
-        }
-      }
-    }
     
     xVel *= moveSpeed;
     zVel *= moveSpeed;
@@ -677,104 +329,15 @@ export default function Player() {
     
     // Update position and velocity
     setPosition([newPosition.x, newPosition.y, newPosition.z]);
-    
-    // Apply slippery effect - momentum continues even when not pressing keys
-    if (isSlippery && grounded) {
-      // If on ice, keep some momentum even when not actively moving
-      // Only slow down gradually instead of stopping immediately
-      if (Math.abs(xVel) < 0.001 && Math.abs(zVel) < 0.001 && 
-          (Math.abs(velocity.x) > 0.01 || Math.abs(velocity.z) > 0.01)) {
-        
-        // Gradual slowdown instead of immediate stop
-        const friction = 0.95; // Higher = more slippery
-        newVel.x = velocity.x * friction;
-        newVel.z = velocity.z * friction;
-        
-        console.log("Slippery surface - maintaining momentum");
-      }
-    }
-    
     setVelocity(newVel);
     
-    // Determine terrain type for sound effects
-    let terrainType: 'grass' | 'sand' | 'stone' | 'wood' | 'water' = 'grass';
-    const soundBlockKey = `${Math.floor(newPosition.x)},${Math.floor(newPosition.y - 0.1)},${Math.floor(newPosition.z)}`;
-    const blockUnderFeet = blocks[soundBlockKey];
-    
-    if (blockUnderFeet) {
-      // Determine terrain type from block below the player
-      switch (blockUnderFeet) {
-        case 'sand': terrainType = 'sand'; break;
-        case 'stone': terrainType = 'stone'; break;
-        case 'wood': terrainType = 'wood'; break;
-        case 'water': terrainType = 'water'; break;
-        default: terrainType = 'grass'; break;
-      }
-    }
-    
-    // Play appropriate sounds based on movement and terrain
+    // Play footstep sounds if moving and grounded
     const isMoving = Math.abs(newVel.x) > 0.01 || Math.abs(newVel.z) > 0.01;
     const isRunning = sprint && isMoving;
-    const isWalking = isMoving && !isRunning;
-    
     if (isMoving && grounded) {
-      playFootsteps(isWalking, isRunning, grounded, terrainType);
+      playFootsteps(isMoving, isRunning, grounded, 'grass');
     } else {
       stopFootsteps();
-    }
-    
-    // Check if in water
-    const blockAtFeetKey = `${Math.floor(newPosition.x)},${Math.floor(newPosition.y)},${Math.floor(newPosition.z)}`;
-    const blockAtFeet = blocks[blockAtFeetKey];
-    const blockAtHeadKey = `${Math.floor(newPosition.x)},${Math.floor(newPosition.y + 1)},${Math.floor(newPosition.z)}`;
-    const blockAtHead = blocks[blockAtHeadKey];
-    
-    const isSwimming = blockAtFeet === 'water';
-    const isUnderwater = blockAtFeet === 'water' && blockAtHead === 'water';
-    
-    // Play water sounds if in water
-    playWaterSounds(isSwimming, isUnderwater);
-    
-    // Apply weather effects to player (like getting wet in rain)
-    if (weatherSystem && (weatherSystem.currentWeather === 'rain' || weatherSystem.currentWeather === 'thunderstorm' || weatherSystem.currentWeather === 'snow')) {
-      // Check if player is exposed to weather (not under a block)
-      let isCurrentlyExposed = true;
-      
-      // Check blocks above player for shelter
-      for (let y = Math.floor(newPosition.y + 2); y <= Math.floor(newPosition.y + 20); y++) {
-        const blockAboveKey = `${Math.floor(newPosition.x)},${y},${Math.floor(newPosition.z)}`;
-        const blockAbove = blocks[blockAboveKey];
-        
-        if (blockAbove && blockAbove !== 'air' && blockAbove !== 'leaves') {
-          // Player is sheltered
-          isCurrentlyExposed = false;
-          break;
-        }
-      }
-      
-      // Update state only if it changed to avoid unnecessary re-renders
-      if (isCurrentlyExposed !== isExposedToWeather) {
-        setIsExposedToWeather(isCurrentlyExposed);
-        
-        if (isCurrentlyExposed) {
-          console.log(`Player exposed to ${weatherSystem.currentWeather} weather`);
-        } else {
-          console.log(`Player found shelter from the ${weatherSystem.currentWeather}`);
-        }
-      }
-    } else if (isExposedToWeather) {
-      // Weather cleared up, reset exposure flag
-      setIsExposedToWeather(false);
-    }
-    
-    // Update camera and player position
-    if (cameraRef.current) {
-      // Position camera at player's eye level
-      cameraRef.current.position.set(
-        newPosition.x,
-        newPosition.y + eyeHeight,
-        newPosition.z
-      );
     }
     
     // Update player mesh position
@@ -783,364 +346,72 @@ export default function Player() {
       newPosition.y,
       newPosition.z
     );
-  });
-  
-  // Update game store with player position and rotation
-  useEffect(() => {
-    // Send position updates to the global store
-    useVoxelGame.getState().updatePlayerPosition(position);
     
-    // Calculate rotation from camera
+    // Update camera position
     if (cameraRef.current) {
-      const cameraDirection = new THREE.Vector3();
-      cameraRef.current.getWorldDirection(cameraDirection);
-      
-      // Calculate Euler angles from direction vector
-      const euler = new THREE.Euler().setFromQuaternion(
-        new THREE.Quaternion().setFromUnitVectors(
-          new THREE.Vector3(0, 0, -1), // Default camera looks down negative z-axis
-          cameraDirection
-        )
+      // Position camera at player's eye level
+      cameraRef.current.position.set(
+        newPosition.x,
+        newPosition.y + eyeHeight,
+        newPosition.z
       );
-      
-      // Update rotation in store
-      useVoxelGame.getState().updatePlayerRotation([euler.x, euler.y, euler.z]);
-    }
-  }, [position]);
-
-  // Handle third-person camera adjustments
-  useEffect(() => {
-    if (cameraMode === 'third' && orbitControlsRef.current) {
-      // Set orbit controls distance and angles for third-person view
-      orbitControlsRef.current.minDistance = 3;
-      orbitControlsRef.current.maxDistance = 10;
-      orbitControlsRef.current.distance = 5;
-      orbitControlsRef.current.minPolarAngle = Math.PI / 6; // Limit how high camera can go
-      orbitControlsRef.current.maxPolarAngle = Math.PI / 2; // Limit how low camera can go
-    }
-  }, [cameraMode]);
-  
-  // Animate weather particles
-  useFrame(({ clock }) => {
-    // Only animate particles if player is exposed to weather
-    if (!isExposedToWeather || !weatherSystem) return;
-    
-    const time = clock.getElapsedTime();
-    
-    // Animate rain particles
-    if (rainParticlesRef.current && weatherSystem.currentWeather === 'rain') {
-      // Safely animate each particle
-      rainParticlesRef.current.children.forEach((child, i) => {
-        if (child instanceof THREE.Mesh) {
-          // Move particles downward
-          child.position.y -= 0.2;
-          
-          // If particle is below player, reset to top
-          if (child.position.y < -5) {
-            child.position.y = 5 + Math.random() * 3;
-            child.position.x = (Math.random() - 0.5) * 10;
-            child.position.z = (Math.random() - 0.5) * 10;
-          }
-        }
-      });
-      
-      // Move the entire particle group with the player
-      rainParticlesRef.current!.position.set(position[0], position[1] + 5, position[2]);
-    }
-    
-    // Animate snow particles
-    if (snowParticlesRef.current && weatherSystem.currentWeather === 'snow') {
-      // Safely animate each particle
-      snowParticlesRef.current.children.forEach((child, i) => {
-        if (child instanceof THREE.Mesh) {
-          // Gentle falling with some drift
-          child.position.y -= 0.03;
-          child.position.x += Math.sin(time + i) * 0.01;
-          child.position.z += Math.cos(time + i * 0.5) * 0.01;
-          
-          // If particle is below player, reset to top
-          if (child.position.y < -5) {
-            child.position.y = 5 + Math.random() * 3;
-            child.position.x = (Math.random() - 0.5) * 10;
-            child.position.z = (Math.random() - 0.5) * 10;
-          }
-        }
-      });
-      
-      // Move the entire particle group with the player
-      snowParticlesRef.current!.position.set(position[0], position[1] + 5, position[2]);
-    }
-    
-    // Animate thunderstorm particles
-    if (stormParticlesRef.current && weatherSystem.currentWeather === 'thunderstorm') {
-      const children = stormParticlesRef.current.children;
-      
-      // Safely animate each particle
-      children.forEach((child, i) => {
-        if (child instanceof THREE.Mesh && i < children.length - 1) { // Skip the last child (lightning)
-          // Faster falling with wind gusts
-          child.position.y -= 0.3;
-          child.position.x += Math.sin(time * 2) * 0.05;
-          
-          // If particle is below player, reset to top
-          if (child.position.y < -5) {
-            child.position.y = 5 + Math.random() * 3;
-            child.position.x = (Math.random() - 0.5) * 10;
-            child.position.z = (Math.random() - 0.5) * 10;
-          }
-        }
-      });
-      
-      // Move the entire particle group with the player
-      stormParticlesRef.current!.position.set(position[0], position[1] + 5, position[2]);
     }
   });
   
+  // Return the player components
   return (
     <>
-      {/* Controls based on camera mode */}
-      {cameraMode === 'first' ? (
-        // First-person controls - auto-lock on click
-        <PointerLockControls 
-          ref={controlsRef} 
-          onUpdate={() => {
-            // Force enable pointer lock when component mounts
-            if (controlsRef.current && !controlsRef.current.isLocked) {
-              console.log("Attempting to lock controls on mount");
-              
-              // Try to lock on mount with a small delay
-              setTimeout(() => {
-                if (controlsRef.current && !controlsRef.current.isLocked) {
-                  try {
-                    controlsRef.current.lock();
-                  } catch (error) {
-                    console.error("Failed to auto-lock controls:", error);
-                  }
-                }
-              }, 1000);
-              
-              // Add a click event to the canvas to help mobile browsers
-              const canvas = document.querySelector('canvas');
-              if (canvas) {
-                // Add click listener that persists (not once)
-                canvas.addEventListener('click', () => {
-                  if (controlsRef.current && !controlsRef.current.isLocked) {
-                    console.log("Canvas clicked, locking pointer");
-                    try {
-                      controlsRef.current.lock();
-                    } catch (error) {
-                      console.error("Failed to lock on click:", error);
-                    }
-                  }
-                });
-                
-                // Also listen for key presses to lock controls
-                window.addEventListener('keydown', (e) => {
-                  if (!controlsRef.current?.isLocked) {
-                    if (e.key === 'w' || e.key === 'a' || e.key === 's' || e.key === 'd' || 
-                        e.key === ' ' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || 
-                        e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                      console.log("Key pressed, locking pointer");
-                      try {
-                        controlsRef.current?.lock();
-                      } catch (error) {
-                        console.error("Failed to lock on keypress:", error);
-                      }
-                    }
-                  }
-                });
-              }
-            }
-          }}
-        />
-      ) : (
-        // Third-person orbit controls
-        <OrbitControls 
-          ref={orbitControlsRef}
-          target={[position[0], position[1] + eyeHeight, position[2]]}
-          enableZoom={true}
-          enablePan={false}
-          makeDefault
-        />
-      )}
+      {/* Camera controls */}
+      <PointerLockControls ref={controlsRef} />
       
-      {/* Weather effects that follow the player when exposed */}
-      {isExposedToWeather && weatherSystem && (
-        <group position={[position[0], position[1] + 5, position[2]]}>
-          {weatherSystem.currentWeather === 'rain' && (
-            <group ref={rainParticlesRef}>
-              {/* Rain particles */}
-              {Array.from({ length: 30 }).map((_, i) => (
-                <mesh 
-                  key={`rain-${i}`} 
-                  position={[
-                    (Math.random() - 0.5) * 10,
-                    Math.random() * 5,
-                    (Math.random() - 0.5) * 10
-                  ]}
-                >
-                  <boxGeometry args={[0.05, 0.3, 0.05]} />
-                  <meshBasicMaterial color="#8EB1C7" transparent opacity={0.6} />
-                </mesh>
-              ))}
-            </group>
-          )}
-          
-          {weatherSystem.currentWeather === 'snow' && (
-            <group ref={snowParticlesRef}>
-              {/* Snow particles */}
-              {Array.from({ length: 40 }).map((_, i) => (
-                <mesh 
-                  key={`snow-${i}`} 
-                  position={[
-                    (Math.random() - 0.5) * 10,
-                    Math.random() * 5,
-                    (Math.random() - 0.5) * 10
-                  ]}
-                >
-                  <sphereGeometry args={[0.07, 4, 4]} />
-                  <meshBasicMaterial color="white" transparent opacity={0.8} />
-                </mesh>
-              ))}
-            </group>
-          )}
-          
-          {weatherSystem.currentWeather === 'thunderstorm' && (
-            <group ref={stormParticlesRef}>
-              {/* Heavy rain particles */}
-              {Array.from({ length: 60 }).map((_, i) => (
-                <mesh 
-                  key={`heavy-rain-${i}`} 
-                  position={[
-                    (Math.random() - 0.5) * 10,
-                    Math.random() * 5,
-                    (Math.random() - 0.5) * 10
-                  ]}
-                >
-                  <boxGeometry args={[0.05, 0.4, 0.05]} />
-                  <meshBasicMaterial color="#6E8CA3" transparent opacity={0.7} />
-                </mesh>
-              ))}
-              
-              {/* Occasional lightning flash */}
-              {Math.random() > 0.99 && (
-                <pointLight 
-                  position={[0, 10, 0]} 
-                  intensity={20} 
-                  distance={50} 
-                  color="#E0F7FF"
-                  decay={1}
-                />
-              )}
-            </group>
-          )}
-        </group>
-      )}
-      
-      {/* Player model - always present but only visible in third-person mode */}
+      {/* Player model */}
       <group ref={playerRef} position={[position[0], position[1], position[2]]}>
-        {/* Conditional rendering based on camera mode */}
         {cameraMode === 'third' ? (
-          // In third-person view, show player model
-          <Suspense fallback={
-            // Fallback for when model is loading
-            <mesh>
-              <boxGeometry args={[0.5, 1.6, 0.5]} />
-              <meshStandardMaterial color="#2196F3" wireframe />
-            </mesh>
-          }>
-            {modelLoaded && playerModel ? (
-              // If 3D model loaded successfully, use it
-              <primitive 
-                object={playerModel!.clone()} 
-                scale={[2.5, 2.5, 2.5]} // Steve model needs to be scaled up
-                position={[0, -1.6, 0]} 
-                rotation={[0, Math.PI, 0]} // Rotate to face forward
-                castShadow
-              />
-            ) : (
-              // Fallback blocky character if model failed to load
-              <group>
-                {/* Player head */}
-                <mesh position={[0, playerHeight - 0.25, 0]}>
-                  <boxGeometry args={[0.5, 0.5, 0.5]} />
-                  <meshStandardMaterial color="#FFD3B4" />
-                </mesh>
-                
-                {/* Player body */}
-                <mesh position={[0, playerHeight - 0.8, 0]}>
-                  <boxGeometry args={[0.5, 0.6, 0.3]} />
-                  <meshStandardMaterial color="#2196F3" />
-                </mesh>
-                
-                {/* Player arms */}
-                <mesh position={[0.4, playerHeight - 0.8, 0]}>
-                  <boxGeometry args={[0.2, 0.6, 0.2]} />
-                  <meshStandardMaterial color="#2196F3" />
-                </mesh>
-                <mesh position={[-0.4, playerHeight - 0.8, 0]}>
-                  <boxGeometry args={[0.2, 0.6, 0.2]} />
-                  <meshStandardMaterial color="#2196F3" />
-                </mesh>
-                
-                {/* Player legs */}
-                <mesh position={[0.15, playerHeight - 1.45, 0]}>
-                  <boxGeometry args={[0.2, 0.6, 0.2]} />
-                  <meshStandardMaterial color="#0D47A1" />
-                </mesh>
-                <mesh position={[-0.15, playerHeight - 1.45, 0]}>
-                  <boxGeometry args={[0.2, 0.6, 0.2]} />
-                  <meshStandardMaterial color="#0D47A1" />
-                </mesh>
-              </group>
-            )}
-          </Suspense>
-        ) : (
-          // In first-person, render the player's arm and weapon
-          <group position={[0.4, -0.5, -0.4]} rotation={[0, 0, 0]}>
-            {/* Player's arm in first person view */}
-            <mesh position={[0, -0.1, 0]}>
-              <boxGeometry args={[0.2, 0.6, 0.2]} />
+          // Third-person model
+          <group>
+            {/* Player head */}
+            <mesh position={[0, playerHeight - 0.25, 0]}>
+              <boxGeometry args={[0.5, 0.5, 0.5]} />
               <meshStandardMaterial color="#FFD3B4" />
             </mesh>
             
-            {/* Sword with animation transform */}
-            <group rotation={[
-              // Use attackAnimProgress for smooth animation
-              swingingTool ? -Math.PI * 0.5 * attackAnimProgress : 0, 
-              swingingTool ? -Math.PI * 0.1 * attackAnimProgress : 0, 
-              0
-            ]}>
-              {/* Sword handle */}
-              <mesh position={[0, -0.5, 0.3]} rotation={[Math.PI / 4, 0, 0]}>
-                <boxGeometry args={[0.1, 0.1, 0.5]} />
-                <meshStandardMaterial color="#8B4513" />
-              </mesh>
-              
-              {/* Sword guard */}
-              <mesh position={[0, -0.5, 0.05]} rotation={[Math.PI / 4, 0, 0]}>
-                <boxGeometry args={[0.25, 0.05, 0.1]} />
-                <meshStandardMaterial color="#FFD700" />
-              </mesh>
-              
-              {/* Sword blade */}
-              <mesh position={[0, -0.5, 0.7]} rotation={[Math.PI / 4, 0, 0]}>
-                <boxGeometry args={[0.1, 0.05, 0.8]} />
-                <meshStandardMaterial color="#B0C4DE" />
-              </mesh>
-              
-              {/* Point light to highlight the sword */}
-              <pointLight
-                position={[0, 0, 0.3]}
-                intensity={0.3}
-                distance={1}
-                color="#FFFFFF"
-              />
-            </group>
+            {/* Player body */}
+            <mesh position={[0, playerHeight - 0.8, 0]}>
+              <boxGeometry args={[0.5, 0.6, 0.3]} />
+              <meshStandardMaterial color="#2196F3" />
+            </mesh>
+            
+            {/* Player arms */}
+            <mesh position={[0.4, playerHeight - 0.8, 0]}>
+              <boxGeometry args={[0.2, 0.6, 0.2]} />
+              <meshStandardMaterial color="#2196F3" />
+            </mesh>
+            <mesh position={[-0.4, playerHeight - 0.8, 0]}>
+              <boxGeometry args={[0.2, 0.6, 0.2]} />
+              <meshStandardMaterial color="#2196F3" />
+            </mesh>
+            
+            {/* Player legs */}
+            <mesh position={[0.15, playerHeight - 1.45, 0]}>
+              <boxGeometry args={[0.2, 0.6, 0.2]} />
+              <meshStandardMaterial color="#0D47A1" />
+            </mesh>
+            <mesh position={[-0.15, playerHeight - 1.45, 0]}>
+              <boxGeometry args={[0.2, 0.6, 0.2]} />
+              <meshStandardMaterial color="#0D47A1" />
+            </mesh>
+          </group>
+        ) : (
+          // First-person view - just show the arm
+          <group position={[0.4, -0.5, -0.4]} rotation={[0, 0, 0]}>
+            <mesh position={[0, 0, 0]}>
+              <boxGeometry args={[0.2, 0.6, 0.2]} />
+              <meshStandardMaterial color="#FFD3B4" />
+            </mesh>
           </group>
         )}
         
-        {/* Light source that follows the player (like holding a torch) */}
+        {/* Player light */}
         <pointLight 
           position={[0, eyeHeight, 0]} 
           intensity={0.5} 
