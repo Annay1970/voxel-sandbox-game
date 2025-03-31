@@ -188,6 +188,10 @@ export interface VoxelGameState {
   setPlayerSprinting: (isSprinting: boolean) => void;
   getStaminaPercentage: () => number;
   
+  // Hunger system
+  updatePlayerHunger: (amount: number) => void;
+  getHungerPercentage: () => number;
+  
   // Temperature system
   updatePlayerTemperature: (amount: number) => void;
   setPlayerTemperatureEffects: (effects: {
@@ -1383,6 +1387,27 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   getStaminaPercentage: () => {
     const { player } = get();
     return (player.stamina / player.maxStamina) * 100;
+  },
+  
+  // Hunger system
+  updatePlayerHunger: (amount) => {
+    set((state) => {
+      // Clamp hunger value between 0 and maxHunger
+      const newHunger = Math.max(0, Math.min(state.player.maxHunger, state.player.hunger + amount));
+      
+      return {
+        ...state,
+        player: {
+          ...state.player,
+          hunger: newHunger
+        }
+      };
+    });
+  },
+  
+  getHungerPercentage: () => {
+    const { player } = get();
+    return (player.hunger / player.maxHunger) * 100;
   },
   
   // Temperature system
