@@ -99,13 +99,16 @@ function App() {
     }
   }, [setChunks, setBlocks, chunks, setSound]);
 
-  // Simplified keyboard controls
+  // Complete keyboard controls
   const keyMap = [
     { name: Controls.forward, keys: ["KeyW", "ArrowUp"] },
     { name: Controls.back, keys: ["KeyS", "ArrowDown"] },
     { name: Controls.left, keys: ["KeyA", "ArrowLeft"] },
     { name: Controls.right, keys: ["KeyD", "ArrowRight"] },
     { name: Controls.jump, keys: ["Space"] },
+    { name: Controls.sprint, keys: ["ShiftLeft"] },
+    { name: Controls.attack, keys: ["KeyF"] }, // F key for attacking
+    { name: Controls.place, keys: ["KeyE"] }, // E key for placing
   ];
 
   return (

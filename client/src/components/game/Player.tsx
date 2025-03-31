@@ -57,13 +57,91 @@ export default function Player() {
     cameraRef.current = camera as THREE.PerspectiveCamera;
   }, [camera]);
   
-  // Set up keyboard controls
+  // Set up keyboard controls through useKeyboardControls
   const forward = useKeyboardControls<Controls>(state => state.forward);
   const back = useKeyboardControls<Controls>(state => state.back);
   const left = useKeyboardControls<Controls>(state => state.left);
   const right = useKeyboardControls<Controls>(state => state.right);
   const jump = useKeyboardControls<Controls>(state => state.jump);
   const sprint = useKeyboardControls<Controls>(state => state.sprint);
+  
+  // Debug keyboard controls
+  useEffect(() => {
+    console.log('useKeyboardControls Status:', { forward, back, left, right, jump, sprint });
+  }, [forward, back, left, right, jump, sprint]);
+  
+  // Set up direct keyboard controls as backup
+  const [manualControls, setManualControls] = useState({
+    forward: false,
+    back: false,
+    left: false,
+    right: false,
+    jump: false,
+    sprint: false
+  });
+  
+  // Update manual controls in the handleKeyDown and handleKeyUp functions
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      console.log('Direct keydown event:', e.code);
+      
+      switch(e.code) {
+        case 'KeyW':
+          setManualControls(prev => ({ ...prev, forward: true }));
+          break;
+        case 'KeyS':
+          setManualControls(prev => ({ ...prev, back: true }));
+          break;
+        case 'KeyA':
+          setManualControls(prev => ({ ...prev, left: true }));
+          break;
+        case 'KeyD':
+          setManualControls(prev => ({ ...prev, right: true }));
+          break;
+        case 'Space':
+          setManualControls(prev => ({ ...prev, jump: true }));
+          break;
+        case 'ShiftLeft':
+          setManualControls(prev => ({ ...prev, sprint: true }));
+          break;
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      console.log('Direct keyup event:', e.code);
+      
+      switch(e.code) {
+        case 'KeyW':
+          setManualControls(prev => ({ ...prev, forward: false }));
+          break;
+        case 'KeyS':
+          setManualControls(prev => ({ ...prev, back: false }));
+          break;
+        case 'KeyA':
+          setManualControls(prev => ({ ...prev, left: false }));
+          break;
+        case 'KeyD':
+          setManualControls(prev => ({ ...prev, right: false }));
+          break;
+        case 'Space':
+          setManualControls(prev => ({ ...prev, jump: false }));
+          break;
+        case 'ShiftLeft':
+          setManualControls(prev => ({ ...prev, sprint: false }));
+          break;
+      }
+    };
+
+    // Add event listeners
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
   
   // Movement parameters
   const speed = 0.15 * characterSpeed; // Base movement speed
@@ -250,8 +328,30 @@ export default function Player() {
       }
     };
     
+    // Debug keyboard events
+    const handleKeyDown = (e: KeyboardEvent) => {
+      console.log('Key down event:', e.code);
+      
+      // Manual keyboard handling for debugging
+      switch (e.code) {
+        case 'KeyW':
+          console.log('Manual W key detected');
+          break;
+        case 'KeyA':
+          console.log('Manual A key detected');
+          break;
+        case 'KeyS':
+          console.log('Manual S key detected');
+          break;
+        case 'KeyD':
+          console.log('Manual D key detected');
+          break;
+      }
+    };
+    
     // Add event listeners
     document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('keydown', handleKeyDown);
     
     // Add right-click prevention
     const preventContextMenu = (e: Event) => e.preventDefault();
@@ -260,6 +360,7 @@ export default function Player() {
     // Cleanup
     return () => {
       document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('contextmenu', preventContextMenu);
     };
   }, [attackCooldown, placeCooldown, blocks, removeBlock, placeBlock, addXp, playBlockBreakSound, playBlockPlaceSound]);
@@ -364,8 +465,17 @@ export default function Player() {
     let xVel = 0;
     let zVel = 0;
     
-    // Apply movement based on camera direction
-    if (forward || back || left || right) {
+  
+
+  // Apply movement based on camera direction
+  const isForward = forward || manualControls.forward;
+  const isBack = back || manualControls.back;
+  const isLeft = left || manualControls.left;
+  const isRight = right || manualControls.right;
+  const isJump = jump || manualControls.jump;
+  const isSprint = sprint || manualControls.sprint;
+  
+  if (isForward || isBack || isLeft || isRight) {
       // Get camera direction
       const cameraDirection = new THREE.Vector3();
       cameraRef.current?.getWorldDirection(cameraDirection);
@@ -375,11 +485,11 @@ export default function Player() {
       cameraDirection.normalize();
       
       // Calculate move direction
-      if (forward) {
+      if (isForward) {
         xVel += cameraDirection.x;
         zVel += cameraDirection.z;
       }
-      if (back) {
+      if (isBack) {
         xVel -= cameraDirection.x;
         zVel -= cameraDirection.z;
       }
@@ -391,11 +501,11 @@ export default function Player() {
         -cameraDirection.x
       );
       
-      if (right) {
+      if (isRight) {
         xVel += rightVector.x;
         zVel += rightVector.z;
       }
-      if (left) {
+      if (isLeft) {
         xVel -= rightVector.x;
         zVel -= rightVector.z;
       }
@@ -409,7 +519,7 @@ export default function Player() {
     }
     
     // Apply speed to movement
-    let moveSpeed = sprint ? speed * sprintMultiplier : speed;
+    let moveSpeed = (sprint || manualControls.sprint) ? speed * sprintMultiplier : speed;
     
     xVel *= moveSpeed;
     zVel *= moveSpeed;
@@ -424,7 +534,7 @@ export default function Player() {
     // Apply gravity if not grounded
     if (!grounded) {
       newVel.y -= gravity;
-    } else if (jump) {
+    } else if (jump || manualControls.jump) {
       // Jump if grounded and jump key pressed
       newVel.y = jumpForce;
       setGrounded(false);
@@ -488,7 +598,7 @@ export default function Player() {
     
     // Play footstep sounds if moving and grounded
     const isMoving = Math.abs(newVel.x) > 0.01 || Math.abs(newVel.z) > 0.01;
-    const isRunning = sprint && isMoving;
+    const isRunning = (sprint || manualControls.sprint) && isMoving;
     if (isMoving && grounded) {
       playFootsteps(isMoving, isRunning, grounded, 'grass');
     } else {
