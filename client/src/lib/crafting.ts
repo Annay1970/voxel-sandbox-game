@@ -175,6 +175,31 @@ export const CRAFTING_RECIPES: CraftingRecipe[] = [
     unlocked: false
   },
   {
+    id: 'glowstone',
+    name: 'Glowstone',
+    output: { type: 'glowstone', count: 1 },
+    ingredients: [
+      { type: 'torch', count: 2 },
+      { type: 'redstone', count: 1 },
+      { type: 'glass', count: 1 }
+    ],
+    requiresCraftingTable: true,
+    category: 'Building',
+    unlocked: true
+  },
+  {
+    id: 'glowstone_from_dust',
+    name: 'Glowstone (from dust)',
+    output: { type: 'glowstone', count: 1 },
+    ingredients: [
+      { type: 'sand', count: 2 },
+      { type: 'redstone', count: 2 }
+    ],
+    requiresCraftingTable: true,
+    category: 'Building',
+    unlocked: true
+  },
+  {
     id: 'spectral_bow',
     name: 'Spectral Bow',
     output: { type: 'woodenAxe', count: 1 }, // Placeholder output type

@@ -43,7 +43,24 @@ const blockColors: Record<BlockType, string> = {
   'lava': '#ff4500',
   'snow': '#f5f5f5',
   'cactus': '#2e7d32',
-  'glass': '#e0f7fa'
+  'glass': '#e0f7fa',
+  // New block types
+  'clay': '#b3b3b3',
+  'obsidian': '#1a1a2e',
+  'flower': '#e91e63',
+  'tallGrass': '#66bb6a',
+  'mushroom': '#8d6e63',
+  'gravel': '#9e9e9e',
+  'roseflower': '#f44336',
+  'blueflower': '#2196f3',
+  'pumpkin': '#ff9800',
+  'melon': '#cddc39',
+  'ironOre': '#b0bec5',
+  'goldOre': '#ffd54f',
+  'redstone': '#b71c1c',
+  'diamond': '#00bcd4',
+  'emerald': '#4caf50',
+  'glowstone': '#ffeb3b'
 };
 
 // Function to get color with transparency
@@ -56,6 +73,7 @@ const getBlockColor = (type: BlockType): THREE.Color | null => {
 const getBlockOpacity = (type: BlockType): number => {
   if (type === 'air') return 0;
   if (type === 'glass' || type === 'water' || type === 'ice') return 0.7;
+  if (type === 'flower' || type === 'tallGrass' || type === 'roseflower' || type === 'blueflower' || type === 'mushroom') return 1.0;
   return 1;
 };
 
@@ -126,6 +144,8 @@ export default function Block({
   // Special cases for different block types
   const renderWater = type === 'water';
   const renderFire = type === 'lava';
+  const isEmissive = type === 'lava' || type === 'torch' || type === 'redstone' || 
+                  type === 'glowstone' || type === 'diamond' || type === 'emerald';
   
   return (
     <mesh 
@@ -144,10 +164,19 @@ export default function Block({
         // Apply texture if available
         map={texture || undefined}
         // Special material properties for different block types
-        emissive={renderFire ? new THREE.Color('#ff2000') : undefined}
-        emissiveIntensity={renderFire ? 0.5 : 0}
-        metalness={type === 'stone' || type === 'stonePickaxe' ? 0.1 : 0}
-        roughness={type === 'ice' || type === 'glass' ? 0.1 : 0.8}
+        emissive={isEmissive ? new THREE.Color(
+                              type === 'lava' ? '#ff2000' : 
+                              type === 'torch' ? '#ff9900' : 
+                              type === 'redstone' ? '#ff0000' : 
+                              type === 'glowstone' ? '#ffeb3b' :
+                              type === 'diamond' ? '#00bcd4' :
+                              type === 'emerald' ? '#4caf50' :
+                              '#ffffff') : undefined}
+        emissiveIntensity={isEmissive ? (type === 'lava' ? 0.5 : 0.3) : 0}
+        metalness={(type === 'stone' || type === 'stonePickaxe' || 
+                   type === 'ironOre' || type === 'goldOre') ? 0.3 : 0}
+        roughness={type === 'ice' || type === 'glass' ? 0.1 : 
+                  type === 'diamond' || type === 'emerald' ? 0.2 : 0.8}
         wireframe={false}
       />
       

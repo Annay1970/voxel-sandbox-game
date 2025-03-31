@@ -5,7 +5,11 @@ export type BlockType =
   'air' | 'grass' | 'dirt' | 'stone' | 'sand' | 'wood' | 'leaves' | 'water' |
   'log' | 'stick' | 'craftingTable' | 'woodenPickaxe' | 'stonePickaxe' |
   'woodenAxe' | 'woodenShovel' | 'coal' | 'torch' | 'ice' | 'lava' | 
-  'snow' | 'cactus' | 'glass';
+  'snow' | 'cactus' | 'glass' | 
+  // New block types
+  'clay' | 'obsidian' | 'flower' | 'tallGrass' | 'mushroom' | 'gravel' |
+  'roseflower' | 'blueflower' | 'pumpkin' | 'melon' | 
+  'ironOre' | 'goldOre' | 'redstone' | 'diamond' | 'emerald' | 'glowstone';
   
 /**
  * Properties of each block type
@@ -208,6 +212,152 @@ export const BLOCK_PROPERTIES: Record<BlockType, BlockProperties> = {
     hardness: 0.3,
     drops: [], // Glass doesn't drop anything when broken
     stackSize: 64
+  },
+  // New block types
+  'clay': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'shovel',
+    minToolLevel: 0,
+    hardness: 0.6,
+    stackSize: 64
+  },
+  'obsidian': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'pickaxe',
+    minToolLevel: 3, // Needs diamond pickaxe
+    hardness: 50.0,
+    stackSize: 64
+  },
+  'flower': {
+    solid: false,
+    transparent: true,
+    liquid: false,
+    hardness: 0.1,
+    stackSize: 64
+  },
+  'tallGrass': {
+    solid: false,
+    transparent: true,
+    liquid: false,
+    hardness: 0.1,
+    drops: [], // Sometimes drops seeds (not implemented yet)
+    stackSize: 64
+  },
+  'mushroom': {
+    solid: false,
+    transparent: true,
+    liquid: false,
+    hardness: 0.1,
+    stackSize: 64
+  },
+  'gravel': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'shovel',
+    minToolLevel: 0,
+    hardness: 0.6,
+    drops: [
+      { type: 'gravel', chance: 0.9 },
+      { type: 'stick', chance: 0.1 }
+    ],
+    stackSize: 64
+  },
+  'roseflower': {
+    solid: false,
+    transparent: true,
+    liquid: false,
+    hardness: 0.1,
+    stackSize: 64
+  },
+  'blueflower': {
+    solid: false,
+    transparent: true,
+    liquid: false,
+    hardness: 0.1,
+    stackSize: 64
+  },
+  'pumpkin': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'axe',
+    minToolLevel: 0,
+    hardness: 1.0,
+    stackSize: 64
+  },
+  'melon': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'axe',
+    minToolLevel: 0,
+    hardness: 1.0,
+    stackSize: 64
+  },
+  'ironOre': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'pickaxe',
+    minToolLevel: 1, // Needs at least wooden pickaxe
+    hardness: 3.0,
+    drops: 'ironOre',
+    stackSize: 64
+  },
+  'goldOre': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'pickaxe',
+    minToolLevel: 2, // Needs at least stone pickaxe
+    hardness: 3.0,
+    drops: 'goldOre',
+    stackSize: 64
+  },
+  'redstone': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'pickaxe',
+    minToolLevel: 2, // Needs at least stone pickaxe
+    hardness: 3.0,
+    drops: 'redstone',
+    stackSize: 64
+  },
+  'diamond': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'pickaxe',
+    minToolLevel: 2, // Needs at least stone pickaxe
+    hardness: 3.0,
+    drops: 'diamond',
+    stackSize: 64
+  },
+  'emerald': {
+    solid: true,
+    transparent: false,
+    liquid: false,
+    tool: 'pickaxe',
+    minToolLevel: 2, // Needs at least stone pickaxe
+    hardness: 3.0,
+    drops: 'emerald',
+    stackSize: 64
+  },
+  'glowstone': {
+    solid: true,
+    transparent: true,
+    liquid: false,
+    tool: 'pickaxe',
+    minToolLevel: 0,
+    hardness: 0.3,
+    drops: 'glowstone',
+    stackSize: 64
   }
 };
 
@@ -294,7 +444,8 @@ export function isBlockDamaging(type: BlockType): { damage: number, cooldown: nu
  * Check if a block emits light
  */
 export function isBlockLightEmitter(type: BlockType): boolean {
-  return type === 'torch' || type === 'lava';
+  return type === 'torch' || type === 'lava' || type === 'redstone' || 
+         type === 'diamond' || type === 'emerald' || type === 'glowstone';
 }
 
 /**

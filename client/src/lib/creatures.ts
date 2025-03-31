@@ -670,7 +670,8 @@ export function getCreatureProperties(type: CreatureType): CreatureProperties {
           { type: 'glass', chance: 0.9, minCount: 2, maxCount: 4 },
           { type: 'ice', chance: 0.7, minCount: 1, maxCount: 3 },
           { type: 'coal', chance: 0.8, minCount: 2, maxCount: 5 },
-          { type: 'torch', chance: 0.6, minCount: 1, maxCount: 3 }
+          { type: 'torch', chance: 0.6, minCount: 1, maxCount: 3 },
+          { type: 'glowstone', chance: 0.4, minCount: 1, maxCount: 2 }
         ],
         
         // Enhanced properties

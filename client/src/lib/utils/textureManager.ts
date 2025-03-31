@@ -11,7 +11,10 @@ class TextureManager {
   private textureTypes: BlockType[] = [
     'grass', 'dirt', 'stone', 'sand', 'wood', 'leaves', 'water',
     'log', 'craftingTable', 'coal', 'torch', 'ice', 'lava', 'snow',
-    'cactus', 'glass'
+    'cactus', 'glass', 'clay', 'obsidian', 'flower', 'tallGrass', 
+    'mushroom', 'gravel', 'roseflower', 'blueflower', 'pumpkin', 
+    'melon', 'ironOre', 'goldOre', 'redstone', 'diamond', 'emerald',
+    'glowstone'
   ];
   
   // Colors for procedural texture generation
@@ -37,7 +40,24 @@ class TextureManager {
     'lava': '#FF5722',
     'snow': '#FAFAFA',
     'cactus': '#2E7D32',
-    'glass': '#E0F7FA'
+    'glass': '#E0F7FA',
+    // New block types
+    'clay': '#B3B3B3',
+    'obsidian': '#1A1A2E',
+    'flower': '#E91E63',
+    'tallGrass': '#66BB6A',
+    'mushroom': '#8D6E63',
+    'gravel': '#9E9E9E',
+    'roseflower': '#F44336',
+    'blueflower': '#2196F3',
+    'pumpkin': '#FF9800',
+    'melon': '#CDDC39',
+    'ironOre': '#B0BEC5',
+    'goldOre': '#FFD54F',
+    'redstone': '#B71C1C',
+    'diamond': '#00BCD4',
+    'emerald': '#4CAF50',
+    'glowstone': '#FFEB3B'
   };
   
   constructor() {
@@ -277,6 +297,43 @@ class TextureManager {
         this.ctx.moveTo(this.canvas.width / 3, 0);
         this.ctx.lineTo(this.canvas.width / 3, this.canvas.height);
         this.ctx.stroke();
+        break;
+        
+      case 'glowstone':
+        // Create glowstone texture with glowing effect
+        // Base yellow
+        this.ctx.fillStyle = '#FFEB3B';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Add radial gradient for glow effect
+        const glowstoneGradient = this.ctx.createRadialGradient(
+          this.canvas.width/2, this.canvas.height/2, 5,
+          this.canvas.width/2, this.canvas.height/2, this.canvas.width/2
+        );
+        glowstoneGradient.addColorStop(0, '#FFFFFF');
+        glowstoneGradient.addColorStop(0.7, '#FFF59D');
+        glowstoneGradient.addColorStop(1, '#FFEB3B');
+        this.ctx.fillStyle = glowstoneGradient;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Add textured dots
+        this.ctx.fillStyle = '#FFC107';
+        for (let i = 0; i < 60; i++) {
+          const x = Math.random() * this.canvas.width;
+          const y = Math.random() * this.canvas.height;
+          const size = 1 + Math.random() * 3;
+          this.ctx.fillRect(x, y, size, size);
+        }
+        
+        // Add some cracks pattern
+        this.ctx.strokeStyle = '#FFA000';
+        this.ctx.lineWidth = 1;
+        for (let i = 0; i < 10; i++) {
+          this.ctx.beginPath();
+          this.ctx.moveTo(Math.random() * this.canvas.width, Math.random() * this.canvas.height);
+          this.ctx.lineTo(Math.random() * this.canvas.width, Math.random() * this.canvas.height);
+          this.ctx.stroke();
+        }
         break;
         
       default:
