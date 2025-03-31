@@ -8,6 +8,7 @@ import { useAudio } from '../../lib/stores/useAudio';
 // Preload available models
 useGLTF.preload('/models/zombie.glb');
 useGLTF.preload('/models/wraith.glb');
+useGLTF.preload('/models/skeleton.glb');
 
 interface CreatureProps {
   type: string;
@@ -56,8 +57,10 @@ export default function Creature({
   // Try to load 3D models for creatures
   let zombieModel: THREE.Group | null = null;
   let wraithModel: THREE.Group | null = null;
+  let skeletonModel: THREE.Group | null = null;
   const [zombieModelLoaded, setZombieModelLoaded] = useState(false);
   const [wraithModelLoaded, setWraithModelLoaded] = useState(false);
+  const [skeletonModelLoaded, setSkeletonModelLoaded] = useState(false);
   
   // Load zombie model
   if (type === 'zombie') {
@@ -96,6 +99,27 @@ export default function Creature({
     } catch (error) {
       if (!modelError) {
         console.warn("Failed to load wraith model, using fallback:", error);
+        setModelError(true);
+      }
+    }
+  }
+  
+  // Load skeleton model
+  if (type === 'skeleton') {
+    try {
+      const { scene } = useGLTF('/models/skeleton.glb') as GLTF & {
+        scene: THREE.Group;
+      };
+      skeletonModel = scene;
+      
+      if (!skeletonModelLoaded) {
+        setSkeletonModelLoaded(true);
+        setModelLoaded(true);
+        console.log("Skeleton model loaded successfully");
+      }
+    } catch (error) {
+      if (!modelError) {
+        console.warn("Failed to load skeleton model, using fallback:", error);
         setModelError(true);
       }
     }
@@ -227,6 +251,24 @@ export default function Creature({
           groupRef.current.scale.set(scale, scale, scale);
         }
       }
+      else if (type === 'skeleton' && skeletonModel) {
+        // Skeleton animations
+        if (animationState === 'idle') {
+          // Subtle bone-rattling effect
+          groupRef.current.position.y = Math.sin(Date.now() * 0.008) * 0.03;
+          groupRef.current.rotation.y = rotation.y + Math.sin(Date.now() * 0.002) * 0.04;
+        } else if (animationState === 'walk') {
+          // More pronounced walking motion
+          groupRef.current.position.y = Math.sin(Date.now() * 0.015) * 0.05;
+          // Slight side-to-side sway while walking
+          groupRef.current.rotation.z = Math.sin(Date.now() * 0.01) * 0.03;
+        } else if (animationState === 'attack') {
+          // Quick forward lunge for attack
+          groupRef.current.position.z = Math.sin(Date.now() * 0.02) * 0.15;
+          // Slight tilt during attack
+          groupRef.current.rotation.x = Math.sin(Date.now() * 0.02) * 0.1;
+        }
+      }
     }
   });
   
@@ -351,45 +393,84 @@ export default function Creature({
             </mesh>
           </group>
         ) : type === 'skeleton' ? (
-          // Skeleton (still using fallback)
+          // Skeleton with 3D model if available
           <group>
-            {/* Torso */}
-            <mesh castShadow position={[0, 0.8, 0]}>
-              <boxGeometry args={[0.6, 1.2, 0.3]} />
-              <meshStandardMaterial color={color} />
-            </mesh>
-            
-            {/* Hips */}
-            <mesh castShadow position={[0, 0.3, 0]}>
-              <boxGeometry args={[0.3, 0.6, 0.3]} />
-              <meshStandardMaterial color={color} />
-            </mesh>
-            
-            {/* Arms */}
-            <mesh castShadow position={[0.4, 0.8, 0]}>
-              <boxGeometry args={[0.2, 0.8, 0.2]} />
-              <meshStandardMaterial color={color} />
-            </mesh>
-            <mesh castShadow position={[-0.4, 0.8, 0]}>
-              <boxGeometry args={[0.2, 0.8, 0.2]} />
-              <meshStandardMaterial color={color} />
-            </mesh>
-            
-            {/* Legs */}
-            <mesh castShadow position={[0.2, -0.5, 0]}>
-              <boxGeometry args={[0.2, 0.6, 0.2]} />
-              <meshStandardMaterial color={color} />
-            </mesh>
-            <mesh castShadow position={[-0.2, -0.5, 0]}>
-              <boxGeometry args={[0.2, 0.6, 0.2]} />
-              <meshStandardMaterial color={color} />
-            </mesh>
-            
-            {/* Head */}
-            <mesh castShadow position={[0, 1.5, 0]}>
-              <boxGeometry args={[0.5, 0.5, 0.5]} />
-              <meshStandardMaterial color={color} />
-            </mesh>
+            {modelLoaded && skeletonModel ? (
+              <Suspense fallback={
+                // Fallback to simple model while loading
+                <mesh castShadow>
+                  <boxGeometry args={[0.6, 1.6, 0.5]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+              }>
+                <group ref={groupRef}>
+                  <primitive 
+                    object={skeletonModel.clone()} 
+                    scale={[2.5, 2.5, 2.5]} 
+                    position={[0, -1.5, 0]}
+                    rotation={[0, Math.PI - rotation.y, 0]} 
+                    castShadow 
+                  />
+                </group>
+                
+                {/* Add some subtle bone rattling effect lights */}
+                <pointLight
+                  position={[0, 0.5, 0]}
+                  distance={3}
+                  intensity={0.8}
+                  color="#FFFFFF"
+                />
+                
+                {/* Add eerie glow to eye sockets */}
+                <pointLight
+                  position={[0, 1.3, 0.2]}
+                  distance={1}
+                  intensity={0.6}
+                  color="#00FFFF"
+                />
+              </Suspense>
+            ) : (
+              // Fallback if model fails to load
+              <>
+                {/* Torso */}
+                <mesh castShadow position={[0, 0.8, 0]}>
+                  <boxGeometry args={[0.6, 1.2, 0.3]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+                
+                {/* Hips */}
+                <mesh castShadow position={[0, 0.3, 0]}>
+                  <boxGeometry args={[0.3, 0.6, 0.3]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+                
+                {/* Arms */}
+                <mesh castShadow position={[0.4, 0.8, 0]}>
+                  <boxGeometry args={[0.2, 0.8, 0.2]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+                <mesh castShadow position={[-0.4, 0.8, 0]}>
+                  <boxGeometry args={[0.2, 0.8, 0.2]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+                
+                {/* Legs */}
+                <mesh castShadow position={[0.2, -0.5, 0]}>
+                  <boxGeometry args={[0.2, 0.6, 0.2]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+                <mesh castShadow position={[-0.2, -0.5, 0]}>
+                  <boxGeometry args={[0.2, 0.6, 0.2]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+                
+                {/* Head */}
+                <mesh castShadow position={[0, 1.5, 0]}>
+                  <boxGeometry args={[0.5, 0.5, 0.5]} />
+                  <meshStandardMaterial color={color} />
+                </mesh>
+              </>
+            )}
             
             {/* Type indicator (bigger for hostiles) */}
             <mesh position={[0, 2.0, 0]}>
