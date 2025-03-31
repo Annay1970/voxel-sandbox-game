@@ -57,36 +57,37 @@ export default function Creature({
   // Single model reference with proper typing
   const [model, setModel] = useState<THREE.Group | null>(null);
   
-  // Load model based on creature type - optimized to avoid async loading within component
+  // Load model based on creature type
   useEffect(() => {
     // Skip loading if we already tried or got an error
     if (modelLoaded || modelError) return;
     
-    // OPTIMIZATION: Use a fallback for all non-zombie creatures for now
-    if (type === 'zombie') {
+    // Check for model availability based on creature type
+    const modelMap: Record<string, string> = {
+      'zombie': '/models/zombie.glb',
+      'skeleton': '/models/skeleton.glb',
+      'wraith': '/models/wraith.glb'
+    };
+    
+    const modelPath = modelMap[type];
+    
+    if (modelPath) {
       try {
-        // SIMPLIFIED: Use synchronous loading with preloaded model
-        const modelPath = '/models/zombie.glb';
+        // Load the model
+        const gltf = useGLTF(modelPath) as GLTF & {
+          scene: THREE.Group
+        };
         
-        // Since we preloaded the zombie model, this should be quick
-        try {
-          const gltf = useGLTF(modelPath) as GLTF & {
-            scene: THREE.Group
-          };
-          
-          // Store the model and update state
-          setModel(gltf.scene);
-          setModelLoaded(true);
-        } catch (err) {
-          console.warn(`Failed to load ${type} model, using fallback`);
-          setModelError(true);
-        }
-      } catch (error) {
-        console.warn(`Error initializing model for ${type}`);
+        // Store the model and update state
+        setModel(gltf.scene);
+        setModelLoaded(true);
+        console.log(`Loaded model for ${type}`);
+      } catch (err) {
+        console.warn(`Failed to load ${type} model, using fallback`, err);
         setModelError(true);
       }
     } else {
-      // For now, just use the fallback for other creature types
+      // Use fallback for creatures without 3D models
       setModelError(true);
     }
   }, [type, modelLoaded, modelError]);

@@ -4,6 +4,7 @@ import { useVoxelGame } from "../../lib/stores/useVoxelGame";
 import Player from "./Player";
 import Chunk from "./Chunk";
 import SkyDome from "./Sky";
+import Creature from "./Creature";
 
 // Minimal World component for emergency performance mode
 export default function World() {
@@ -11,6 +12,7 @@ export default function World() {
   const blocks = useVoxelGame(state => state.blocks);
   const timeOfDay = useVoxelGame(state => state.timeOfDay);
   const weather = useVoxelGame(state => state.weather);
+  const creatures = useVoxelGame(state => state.creatures);
   
   const worldRef = useRef<THREE.Group>(null);
   
@@ -33,6 +35,22 @@ export default function World() {
           chunkX={chunk.x} 
           chunkZ={chunk.z} 
           blocks={blocks}
+        />
+      ))}
+      
+      {/* Creatures */}
+      {Object.values(creatures).map(creature => (
+        <Creature
+          key={creature.id}
+          type={creature.type}
+          position={creature.position}
+          rotation={creature.rotation}
+          state={creature.state}
+          mood={creature.mood}
+          animationState={creature.animationState}
+          animationSpeed={creature.animationSpeed}
+          animationProgress={creature.animationProgress}
+          leader={creature.leader}
         />
       ))}
       
