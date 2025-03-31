@@ -1,10 +1,9 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Sky, KeyboardControls, Stars, Loader } from '@react-three/drei';
+import { KeyboardControls, Loader } from '@react-three/drei';
 import GamepadDisplay from './components/game/GamepadDisplay';
 import Crosshair from './components/game/Crosshair';
 import MobileControls from './components/game/MobileControls';
-import Player from './components/game/Player';
 import BlockInteraction from './components/game/BlockInteraction';
 import DemoCreatures from './components/game/DemoCreatures';
 import WeatherInfo from './components/ui/WeatherInfo';
@@ -14,6 +13,7 @@ import HungerBar from './components/ui/HungerBar';
 import StatusEffects from './components/ui/StatusEffects';
 import SkillTree from './components/ui/SkillTree';
 import EnhancedCrafting, { CraftingStationType } from './components/game/EnhancedCrafting';
+import OptimizedWorld from './components/game/OptimizedWorld';
 import { useIsMobile } from './hooks/use-is-mobile';
 import { gamepadManager } from './lib/controls/GamepadManager';
 
@@ -125,18 +125,9 @@ function App() {
           <KeyboardControls map={keyMap}>
             <Canvas shadows camera={{ position: [0, 5, 10], fov: 60 }}>
               <Suspense fallback={null}>
-                <Sky sunPosition={[10, 5, 10]} />
-                <Stars radius={100} depth={50} count={5000} factor={4} />
-                <ambientLight intensity={0.5} />
-                <directionalLight position={[10, 10, 5]} intensity={1} castShadow />
-                <Player position={[0, 1, 0]} />
+                {/* Use the new OptimizedWorld component for better performance */}
+                <OptimizedWorld />
                 <BlockInteraction />
-                
-                {/* Ground plane as a fallback */}
-                <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -0.5, 0]}>
-                  <planeGeometry args={[100, 100]} />
-                  <meshStandardMaterial color="#3b8c3b" />
-                </mesh>
               </Suspense>
             </Canvas>
           </KeyboardControls>

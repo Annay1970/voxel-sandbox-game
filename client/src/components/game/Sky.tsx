@@ -1,189 +1,190 @@
-import { useMemo } from 'react';
+import { useRef, useMemo } from 'react';
 import * as THREE from 'three';
-import { useVoxelGame, WeatherType } from '../../lib/stores/useVoxelGame';
+import { useFrame } from '@react-three/fiber';
+import { Sky } from '@react-three/drei';
+import { WeatherType } from '../../lib/stores/useVoxelGame';
 
 interface SkyDomeProps {
-  timeOfDay?: number;
-  weather?: WeatherType;
+  timeOfDay: number; // 0-24 hour cycle
+  weather: WeatherType;
 }
 
-// Ultra simplified Sky component for critical performance
-export default function SkyDome({ timeOfDay: propTimeOfDay, weather: propWeather }: SkyDomeProps = {}) {
-  // Use props if provided, otherwise get values from store
-  const storeTimeOfDay = useVoxelGame(state => state.timeOfDay);
-  const storeWeather = useVoxelGame(state => state.weather);
-  const bloodMoonEvent = useVoxelGame(state => state.bloodMoonEvent);
+/**
+ * Dynamic sky dome with day/night cycle and weather effects
+ */
+export default function SkyDome({ timeOfDay, weather }: SkyDomeProps) {
+  // Reference to the sky component
+  const skyRef = useRef<any>(null);
+  const directionalLightRef = useRef<THREE.DirectionalLight>(null);
   
-  // Use props if provided, otherwise fallback to store values
-  const timeOfDay = propTimeOfDay !== undefined ? propTimeOfDay : storeTimeOfDay;
-  const weather = propWeather !== undefined ? propWeather : storeWeather;
-  
-  // Check if Blood Moon is active
-  const isBloodMoonActive = bloodMoonEvent.active;
-  
-  // Improved sky colors with transitions
-  const skyColor = useMemo(() => {
-    // Time-based gradient calculation
-    if (isBloodMoonActive) {
-      // Blood moon colors
-      if (timeOfDay >= 0.25 && timeOfDay <= 0.75) {
-        // Blood moon daytime - reddish
-        return '#855555';
-      } else if (timeOfDay > 0.75 && timeOfDay < 0.85) {
-        // Blood moon sunset - deep red
-        return '#662222';
-      } else {
-        // Blood moon night - dark red
-        return '#330000';
-      }
-    } else {
-      // Normal sky colors
-      if (timeOfDay > 0.25 && timeOfDay < 0.75) {
-        // Full daytime - blue sky
-        return '#87CEEB';
-      } else if ((timeOfDay >= 0.2 && timeOfDay <= 0.25) || (timeOfDay >= 0.75 && timeOfDay <= 0.8)) {
-        // Dawn/dusk - light orange blue
-        return '#FF9966';
-      } else {
-        // Night - dark blue
-        return '#0A0A2A';
-      }
-    }
-  }, [timeOfDay, isBloodMoonActive]);
-  
-  // Improved light settings with smoother transitions
-  const lightIntensity = useMemo(() => {
-    // Smooth day-night cycle
-    if (timeOfDay > 0.25 && timeOfDay < 0.75) {
-      // Full daytime
-      return 1.0;
-    } else if (timeOfDay >= 0.75 && timeOfDay <= 0.85) {
-      // Sunset - gradual decrease
-      const t = (timeOfDay - 0.75) / 0.1; // 0 to 1
-      return 1.0 - (t * 0.8);
-    } else if (timeOfDay >= 0.15 && timeOfDay <= 0.25) {
-      // Sunrise - gradual increase
-      const t = (timeOfDay - 0.15) / 0.1; // 0 to 1
-      return 0.2 + (t * 0.8);
-    } else {
-      // Night
-      return 0.2;
-    }
+  // Calculate sun position based on time of day
+  const sunPosition = useMemo(() => {
+    // Convert 24-hour time to radians (0-2PI)
+    const timeInRadians = (timeOfDay / 24) * Math.PI * 2;
+    
+    // Calculate sun position on a unit circle
+    // Offset by -PI/2 so that noon is at the top
+    const x = Math.cos(timeInRadians - Math.PI / 2) * 100;
+    const y = Math.sin(timeInRadians - Math.PI / 2) * 100;
+    
+    // Place sun on a circle in the xz-plane
+    return [x, y, 0];
   }, [timeOfDay]);
-  
-  // Improved light color with transitions
-  const lightColor = useMemo(() => {
-    if (isBloodMoonActive) {
-      // Blood moon colors
-      if (timeOfDay > 0.25 && timeOfDay < 0.75) {
-        // Blood moon day
-        return '#FFCCCC';
-      } else if ((timeOfDay >= 0.75 && timeOfDay <= 0.85) || (timeOfDay >= 0.15 && timeOfDay <= 0.25)) {
-        // Blood moon dawn/dusk
-        return '#FF5555';
-      } else {
-        // Blood moon night
-        return '#FF2222';
-      }
-    } else {
-      // Normal colors
-      if (timeOfDay > 0.25 && timeOfDay < 0.75) {
-        // Day - white light
-        return '#FFFFFF';
-      } else if (timeOfDay >= 0.75 && timeOfDay <= 0.85) {
-        // Sunset - orange light
-        return '#FFA500';
-      } else if (timeOfDay >= 0.15 && timeOfDay <= 0.25) {
-        // Sunrise - yellow-orange light
-        return '#FFCC88';
-      } else {
-        // Night - blue light
-        return '#2B5797';
-      }
-    }
-  }, [timeOfDay, isBloodMoonActive]);
-  
-  // Calculate moon position based on time of day
-  const moonPosition = useMemo(() => {
-    // Moon is visible from 0.75 to 0.25 (night time)
-    if (timeOfDay > 0.75 || timeOfDay < 0.25) {
-      // Convert time to angle (0.75 = 0 degrees, 0.0 = 180 degrees, 0.25 = 360 degrees)
-      let angle = 0;
-      if (timeOfDay > 0.75) {
-        // 0.75 to 1.0 maps to 0 to 90 degrees
-        angle = (timeOfDay - 0.75) * 360;
-      } else {
-        // 0.0 to 0.25 maps to 90 to 180 degrees
-        angle = (timeOfDay + 0.25) * 360;
-      }
-      
-      // Convert angle to radians and calculate position on a circle
-      const radians = angle * (Math.PI / 180);
-      const radius = 50; // Distance from center
-      
-      // Position the moon in the sky along an arc
-      return [
-        Math.sin(radians) * radius,
-        Math.abs(Math.cos(radians)) * 30 + 5, // Keep moon above horizon
-        Math.cos(radians) * radius
-      ];
-    } else {
-      // Moon not visible during day (position it behind the scene)
-      return [0, -100, 0];
-    }
-  }, [timeOfDay]);
-  
-  // Calculate moon color
-  const moonColor = useMemo(() => {
-    return isBloodMoonActive ? '#FF2222' : '#FFFFFF';
-  }, [isBloodMoonActive]);
-  
-  // Calculate moon glow intensity
-  const moonGlowIntensity = useMemo(() => {
-    if (timeOfDay > 0.75 || timeOfDay < 0.25) {
-      return isBloodMoonActive ? 0.5 : 0.3;
-    }
-    return 0;
-  }, [timeOfDay, isBloodMoonActive]);
 
-  // Pure-minimum render for basic lighting
+  // Determine sky parameters based on time and weather
+  const skyParams = useMemo(() => {
+    // Is it night time?
+    const isNight = timeOfDay < 6 || timeOfDay > 18;
+    
+    // Is it dawn/dusk?
+    const isDawnDusk = (timeOfDay > 5 && timeOfDay < 7) || (timeOfDay > 17 && timeOfDay < 19);
+    
+    // Base parameters for clear day
+    let params = {
+      turbidity: 10,
+      rayleigh: 0.5,
+      mieCoefficient: 0.005,
+      mieDirectionalG: 0.7,
+    };
+    
+    // Adjust for time of day
+    if (isNight) {
+      // Night time - darker sky
+      params.turbidity = 0.1;
+      params.rayleigh = 0.2;
+      params.mieCoefficient = 0.001;
+    } else if (isDawnDusk) {
+      // Dawn/dusk - orange-red hues
+      params.turbidity = 12;
+      params.rayleigh = 1.5;
+      params.mieCoefficient = 0.01;
+      params.mieDirectionalG = 0.8;
+    }
+    
+    // Adjust for weather
+    if (weather === 'rain' || weather === 'thunderstorm') {
+      // Rainy or stormy - grayish sky
+      params.turbidity = Math.min(params.turbidity + 5, 20);
+      params.rayleigh = Math.min(params.rayleigh + 0.5, 4);
+      params.mieCoefficient = Math.min(params.mieCoefficient + 0.01, 0.1);
+    } else if (weather === 'snow') {
+      // Snowy - bright but diffuse light
+      params.turbidity = Math.max(params.turbidity - 2, 0.1);
+      params.rayleigh = Math.min(params.rayleigh + 1, 4);
+      params.mieCoefficient = Math.min(params.mieCoefficient + 0.02, 0.1);
+    } else if (weather === 'fog') {
+      // Foggy - diffuse light
+      params.turbidity = Math.min(params.turbidity + 2, 20);
+      params.rayleigh = Math.min(params.rayleigh + 0.8, 4);
+      params.mieCoefficient = Math.min(params.mieCoefficient + 0.03, 0.1);
+    } else if (weather === 'cloudy') {
+      // Cloudy skies
+      params.turbidity = Math.min(params.turbidity + 3, 15);
+      params.rayleigh = Math.min(params.rayleigh + 0.3, 3);
+      params.mieCoefficient = Math.min(params.mieCoefficient + 0.005, 0.08);
+    }
+    
+    return params;
+  }, [timeOfDay, weather]);
+
+  // Update sun position and light intensity on every frame
+  useFrame(() => {
+    if (directionalLightRef.current) {
+      // Copy the sun position for the light
+      directionalLightRef.current.position.set(
+        sunPosition[0],
+        sunPosition[1],
+        sunPosition[2]
+      );
+      
+      // Adjust light intensity based on time of day and weather
+      let intensity = 0;
+      
+      // Day/night cycle intensity
+      if (timeOfDay > 6 && timeOfDay < 18) {
+        // Daytime - sun intensity follows a sine curve peaking at noon
+        const dayProgress = (timeOfDay - 6) / 12; // 0 to 1 from 6AM to 6PM
+        intensity = Math.sin(dayProgress * Math.PI) * 0.8 + 0.2;
+      } else {
+        // Nighttime - very low intensity
+        intensity = 0.05;
+      }
+      
+      // Weather modifier
+      if (weather === 'rain') {
+        intensity *= 0.6; // Reduced intensity during rain
+      } else if (weather === 'thunderstorm') {
+        intensity *= 0.3; // Heavily reduced during storms
+      } else if (weather === 'snow') {
+        intensity *= 0.8; // Slightly reduced during snow
+      } else if (weather === 'fog') {
+        intensity *= 0.7; // Reduced for foggy conditions
+      } else if (weather === 'cloudy') {
+        intensity *= 0.9; // Slightly reduced for cloudy weather
+      }
+      
+      directionalLightRef.current.intensity = intensity;
+    }
+  });
+  
+  // Determine if we should show stars (night time)
+  const showStars = timeOfDay < 6 || timeOfDay > 18;
+
   return (
-    <group>
-      {/* Just set background color */}
-      <color attach="background" args={[skyColor]} />
+    <>
+      {/* Sky component from drei */}
+      <Sky
+        ref={skyRef}
+        distance={450000}
+        sunPosition={[sunPosition[0], sunPosition[1], sunPosition[2]]}
+        turbidity={skyParams.turbidity}
+        rayleigh={skyParams.rayleigh}
+        mieCoefficient={skyParams.mieCoefficient}
+        mieDirectionalG={skyParams.mieDirectionalG}
+      />
+      {/* Note: Removed exposure prop as it might not be supported in the current version */}
       
-      {/* Ultra simplified fog - very short distance */}
-      <fog attach="fog" args={[skyColor, 20, 70]} />
-      
-      {/* Add moon */}
-      <group position={moonPosition as [number, number, number]}>
-        {/* Moon sphere */}
-        <mesh>
-          <sphereGeometry args={[3, 16, 16]} />
-          <meshBasicMaterial color={moonColor} />
-        </mesh>
-        
-        {/* Moon light - only active at night */}
-        {(timeOfDay > 0.75 || timeOfDay < 0.25) && (
-          <pointLight 
-            color={moonColor} 
-            intensity={moonGlowIntensity}
-            distance={100}
-            decay={2}
-          />
-        )}
-      </group>
-      
-      {/* Single directional light */}
+      {/* Directional light following sun position */}
       <directionalLight 
-        position={[0, 1, 0]} 
-        intensity={lightIntensity} 
-        color={lightColor}
-        castShadow={false} // Disable shadows for performance
+        ref={directionalLightRef}
+        position={[sunPosition[0], sunPosition[1], sunPosition[2]]}
+        intensity={1}
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+        shadow-camera-far={60}
+        shadow-camera-left={-25}
+        shadow-camera-right={25}
+        shadow-camera-top={25}
+        shadow-camera-bottom={-25}
       />
       
-      {/* Single ambient light */}
-      <ambientLight intensity={lightIntensity * 0.5} color={lightColor} />
-    </group>
+      {/* Stars at night */}
+      {showStars && (
+        <group>
+          {/* Generate a field of stars */}
+          {Array.from({ length: 1000 }).map((_, i) => {
+            // Generate random position on a sphere
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            const radius = 300;
+            
+            const x = radius * Math.sin(phi) * Math.cos(theta);
+            const y = radius * Math.sin(phi) * Math.sin(theta);
+            const z = radius * Math.cos(phi);
+            
+            // Randomize star appearance
+            const size = Math.random() * 0.5 + 0.1;
+            
+            return (
+              <mesh key={`star-${i}`} position={[x, y, z]}>
+                <sphereGeometry args={[size, 4, 4]} />
+                <meshBasicMaterial color="white" />
+              </mesh>
+            );
+          })}
+        </group>
+      )}
+    </>
   );
 }

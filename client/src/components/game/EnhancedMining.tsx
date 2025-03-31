@@ -136,10 +136,10 @@ const EnhancedMining: React.FC<EnhancedMiningProps> = ({
   const [activeEffects, setActiveEffects] = useState<Record<string, MiningEffect>>({});
   
   // Get world blocks from the game store
-  const { blocks, removeBlock, addPlayerHotbarItem } = useVoxelGame(state => ({
+  const { blocks, removeBlock, addToInventory } = useVoxelGame(state => ({
     blocks: state.blocks,
     removeBlock: state.removeBlock,
-    addPlayerHotbarItem: state.addPlayerHotbarItem
+    addToInventory: state.addToInventory
   }));
   
   // References for timing
@@ -346,9 +346,10 @@ const EnhancedMining: React.FC<EnhancedMiningProps> = ({
               const nearbyHardness = getBlockHardness(nearbyType);
               
               // Only mine blocks with similar or lower hardness
-              if (nearbyHardness <= blockHardness * 1.5) {
+              const currentBlockHardness = getBlockHardness(blockType);
+              if (nearbyHardness <= currentBlockHardness * 1.5) {
                 // Remove block from world
-                removeBlock(nearbyPos);
+                removeBlock(nearbyPos[0], nearbyPos[1], nearbyPos[2]);
                 
                 // Get reduced drops for area mining
                 const areaDrops = getBlockDrops(nearbyType).map(drop => ({
@@ -377,11 +378,11 @@ const EnhancedMining: React.FC<EnhancedMiningProps> = ({
     }
     
     // Remove the block from world
-    removeBlock(position);
+    removeBlock(position[0], position[1], position[2]);
     
     // Add drops to player inventory
     drops.forEach(drop => {
-      addPlayerHotbarItem(drop.type, drop.count);
+      addToInventory(drop.type, drop.count);
     });
     
     // Call the onBlockMined callback

@@ -1,188 +1,171 @@
-import React, { useRef, useEffect, useState, useMemo, Suspense } from "react";
-import { useFrame } from "@react-three/fiber";
-import { useGLTF } from "@react-three/drei";
-import * as THREE from "three";
-import { GLTF } from "three-stdlib";
+import { useRef, useMemo } from 'react';
+import * as THREE from 'three';
+import { useFrame } from '@react-three/fiber';
+import { useTexture } from '@react-three/drei';
 
 interface AncientRuinsProps {
   position: [number, number, number];
   scale?: [number, number, number];
-  rotation?: [number, number, number];
 }
 
-// Preload the model
-useGLTF.preload('/models/ancient_ruins.glb');
-
+/**
+ * Ancient Ruins landmark with mystical glowing elements
+ */
 export default function AncientRuins({ 
-  position, 
-  scale = [1, 1, 1], 
-  rotation = [0, 0, 0]
+  position = [0, 0, 0], 
+  scale = [1, 1, 1] 
 }: AncientRuinsProps) {
-  // References
+  // References for animation
   const ruinsRef = useRef<THREE.Group>(null);
-  const particlesRef = useRef<THREE.Points>(null);
+  const glowRef = useRef<THREE.PointLight>(null);
   
-  // Load the 3D model
-  const { scene: ruinsModel } = useGLTF('/models/ancient_ruins.glb') as GLTF & {
-    scene: THREE.Group
-  };
+  // Load textures
+  const stoneTex = useTexture('/textures/stone.png');
+  const mossyTex = useTexture('/textures/mossy_stone.png');
   
-  // Model loading state
-  const [modelLoaded, setModelLoaded] = useState(false);
+  // Configure stone materials
+  const stoneMaterial = useMemo(() => {
+    return new THREE.MeshStandardMaterial({ 
+      map: stoneTex,
+      roughness: 0.8,
+      metalness: 0.2
+    });
+  }, [stoneTex]);
   
-  // Track when model is loaded
-  useEffect(() => {
-    if (ruinsModel) {
-      setModelLoaded(true);
-      console.log("Ancient Ruins model loaded successfully");
-      
-      // Find glowing elements in the model and make them emit light
-      ruinsModel.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          // Check if this is a glowing part by name or material properties
-          const isGlowing = 
-            child.name.toLowerCase().includes('glow') || 
-            child.name.toLowerCase().includes('rune') ||
-            (child.material instanceof THREE.MeshStandardMaterial && 
-            child.material.emissive && 
-            child.material.emissiveIntensity > 0);
-          
-          if (isGlowing) {
-            // Make the material emit light
-            if (child.material instanceof THREE.MeshStandardMaterial) {
-              child.material.emissive = new THREE.Color(0x00ffff);
-              child.material.emissiveIntensity = 2;
-              child.material.needsUpdate = true;
-            }
-          }
-          
-          // Cast and receive shadows for all meshes
-          child.castShadow = true;
-          child.receiveShadow = true;
-        }
-      });
-    }
-  }, [ruinsModel]);
+  const mossyMaterial = useMemo(() => {
+    return new THREE.MeshStandardMaterial({ 
+      map: mossyTex,
+      roughness: 0.9,
+      metalness: 0.1
+    });
+  }, [mossyTex]);
   
-  // Particle system for mystical effects
-  const particleCount = 300;
-  const particlePositions = useMemo(() => {
-    const positions = new Float32Array(particleCount * 3);
-    const radius = 5;
-    
-    for (let i = 0; i < particleCount; i++) {
-      const i3 = i * 3;
-      // Distribute particles in a sphere around the ruins
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const r = radius * Math.cbrt(Math.random()); // Cube root for more uniform distribution
-      
-      positions[i3] = r * Math.sin(phi) * Math.cos(theta);
-      positions[i3 + 1] = r * Math.sin(phi) * Math.sin(theta) + 2; // Lift particles a bit
-      positions[i3 + 2] = r * Math.cos(phi);
-    }
-    
-    return positions;
+  // Glowing rune material
+  const glowingRuneMaterial = useMemo(() => {
+    return new THREE.MeshStandardMaterial({
+      color: new THREE.Color(0x64ffda),
+      emissive: new THREE.Color(0x64ffda),
+      emissiveIntensity: 0.6,
+      roughness: 0.3,
+      metalness: 0.8
+    });
   }, []);
-  
-  // Particle system animation
-  useFrame((state, delta) => {
-    if (particlesRef.current) {
-      // Rotate particle system slowly
-      particlesRef.current.rotation.y += delta * 0.1;
-      
-      // Update particle positions for ethereal movement
-      const positions = particlesRef.current.geometry.attributes.position.array as Float32Array;
-      
-      for (let i = 0; i < particleCount; i++) {
-        const i3 = i * 3;
-        
-        // Apply simplex noise or other pattern for interesting movement
-        const time = state.clock.elapsedTime;
-        positions[i3 + 1] += Math.sin(time * 0.5 + i * 0.1) * 0.01;
-        
-        // Keep particles within bounds
-        if (positions[i3 + 1] > 6) positions[i3 + 1] = 0;
-        if (positions[i3 + 1] < 0) positions[i3 + 1] = 6;
-      }
-      
-      particlesRef.current.geometry.attributes.position.needsUpdate = true;
+
+  // Animate the glow effect and subtle movement
+  useFrame(({ clock }) => {
+    if (glowRef.current) {
+      // Pulsating light intensity
+      glowRef.current.intensity = 1.5 + Math.sin(clock.getElapsedTime() * 0.5) * 0.5;
     }
     
-    // Pulsate the glowing elements
-    if (ruinsRef.current && modelLoaded) {
-      ruinsRef.current.traverse((child) => {
-        if (child instanceof THREE.Mesh && 
-            child.material instanceof THREE.MeshStandardMaterial && 
-            child.material.emissiveIntensity > 0) {
-          
-          // Subtle pulsating effect
-          const intensity = 1.5 + Math.sin(state.clock.elapsedTime * 2) * 0.5;
-          child.material.emissiveIntensity = intensity;
-          child.material.needsUpdate = true;
-        }
-      });
+    if (ruinsRef.current) {
+      // Very subtle swaying effect for mystical feel
+      ruinsRef.current.rotation.y = Math.sin(clock.getElapsedTime() * 0.05) * 0.02;
     }
   });
-  
+
   return (
-    <group 
-      position={position} 
-      rotation={[rotation[0], rotation[1], rotation[2]]}
-      scale={scale}
-    >
-      {/* The ruins structure */}
-      <group ref={ruinsRef}>
-        {modelLoaded && ruinsModel ? (
-          <Suspense fallback={
-            <mesh>
-              <boxGeometry args={[2, 1, 2]} />
-              <meshStandardMaterial color="#777777" />
-            </mesh>
-          }>
-            <primitive 
-              object={ruinsModel.clone()} 
-              castShadow 
+    <group position={position} scale={scale} ref={ruinsRef}>
+      {/* Central stone circle */}
+      <mesh receiveShadow castShadow position={[0, 0.5, 0]} rotation={[0, 0, 0]} material={stoneMaterial}>
+        <cylinderGeometry args={[5, 5, 1, 16]} />
+      </mesh>
+      
+      {/* Mossy ground beneath */}
+      <mesh receiveShadow position={[0, 0.1, 0]} rotation={[0, 0, 0]} material={mossyMaterial}>
+        <cylinderGeometry args={[6, 6, 0.2, 16]} />
+      </mesh>
+      
+      {/* Surrounding stone pillars */}
+      {Array.from({ length: 7 }).map((_, i) => {
+        const angle = (i / 7) * Math.PI * 2;
+        const radius = 4.5;
+        const x = Math.sin(angle) * radius;
+        const z = Math.cos(angle) * radius;
+        const height = 2 + Math.sin(i * 1.5) * 1.5; // Varied heights
+        const isIntact = i % 3 !== 0; // Some pillars are broken
+        
+        return (
+          <group key={i} position={[x, 0, z]}>
+            {/* Pillar */}
+            <mesh 
               receiveShadow 
-            />
-          </Suspense>
-        ) : (
-          // Fallback if model isn't loaded yet
-          <mesh>
-            <boxGeometry args={[2, 1, 2]} />
-            <meshStandardMaterial color="#777777" />
-          </mesh>
-        )}
-      </group>
+              castShadow 
+              position={[0, height / 2, 0]} 
+              material={i % 2 === 0 ? stoneMaterial : mossyMaterial}
+            >
+              <cylinderGeometry args={[0.5, 0.6, height, 8]} />
+            </mesh>
+            
+            {/* Top cap for intact pillars */}
+            {isIntact && (
+              <mesh 
+                receiveShadow 
+                castShadow 
+                position={[0, height + 0.25, 0]} 
+                material={stoneMaterial}
+              >
+                <cylinderGeometry args={[0.7, 0.5, 0.5, 8]} />
+              </mesh>
+            )}
+            
+            {/* Rune engravings (glowing) - only on some pillars */}
+            {i % 2 === 0 && (
+              <mesh 
+                position={[0, height / 2, 0.51]} 
+                material={glowingRuneMaterial}
+              >
+                <planeGeometry args={[0.5, height * 0.7]} />
+              </mesh>
+            )}
+          </group>
+        );
+      })}
       
-      {/* Particle effects */}
-      <points ref={particlesRef}>
-        <bufferGeometry>
-          <bufferAttribute 
-            attach="attributes-position" 
-            count={particleCount} 
-            array={particlePositions} 
-            itemSize={3} 
-          />
-        </bufferGeometry>
-        <pointsMaterial 
-          size={0.1} 
-          color="#00ffff" 
-          transparent 
-          opacity={0.6}
-          blending={THREE.AdditiveBlending}
-          sizeAttenuation
-        />
-      </points>
+      {/* Central altar stone */}
+      <mesh receiveShadow castShadow position={[0, 1.5, 0]} material={stoneMaterial}>
+        <boxGeometry args={[2, 1, 2]} />
+      </mesh>
       
-      {/* Add subtle point light to illuminate the area */}
+      {/* Mystical glowing artifact */}
+      <mesh position={[0, 2.2, 0]} material={glowingRuneMaterial}>
+        <dodecahedronGeometry args={[0.5, 0]} />
+      </mesh>
+      
+      {/* Glowing point light */}
       <pointLight 
+        ref={glowRef} 
         position={[0, 3, 0]} 
-        color="#00ffff" 
-        intensity={0.8} 
-        distance={15}
-        castShadow
+        color="#64ffda" 
+        intensity={2} 
+        distance={15} 
+        decay={2} 
       />
+      
+      {/* Fallen debris and rubble */}
+      {Array.from({ length: 12 }).map((_, i) => {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 2 + Math.random() * 3;
+        const x = Math.sin(angle) * radius;
+        const z = Math.cos(angle) * radius;
+        const size = 0.2 + Math.random() * 0.5;
+        
+        return (
+          <mesh 
+            key={`debris-${i}`} 
+            position={[x, size / 2, z]} 
+            rotation={[
+              Math.random() * Math.PI,
+              Math.random() * Math.PI,
+              Math.random() * Math.PI
+            ]}
+            material={Math.random() > 0.5 ? stoneMaterial : mossyMaterial}
+            castShadow
+          >
+            <boxGeometry args={[size, size, size]} />
+          </mesh>
+        );
+      })}
     </group>
   );
 }
