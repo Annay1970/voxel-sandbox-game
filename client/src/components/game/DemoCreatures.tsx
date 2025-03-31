@@ -6,7 +6,8 @@ import Creature from './Creature';
 
 export default function DemoCreatures() {
   const [creatureTypes] = useState([
-    'zombie', 'skeleton', 'wraith', 'cow', 'sheep', 'pig', 'chicken', 'bee'
+    'zombie', 'skeleton', 'wraith', 'cow', 'sheep', 'pig', 'chicken', 'bee', 
+    'unicorn', 'pegasus', 'friendlyHorse'
   ]);
   
   const [selectedCreature, setSelectedCreature] = useState('cow');

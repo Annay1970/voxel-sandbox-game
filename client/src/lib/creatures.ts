@@ -3,6 +3,7 @@ import { BlockType, isBlockSolid } from './blocks';
 export type CreatureType = 
   'cow' | 'pig' | 'sheep' | 'chicken' | 
   'zombie' | 'skeleton' | 'spider' | 'bee' | 
+  'unicorn' | 'pegasus' | 'friendlyHorse' |
   'wraith'; // Blood Moon special mob
 
 // Helper function to add creatures at fixed positions
@@ -659,6 +660,113 @@ export function getCreatureProperties(type: CreatureType): CreatureProperties {
         animationStates: ['idle', 'fly', 'attack', 'pollinate', 'dance'],
         animationSpeeds: { idle: 0.6, fly: 1.5, attack: 1.8, pollinate: 0.8, dance: 1.0 }
       };
+    case 'unicorn':
+      return {
+        maxHealth: 30,
+        speed: 1.2,
+        damage: 5,
+        hostility: 'neutral',
+        spawnBiomes: ['plains', 'forest'],
+        lootTable: [
+          { type: 'diamond', chance: 0.2, minCount: 1, maxCount: 2 },
+          { type: 'glowstone', chance: 0.5, minCount: 1, maxCount: 3 }
+        ],
+        
+        // Enhanced properties
+        preferredStates: ['grazing', 'idle', 'wandering', 'sleeping'],
+        stateWeights: { grazing: 0.3, idle: 0.3, wandering: 0.3, sleeping: 0.1 },
+        senseRadius: 20,
+        flockingBehavior: true,
+        socialDistance: 5,
+        diurnalActivity: true,
+        
+        // Special abilities
+        attackRange: 2.5,
+        aggroWhenAttacked: true,
+        
+        // Mood properties
+        defaultMood: 'majestic',
+        moodTransitions: {
+          'majestic': { 'alert': 0.3, 'defensive': 0.2 },
+          'alert': { 'majestic': 0.5, 'defensive': 0.3 },
+          'defensive': { 'alert': 0.4, 'majestic': 0.2 }
+        },
+        
+        // Animation properties
+        animationStates: ['idle', 'walk', 'gallop', 'rear', 'attack'],
+        animationSpeeds: { idle: 0.5, walk: 1.0, gallop: 1.5, rear: 1.2, attack: 1.3 }
+      };
+      
+    case 'pegasus':
+      return {
+        maxHealth: 35,
+        speed: 1.4,
+        damage: 4,
+        hostility: 'neutral',
+        spawnBiomes: ['mountains', 'plains'],
+        lootTable: [
+          { type: 'diamond', chance: 0.2, minCount: 1, maxCount: 1 },
+          { type: 'glowstone', chance: 0.8, minCount: 2, maxCount: 5 }
+        ],
+        
+        // Enhanced properties
+        preferredStates: ['flying', 'soaring', 'idle', 'wandering', 'sleeping'],
+        stateWeights: { flying: 0.4, soaring: 0.2, idle: 0.2, wandering: 0.15, sleeping: 0.05 },
+        senseRadius: 25,
+        diurnalActivity: true,
+        
+        // Special abilities
+        attackRange: 2,
+        aggroWhenAttacked: true,
+        
+        // Mood properties
+        defaultMood: 'free',
+        moodTransitions: {
+          'free': { 'alert': 0.3, 'protective': 0.2 },
+          'alert': { 'free': 0.4, 'protective': 0.3 },
+          'protective': { 'alert': 0.3, 'free': 0.2 }
+        },
+        
+        // Animation properties
+        animationStates: ['idle', 'walk', 'gallop', 'fly', 'attack'],
+        animationSpeeds: { idle: 0.5, walk: 1.0, gallop: 1.5, fly: 1.2, attack: 1.3 }
+      };
+      
+    case 'friendlyHorse':
+      return {
+        maxHealth: 40,
+        speed: 1.3,
+        damage: 6,
+        hostility: 'neutral',
+        spawnBiomes: ['plains', 'forest'],
+        lootTable: [
+          { type: 'diamond', chance: 0.3, minCount: 1, maxCount: 2 },
+          { type: 'glowstone', chance: 0.7, minCount: 2, maxCount: 4 }
+        ],
+        
+        // Enhanced properties
+        preferredStates: ['protecting', 'idle', 'following', 'alert'],
+        stateWeights: { protecting: 0.4, idle: 0.3, following: 0.2, alert: 0.1 },
+        senseRadius: 30,
+        diurnalActivity: true,
+        
+        // Special abilities
+        attackRange: 3,
+        aggroWhenAttacked: true,
+        
+        // Mood properties
+        defaultMood: 'friendly',
+        moodTransitions: {
+          'friendly': { 'alert': 0.2, 'protective': 0.3 },
+          'alert': { 'friendly': 0.3, 'protective': 0.5 },
+          'protective': { 'alert': 0.3, 'friendly': 0.2 }
+        },
+        
+        // Animation properties
+        animationStates: ['idle', 'walk', 'gallop', 'protect', 'attack'],
+        animationSpeeds: { idle: 0.5, walk: 1.0, gallop: 1.5, protect: 1.0, attack: 1.4 }
+      };
+      
     case 'wraith':
       return {
         maxHealth: 35,
