@@ -76,6 +76,8 @@ export interface PlayerState {
   takingBlockDamage: boolean; // Flag to track if player is currently taking damage from a block
 }
 
+// This interface is for compatibility with the old crafting system
+// We now use the more comprehensive CraftingRecipe from the crafting.ts file
 export interface CraftingRecipe {
   output: {
     type: BlockType;
@@ -166,7 +168,7 @@ export interface VoxelGameState {
   setPlayerTakingBlockDamage: (isTakingDamage: boolean) => void;
   
   // Crafting
-  craftItem: (recipeIndex: number) => boolean;
+  craftItem: (type: BlockType, count: number, ingredients: { type: BlockType, count: number }[]) => boolean;
   
   // Camera control
   setCameraRotation: (x: number, y: number) => void;
@@ -1252,37 +1254,30 @@ export const useVoxelGame = create<VoxelGameState>((set, get) => ({
   },
   
   // Crafting system
-  craftItem: (recipeIndex) => {
-    const { craftingRecipes, inventory } = get();
-    
-    if (recipeIndex < 0 || recipeIndex >= craftingRecipes.length) {
-      console.log("Invalid recipe index");
-      return false;
-    }
-    
-    const recipe = craftingRecipes[recipeIndex];
+  craftItem: (outputType, outputCount, ingredients) => {
+    const { inventory } = get();
     
     // Check if we have all required ingredients
-    for (const [itemType, count] of Object.entries(recipe.input)) {
+    for (const ingredient of ingredients) {
       const hasEnough = inventory.some(item => 
-        item.type === itemType && item.count >= count
+        item.type === ingredient.type && item.count >= ingredient.count
       );
       
       if (!hasEnough) {
-        console.log(`Missing ingredients for crafting: need ${count} of ${itemType}`);
+        console.log(`Missing ingredients for crafting: need ${ingredient.count} of ${ingredient.type}`);
         return false;
       }
     }
     
     // Remove ingredients from inventory
-    for (const [itemType, count] of Object.entries(recipe.input)) {
-      get().removeFromInventory(itemType as BlockType, count);
+    for (const ingredient of ingredients) {
+      get().removeFromInventory(ingredient.type, ingredient.count);
     }
     
     // Add crafted item to inventory
-    get().addToInventory(recipe.output.type, recipe.output.count);
+    get().addToInventory(outputType, outputCount);
     
-    console.log(`Crafted ${recipe.output.count}x ${recipe.output.type}`);
+    console.log(`Crafted ${outputCount}x ${outputType}`);
     return true;
   },
   
