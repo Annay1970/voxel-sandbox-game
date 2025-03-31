@@ -278,15 +278,98 @@ export function spawnCreatures(
 
 // Enhanced creature behavior and AI
 
-export function getCreatureProperties(type: CreatureType) {
+// Define loot tables for each creature type
+export interface LootItem {
+  type: BlockType;
+  chance: number; // 0-1 probability
+  minCount: number;
+  maxCount: number;
+}
+
+export interface CreatureProperties {
+  maxHealth: number;
+  damage: number;
+  speed: number;
+  animationStates?: string[];
+  defaultMood?: string;
+  hostility: 'passive' | 'neutral' | 'hostile';
+  lootTable: LootItem[];
+  
+  // Common properties
+  spawnBiomes?: string[];
+  preferredStates?: string[];
+  stateWeights?: Record<string, number>;
+  senseRadius?: number;
+  flockingBehavior?: boolean;
+  socialDistance?: number;
+  feedingTime?: [number, number];
+  huntedBy?: string[];
+  diurnalActivity?: boolean;
+  
+  // Specialized properties
+  burnInSunlight?: boolean;
+  targetPreference?: string;
+  doorBreaking?: boolean;
+  rangedAttack?: boolean;
+  avoidsMelee?: boolean;
+  canClimb?: boolean;
+  jumpAttack?: boolean;
+  neutralInDaylight?: boolean;
+  attackRange?: number;
+  
+  // Blood Moon specific
+  bloodMoonOnly?: boolean;
+  teleportAbility?: boolean;
+  teleportCooldown?: number;
+  teleportRange?: number;
+  ignoresLight?: boolean;
+  spectral?: boolean;
+  
+  // Animal-specific properties
+  prefersMud?: boolean;
+  woolGrowthRate?: number;
+  eggLayingRate?: number;
+  pollinationRate?: number;
+  hiveMemory?: boolean;
+  aggroWhenAttacked?: boolean;
+  diesAfterStinging?: boolean;
+  
+  // Animation
+  animationSpeeds?: Record<string, number>;
+  
+  // Mood
+  moodTransitions?: Record<string, Record<string, number>>;
+}
+
+// Get loot from a creature based on type
+export function getCreatureLoot(type: CreatureType): { type: BlockType, count: number }[] {
+  const properties = getCreatureProperties(type);
+  const loot: { type: BlockType, count: number }[] = [];
+  
+  // Roll for each possible loot item
+  properties.lootTable.forEach(item => {
+    if (Math.random() < item.chance) {
+      const count = Math.floor(Math.random() * (item.maxCount - item.minCount + 1)) + item.minCount;
+      loot.push({ type: item.type, count });
+    }
+  });
+  
+  return loot;
+}
+
+export function getCreatureProperties(type: CreatureType): CreatureProperties {
   switch (type) {
     case 'cow':
       return {
         maxHealth: 10,
+        damage: 0,
         speed: 0.5,
-        drops: ['leather', 'beef'],
         hostility: 'passive',
         spawnBiomes: ['plains', 'forest'],
+        lootTable: [
+          { type: 'wood', chance: 0.8, minCount: 1, maxCount: 3 },
+          { type: 'log', chance: 0.3, minCount: 1, maxCount: 2 }
+        ],
         
         // Enhanced properties
         preferredStates: ['grazing', 'idle', 'wandering', 'sleeping'],
@@ -313,10 +396,14 @@ export function getCreatureProperties(type: CreatureType) {
     case 'pig':
       return {
         maxHealth: 10,
+        damage: 0,
         speed: 0.6,
-        drops: ['porkchop'],
         hostility: 'passive',
         spawnBiomes: ['plains', 'forest'],
+        lootTable: [
+          { type: 'dirt', chance: 0.8, minCount: 1, maxCount: 3 },
+          { type: 'log', chance: 0.2, minCount: 1, maxCount: 1 }
+        ],
         
         // Enhanced properties
         preferredStates: ['grazing', 'idle', 'wandering', 'sleeping'],
@@ -347,10 +434,14 @@ export function getCreatureProperties(type: CreatureType) {
     case 'sheep':
       return {
         maxHealth: 8,
+        damage: 0,
         speed: 0.5,
-        drops: ['wool', 'mutton'],
         hostility: 'passive',
         spawnBiomes: ['plains', 'forest'],
+        lootTable: [
+          { type: 'wood', chance: 0.7, minCount: 1, maxCount: 2 },
+          { type: 'sand', chance: 0.3, minCount: 1, maxCount: 3 }
+        ],
         
         // Enhanced properties
         preferredStates: ['grazing', 'idle', 'wandering', 'sleeping'],
@@ -380,10 +471,14 @@ export function getCreatureProperties(type: CreatureType) {
     case 'chicken':
       return {
         maxHealth: 4,
+        damage: 0,
         speed: 0.4,
-        drops: ['feather', 'chicken'],
         hostility: 'passive',
         spawnBiomes: ['plains', 'forest'],
+        lootTable: [
+          { type: 'stick', chance: 0.8, minCount: 1, maxCount: 2 },
+          { type: 'grass', chance: 0.4, minCount: 1, maxCount: 1 }
+        ],
         
         // Enhanced properties
         preferredStates: ['idle', 'wandering', 'grazing', 'sleeping'],
@@ -415,9 +510,12 @@ export function getCreatureProperties(type: CreatureType) {
         maxHealth: 20,
         speed: 0.6,
         damage: 2,
-        drops: ['rotten_flesh'],
         hostility: 'hostile',
         spawnBiomes: ['all'],
+        lootTable: [
+          { type: 'stick', chance: 0.7, minCount: 1, maxCount: 3 },
+          { type: 'stone', chance: 0.5, minCount: 1, maxCount: 2 }
+        ],
         
         // Enhanced properties
         preferredStates: ['wandering', 'idle', 'hunting', 'attacking'],
@@ -449,9 +547,12 @@ export function getCreatureProperties(type: CreatureType) {
         maxHealth: 20,
         speed: 0.6,
         damage: 3,
-        drops: ['bone', 'arrow'],
         hostility: 'hostile',
         spawnBiomes: ['all'],
+        lootTable: [
+          { type: 'stone', chance: 0.8, minCount: 1, maxCount: 3 },
+          { type: 'coal', chance: 0.4, minCount: 1, maxCount: 2 }
+        ],
         
         // Enhanced properties
         preferredStates: ['wandering', 'idle', 'hunting', 'attacking'],
@@ -484,9 +585,12 @@ export function getCreatureProperties(type: CreatureType) {
         maxHealth: 16,
         speed: 0.7,
         damage: 2,
-        drops: ['string', 'spider_eye'],
         hostility: 'hostile',
         spawnBiomes: ['all'],
+        lootTable: [
+          { type: 'stick', chance: 0.7, minCount: 1, maxCount: 2 },
+          { type: 'sand', chance: 0.4, minCount: 1, maxCount: 3 }
+        ],
         
         // Enhanced properties
         preferredStates: ['idle', 'wandering', 'hunting', 'attacking', 'climbing'],
@@ -518,9 +622,12 @@ export function getCreatureProperties(type: CreatureType) {
         maxHealth: 10,
         speed: 0.8,
         damage: 1,
-        drops: ['honey'],
         hostility: 'neutral',
         spawnBiomes: ['plains', 'forest'],
+        lootTable: [
+          { type: 'glass', chance: 0.6, minCount: 1, maxCount: 2 },
+          { type: 'grass', chance: 0.5, minCount: 1, maxCount: 3 }
+        ],
         
         // Enhanced properties
         preferredStates: ['idle', 'wandering', 'grazing', 'following', 'defending'],
@@ -556,10 +663,15 @@ export function getCreatureProperties(type: CreatureType) {
         maxHealth: 35,
         speed: 1.0,
         damage: 4,
-        drops: ['glass', 'ice', 'coal', 'torch'], // Special Blood Moon specific drops
         hostility: 'hostile',
         spawnBiomes: ['all'], // Can spawn anywhere during Blood Moon
         bloodMoonOnly: true, // Only spawns during Blood Moon event
+        lootTable: [
+          { type: 'glass', chance: 0.9, minCount: 2, maxCount: 4 },
+          { type: 'ice', chance: 0.7, minCount: 1, maxCount: 3 },
+          { type: 'coal', chance: 0.8, minCount: 2, maxCount: 5 },
+          { type: 'torch', chance: 0.6, minCount: 1, maxCount: 3 }
+        ],
         
         // Enhanced properties
         preferredStates: ['hunting', 'attacking'],
@@ -592,8 +704,12 @@ export function getCreatureProperties(type: CreatureType) {
       return {
         maxHealth: 10,
         speed: 0.5,
+        damage: 0,
         hostility: 'passive',
         spawnBiomes: ['all'],
+        lootTable: [
+          { type: 'dirt', chance: 0.6, minCount: 1, maxCount: 2 }
+        ],
         preferredStates: ['idle', 'wandering'],
         stateWeights: { idle: 0.5, wandering: 0.5 },
         senseRadius: 5,

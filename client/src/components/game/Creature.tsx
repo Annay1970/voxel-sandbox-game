@@ -20,6 +20,12 @@ interface CreatureProps {
   targetPosition?: { x: number, y: number, z: number } | null;
   flockId?: string;
   leader?: boolean;
+  // Health properties
+  health?: number;
+  maxHealth?: number;
+  // Flag to show active loot bag
+  hasLoot?: boolean;
+  showHealth?: boolean;
 }
 
 export default function Creature({ 
@@ -33,7 +39,12 @@ export default function Creature({
   animationProgress = 0,
   targetPosition = null,
   flockId,
-  leader = false
+  leader = false,
+  // Health parameters with defaults
+  health = 10,
+  maxHealth = 10,
+  hasLoot = false,
+  showHealth = true
 }: CreatureProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const groupRef = useRef<THREE.Group>(null);
@@ -559,6 +570,65 @@ export default function Creature({
           <sphereGeometry args={[0.15, 8, 8]} />
           <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={2} />
         </mesh>
+      )}
+      
+      {/* Health bar - only show if health is less than maxHealth or showHealth is explicitly true */}
+      {showHealth && (health < maxHealth || showHealth) && (
+        <group position={[0, 2.5, 0]}>
+          {/* Health bar background */}
+          <mesh position={[0, 0, 0]} scale={[1.2, 0.15, 0.05]}>
+            <boxGeometry />
+            <meshStandardMaterial color="#333333" />
+          </mesh>
+          
+          {/* Health bar fill - scales based on health percentage */}
+          {health > 0 && (
+            <mesh 
+              position={[-0.6 + (health / maxHealth * 0.6), 0, 0.05]} 
+              scale={[1.2 * (health / maxHealth), 0.1, 0.05]}
+            >
+              <boxGeometry />
+              <meshStandardMaterial 
+                color={
+                  health > maxHealth * 0.7 ? "#00FF00" : 
+                  health > maxHealth * 0.3 ? "#FFFF00" : 
+                  "#FF0000"
+                } 
+                emissive={
+                  health > maxHealth * 0.7 ? "#00FF00" : 
+                  health > maxHealth * 0.3 ? "#FFFF00" : 
+                  "#FF0000"
+                }
+                emissiveIntensity={0.5}
+              />
+            </mesh>
+          )}
+        </group>
+      )}
+      
+      {/* Loot bag - displayed when creature is killed */}
+      {hasLoot && (
+        <group position={[0, 0.1, 0]}>
+          {/* Loot bag body */}
+          <mesh position={[0, 0.3, 0]} rotation={[0, Math.PI / 4, 0]}>
+            <boxGeometry args={[0.5, 0.5, 0.5]} />
+            <meshStandardMaterial color="#8B4513" />
+          </mesh>
+          
+          {/* Loot bag tie/top */}
+          <mesh position={[0, 0.6, 0]}>
+            <cylinderGeometry args={[0.1, 0.2, 0.2, 8]} />
+            <meshStandardMaterial color="#FFD700" emissive="#FFD700" emissiveIntensity={0.5} />
+          </mesh>
+          
+          {/* Loot sparkling effect */}
+          <pointLight
+            position={[0, 0.5, 0]}
+            intensity={0.7}
+            distance={2}
+            color="#FFD700"
+          />
+        </group>
       )}
       
       {/* Add a spotlight to make creatures more visible */}
