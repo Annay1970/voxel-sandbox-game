@@ -8,6 +8,7 @@ import { useAudio } from "./lib/stores/useAudio";
 import { generateTerrain } from "./lib/terrain";
 import World from "./components/game/World";
 import UI from "./components/game/UI";
+import { GameMonitoringSystem } from "./components/monitoring";
 
 // Ultra simplified loading screen for better performance
 interface LoadingScreenProps {
@@ -166,6 +167,9 @@ function App() {
         
         {/* Game UI overlay */}
         <UI />
+        
+        {/* Game Monitoring System */}
+        <GameMonitoringSystem />
       </KeyboardControls>
     </div>
   );
