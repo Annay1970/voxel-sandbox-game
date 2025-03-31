@@ -276,14 +276,6 @@ export default function BlockInteraction() {
           selected={true}
         />
       )}
-      
-      {/* Render the crosshair */}
-      <Crosshair 
-        size={20} 
-        color="white" 
-        thickness={2} 
-        gap={6} 
-      />
     </>
   );
 }

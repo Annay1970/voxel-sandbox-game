@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Sky, KeyboardControls, Stars, Loader } from '@react-three/drei';
 import GamepadDisplay from './components/game/GamepadDisplay';
+import Crosshair from './components/game/Crosshair';
 import Player from './components/game/Player';
 import BlockInteraction from './components/game/BlockInteraction';
 import { useIsMobile } from './hooks/use-is-mobile';
@@ -123,6 +124,9 @@ function App() {
             <h1 className="text-2xl font-bold">Voxel World</h1>
             <p className="text-sm mt-1">A sandbox adventure</p>
           </div>
+          
+          {/* Crosshair in the center of the screen */}
+          <Crosshair size={20} color="white" thickness={2} gap={6} />
           
           {/* Gamepad display (press G to toggle) */}
           <GamepadDisplay showByDefault={false} />
