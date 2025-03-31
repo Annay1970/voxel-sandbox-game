@@ -1,167 +1,112 @@
-import { SimplexNoise } from './utils/noise';
 import { BlockType } from './blocks';
 import { CHUNK_SIZE } from '../components/game/Chunk';
 
-// Generate initial terrain for the world
+// Emergency light-weight terrain generation function
 export function generateTerrain() {
-  console.log("Generating terrain with ultra-lite settings...");
+  console.log("Generating emergency simplified terrain...");
   
   try {
-    // Create noise generators with seeds for reproducibility 
-    const seed1 = Math.random();
-    const seed2 = Math.random();
-    console.log(`Using terrain seeds: ${seed1.toFixed(4)}, ${seed2.toFixed(4)}`);
-    
-    const simplex = new SimplexNoise(seed1);
-    const simplex2 = new SimplexNoise(seed2);
-  
-    // ULTRA-LITE terrain parameters for guaranteed performance
-    const WORLD_SIZE = 4; // Extremely small world size (4 chunks = 64x64 blocks total)
+    // MINIMUM terrain parameters for guaranteed performance
+    const WORLD_SIZE = 2; // Tiny world size (2 chunks radius = just 25 chunks total)
     const WATER_LEVEL = 8;
-    const MOUNTAIN_HEIGHT = 30; // Smaller mountains 
     const BASE_HEIGHT = 15;
     
     // Data structures to store generated world
     const chunks: Record<string, { x: number, z: number }> = {};
     const blocks: Record<string, BlockType> = {};
     
-    // Generate chunks around origin
+    // Generate just a small area around the origin
     const chunkRadius = Math.floor(WORLD_SIZE / 2);
-  
-    // Track total operations for progress updates
-    const totalOperations = (2 * chunkRadius + 1) * (2 * chunkRadius + 1) * CHUNK_SIZE * CHUNK_SIZE;
-    let completedOperations = 0;
     
     console.log(`Generating ${(2 * chunkRadius + 1) * (2 * chunkRadius + 1)} chunks...`);
   
     for (let cx = -chunkRadius; cx <= chunkRadius; cx++) {
       for (let cz = -chunkRadius; cz <= chunkRadius; cz++) {
+        // Skip distant chunks for a circular-ish world (further optimization)
+        if (cx*cx + cz*cz > chunkRadius*chunkRadius) continue;
+        
         // Register chunk
         const chunkKey = `${cx},${cz}`;
         chunks[chunkKey] = { x: cx, z: cz };
       
-        // Generate all blocks in this chunk
+        // Generate all blocks in this chunk with a simplified flat terrain
         for (let x = 0; x < CHUNK_SIZE; x++) {
           for (let z = 0; z < CHUNK_SIZE; z++) {
             // World coordinates
             const worldX = cx * CHUNK_SIZE + x;
             const worldZ = cz * CHUNK_SIZE + z;
             
-            // SIMPLIFIED height calculation with fewer noise samples
-            const frequency1 = 0.01; // Primary terrain frequency
+            // Super simplified terrain - just calculate distance from center
+            const distFromCenter = Math.sqrt(worldX*worldX + worldZ*worldZ);
             
-            // Simplified terrain shape with just one noise function for hills
-            const hillValue = simplex.noise2D(worldX * frequency1, worldZ * frequency1);
+            // Simple height formula - higher in the center, lower at edges
+            let height = BASE_HEIGHT;
             
-            // Generate altitude using simplified formula
-            let height = BASE_HEIGHT + (hillValue * MOUNTAIN_HEIGHT);
-            height = Math.max(1, Math.floor(height)); // Ensure at least 1 block of ground
-            
-            // Simplified biome with just one noise function
-            const biomeValue = simplex2.noise2D(worldX * 0.005, worldZ * 0.005);
-            const biomeType = (biomeValue + 1) / 2; // 0-1 range
-            
-            // Extremely simplified biome determination (just 3 biomes)
-            let biome: 'plains' | 'desert' | 'forest';
-            
-            if (biomeType < 0.33) {
-              biome = 'desert';
-            } else if (biomeType < 0.66) {
-              biome = 'plains';
-            } else {
-              biome = 'forest';
+            // Very slight variation based on distance from center
+            if (distFromCenter < 10) {
+              height += 2; // Small hill in the center
+            } else if (distFromCenter > 30) {
+              height -= 2; // Small depression at the edges
             }
             
-            // SIMPLIFIED: Base layer is always stone
-            blocks[`${worldX},0,${worldZ}`] = 'stone';
+            // Just place the necessary blocks - no noise calculations
             
-            // OPTIMIZED: Skip generating internal blocks we can't see
-            // Only create stone below terrain surface - 3 blocks deep
-            blocks[`${worldX},${height-3},${worldZ}`] = 'stone';
+            // Base block
             blocks[`${worldX},${height-2},${worldZ}`] = 'stone';
             
-            // Just one layer of dirt/sand
-            let underSurfaceBlock: BlockType = 'dirt';
-            if (biome === 'desert') {
-              underSurfaceBlock = 'sand';
-            }
-            blocks[`${worldX},${height-1},${worldZ}`] = underSurfaceBlock;
+            // Middle layer
+            blocks[`${worldX},${height-1},${worldZ}`] = 'dirt';
             
-            // Top layer depends on biome (extremely simplified)
-            let surfaceBlock: BlockType = 'grass';
-            if (biome === 'desert') {
-              surfaceBlock = 'sand';
-            }
+            // Top layer - grass everywhere for simplicity
+            blocks[`${worldX},${height},${worldZ}`] = 'grass';
             
-            // Set the surface block
-            blocks[`${worldX},${height},${worldZ}`] = surfaceBlock;
-            
-            // Add water where height is below water level
-            if (height < WATER_LEVEL) {
+            // Add water at the edges for visual interest
+            if (distFromCenter > 40 && height < WATER_LEVEL) {
               blocks[`${worldX},${WATER_LEVEL},${worldZ}`] = 'water';
             }
             
-            // SIMPLIFIED: Very rare tree generation 
-            if (biome === 'forest' && Math.random() < 0.03 && height > WATER_LEVEL) {
-              // Fixed height trees to reduce complexity
-              const treeHeight = 4;
+            // Almost no trees - just a couple in the center for decoration
+            if (distFromCenter < 5 && Math.random() < 0.1) {
+              // One simple tree
+              blocks[`${worldX},${height+1},${worldZ}`] = 'wood';
+              blocks[`${worldX},${height+2},${worldZ}`] = 'wood';
+              blocks[`${worldX},${height+3},${worldZ}`] = 'wood';
               
-              // Simple trunk
-              for (let y = height + 1; y < height + treeHeight; y++) {
-                blocks[`${worldX},${y},${worldZ}`] = 'wood';
-              }
-              
-              // Minimal cube of leaves
-              for (let lx = -1; lx <= 1; lx++) {
-                for (let ly = 0; ly <= 1; ly++) {
-                  for (let lz = -1; lz <= 1; lz++) {
-                    // Skip trunk space
-                    if (lx === 0 && lz === 0) continue;
-                    
-                    const leafX = worldX + lx;
-                    const leafY = height + treeHeight + ly;
-                    const leafZ = worldZ + lz;
-                    
-                    blocks[`${leafX},${leafY},${leafZ}`] = 'leaves';
-                  }
-                }
-              }
+              // Just a few leaves on top
+              blocks[`${worldX},${height+4},${worldZ}`] = 'leaves';
+              blocks[`${worldX+1},${height+3},${worldZ}`] = 'leaves';
+              blocks[`${worldX-1},${height+3},${worldZ}`] = 'leaves';
+              blocks[`${worldX},${height+3},${worldZ+1}`] = 'leaves';
+              blocks[`${worldX},${height+3},${worldZ-1}`] = 'leaves';
             }
-            
-            // Update progress counter
-            completedOperations++;
           }
         }
       }
     }
   
     console.log(`Generated ${Object.keys(chunks).length} chunks with ${Object.keys(blocks).length} blocks`);
-    
     return { generatedChunks: chunks, generatedBlocks: blocks };
+    
   } catch (error) {
     console.error("Failed to generate terrain:", error);
     
-    // Create a minimal fallback terrain (flat platform) to prevent game from crashing
+    // Create an absolute minimum fallback terrain - just a small flat platform
     const fallbackChunks: Record<string, { x: number, z: number }> = { 
       '0,0': { x: 0, z: 0 } 
     };
     const fallbackBlocks: Record<string, BlockType> = {};
     
-    // Create a small 16x16 flat platform at y=15
-    for (let x = 0; x < CHUNK_SIZE; x++) {
-      for (let z = 0; z < CHUNK_SIZE; z++) {
-        // Add stone base
+    // Create a tiny 8x8 flat platform at y=15
+    for (let x = -4; x < 4; x++) {
+      for (let z = -4; z < 4; z++) {
+        // Just three layers
         fallbackBlocks[`${x},13,${z}`] = 'stone';
-        
-        // Add dirt layer
         fallbackBlocks[`${x},14,${z}`] = 'dirt';
-        
-        // Add grass top
         fallbackBlocks[`${x},15,${z}`] = 'grass';
       }
     }
     
-    console.log("Generated fallback terrain as emergency measure");
+    console.log("Generated emergency fallback terrain");
     return { generatedChunks: fallbackChunks, generatedBlocks: fallbackBlocks };
   }
 }
