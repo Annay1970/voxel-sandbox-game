@@ -12,7 +12,7 @@ interface ChunkProps {
 export const CHUNK_SIZE = 16;
 export const CHUNK_HEIGHT = 128;
 
-// EMERGENCY PERFORMANCE MODE: Significantly simplified chunk rendering
+// SUPER-EMERGENCY PERFORMANCE MODE: Most basic rendering possible
 export default function Chunk({ chunkX, chunkZ, blocks }: ChunkProps) {
   // Calculate chunk boundaries
   const minX = chunkX * CHUNK_SIZE;
@@ -26,89 +26,62 @@ export default function Chunk({ chunkX, chunkZ, blocks }: ChunkProps) {
     return null;
   }
   
-  // Simplified filtering and instanced rendering - group blocks by type for performance
-  const blocksByType = useMemo(() => {
-    // Group positions by block type
-    const groupedBlocks: Record<string, THREE.Vector3[]> = {};
+  // Get all blocks in this chunk
+  const chunkBlocks = useMemo(() => {
+    // Filter blocks in this chunk - SKIP instancedMesh and just render regular meshes
+    const result: { position: [number, number, number], type: BlockType }[] = [];
     
-    // Process only visible blocks in this chunk
     Object.entries(blocks).forEach(([key, type]) => {
-      // Skip air blocks
-      if (type === 'air' || type === 'water') return; // Simplified: skip water too
+      // Skip air and water blocks
+      if (type === 'air' || type === 'water') return;
       
       const [x, y, z] = key.split(',').map(Number);
       
       // Only include blocks in this chunk
       if (x >= minX && x < maxX && z >= minZ && z < maxZ) {
-        // Group by type
-        if (!groupedBlocks[type]) {
-          groupedBlocks[type] = [];
-        }
-        
-        // Store position
-        groupedBlocks[type].push(new THREE.Vector3(x, y, z));
+        // Simple position and type
+        result.push({
+          position: [x, y, z],
+          type
+        });
       }
     });
     
-    return groupedBlocks;
+    // EMERGENCY: Only return a small number of blocks to prevent crashes
+    return result.slice(0, 50); // Only render max 50 blocks per chunk
   }, [blocks, minX, minZ, maxX, maxZ]);
   
-  // Only render a single type of block for extreme performance mode
-  const blockTypeCount = Object.keys(blocksByType).length;
-  
   // No visible blocks
-  if (blockTypeCount === 0) {
+  if (chunkBlocks.length === 0) {
     return null;
   }
   
   // Use color mapping for super simplified block rendering
-  const blockColors = {
+  const blockColors: Record<string, string> = {
     'grass': '#55AA55',
     'dirt': '#8B4513',
     'stone': '#888888',
     'wood': '#A0522D',
     'leaves': '#7CAF50',
-    'sand': '#FFFF99',
-    'water': '#5555FF',
-    'snow': '#FFFFFF',
-    'coal': '#333333',
-    'ice': '#AADDFF',
-    'lava': '#FF5500',
-    'cactus': '#00AA00'
+    'sand': '#FFFF99'
   };
   
-  // Render using instanced meshes for better performance
+  // Render using extremely simple individual meshes
   return (
     <group>
-      {Object.entries(blocksByType).map(([type, positions]) => {
-        // Skip if no positions
-        if (positions.length === 0) return null;
-        
+      {chunkBlocks.map(({ position, type }, index) => {
         // Get color - use default if not defined
-        const color = blockColors[type as keyof typeof blockColors] || '#FF00FF';
+        const color = blockColors[type] || '#FF00FF';
         
-        // Use instanced mesh for better performance
+        // Render as individual mesh
         return (
-          <instancedMesh 
-            key={type}
-            args={[undefined, undefined, positions.length]}
-            count={positions.length}
+          <mesh 
+            key={`${index}-${position.join(',')}`}
+            position={[position[0] + 0.5, position[1] + 0.5, position[2] + 0.5]}
           >
             <boxGeometry args={[1, 1, 1]} />
             <meshStandardMaterial color={color} />
-            {positions.map((pos, i) => {
-              // Create a temporary matrix to set the instance position
-              const matrix = new THREE.Matrix4();
-              matrix.setPosition(pos.x + 0.5, pos.y + 0.5, pos.z + 0.5);
-              return (
-                <primitive
-                  key={i}
-                  object={matrix}
-                  attach={`instanceMatrix-${i}`}
-                />
-              );
-            })}
-          </instancedMesh>
+          </mesh>
         );
       })}
     </group>
