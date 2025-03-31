@@ -39,14 +39,22 @@ export default function World() {
       {/* Player */}
       <Player />
       
-      {/* Basic ambient light */}
-      <ambientLight intensity={0.7} />
+      {/* Improved ambient light */}
+      <ambientLight intensity={0.6} />
       
-      {/* Basic directional light */}
+      {/* Improved directional light */}
       <directionalLight
-        position={[0, 10, 0]}
-        intensity={1.0}
-        castShadow={false}
+        position={[15, 20, 15]}
+        intensity={0.8}
+        color="#FFD580"
+        castShadow
+        shadow-mapSize-width={512}
+        shadow-mapSize-height={512}
+        shadow-camera-far={50}
+        shadow-camera-left={-15}
+        shadow-camera-right={15}
+        shadow-camera-top={15}
+        shadow-camera-bottom={-15}
       />
     </group>
   );

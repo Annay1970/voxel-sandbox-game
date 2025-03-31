@@ -21,36 +21,85 @@ export default function SkyDome({ timeOfDay: propTimeOfDay, weather: propWeather
   // Check if Blood Moon is active
   const isBloodMoonActive = bloodMoonEvent.active;
   
-  // Ultra-simplified sky colors - only day/night with no transitions
+  // Improved sky colors with transitions
   const skyColor = useMemo(() => {
-    // Just two states: day or night
-    const isDaytime = timeOfDay >= 0.25 && timeOfDay <= 0.75;
-    
-    if (isDaytime) {
-      // Day - blue sky
-      return isBloodMoonActive ? '#855555' : '#87CEEB';
+    // Time-based gradient calculation
+    if (isBloodMoonActive) {
+      // Blood moon colors
+      if (timeOfDay >= 0.25 && timeOfDay <= 0.75) {
+        // Blood moon daytime - reddish
+        return '#855555';
+      } else if (timeOfDay > 0.75 && timeOfDay < 0.85) {
+        // Blood moon sunset - deep red
+        return '#662222';
+      } else {
+        // Blood moon night - dark red
+        return '#330000';
+      }
     } else {
-      // Night - dark blue
-      return isBloodMoonActive ? '#330000' : '#0A0A2A';
+      // Normal sky colors
+      if (timeOfDay > 0.25 && timeOfDay < 0.75) {
+        // Full daytime - blue sky
+        return '#87CEEB';
+      } else if ((timeOfDay >= 0.2 && timeOfDay <= 0.25) || (timeOfDay >= 0.75 && timeOfDay <= 0.8)) {
+        // Dawn/dusk - light orange blue
+        return '#FF9966';
+      } else {
+        // Night - dark blue
+        return '#0A0A2A';
+      }
     }
   }, [timeOfDay, isBloodMoonActive]);
   
-  // Ultra-simplified light settings - directly calculate based on time
+  // Improved light settings with smoother transitions
   const lightIntensity = useMemo(() => {
-    // Just two states: day or night
-    const isDaytime = timeOfDay >= 0.25 && timeOfDay <= 0.75;
-    return isDaytime ? 1.0 : 0.2;
+    // Smooth day-night cycle
+    if (timeOfDay > 0.25 && timeOfDay < 0.75) {
+      // Full daytime
+      return 1.0;
+    } else if (timeOfDay >= 0.75 && timeOfDay <= 0.85) {
+      // Sunset - gradual decrease
+      const t = (timeOfDay - 0.75) / 0.1; // 0 to 1
+      return 1.0 - (t * 0.8);
+    } else if (timeOfDay >= 0.15 && timeOfDay <= 0.25) {
+      // Sunrise - gradual increase
+      const t = (timeOfDay - 0.15) / 0.1; // 0 to 1
+      return 0.2 + (t * 0.8);
+    } else {
+      // Night
+      return 0.2;
+    }
   }, [timeOfDay]);
   
-  // Ultra-simplified light color
+  // Improved light color with transitions
   const lightColor = useMemo(() => {
-    // Just two states: day or night
-    const isDaytime = timeOfDay >= 0.25 && timeOfDay <= 0.75;
-    
-    if (isDaytime) {
-      return isBloodMoonActive ? '#FFCCCC' : '#FFFFFF';
+    if (isBloodMoonActive) {
+      // Blood moon colors
+      if (timeOfDay > 0.25 && timeOfDay < 0.75) {
+        // Blood moon day
+        return '#FFCCCC';
+      } else if ((timeOfDay >= 0.75 && timeOfDay <= 0.85) || (timeOfDay >= 0.15 && timeOfDay <= 0.25)) {
+        // Blood moon dawn/dusk
+        return '#FF5555';
+      } else {
+        // Blood moon night
+        return '#FF2222';
+      }
     } else {
-      return isBloodMoonActive ? '#FF2222' : '#2B5797';
+      // Normal colors
+      if (timeOfDay > 0.25 && timeOfDay < 0.75) {
+        // Day - white light
+        return '#FFFFFF';
+      } else if (timeOfDay >= 0.75 && timeOfDay <= 0.85) {
+        // Sunset - orange light
+        return '#FFA500';
+      } else if (timeOfDay >= 0.15 && timeOfDay <= 0.25) {
+        // Sunrise - yellow-orange light
+        return '#FFCC88';
+      } else {
+        // Night - blue light
+        return '#2B5797';
+      }
     }
   }, [timeOfDay, isBloodMoonActive]);
   

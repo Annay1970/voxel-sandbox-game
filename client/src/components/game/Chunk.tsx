@@ -47,8 +47,8 @@ export default function Chunk({ chunkX, chunkZ, blocks }: ChunkProps) {
       }
     });
     
-    // EMERGENCY: Only return a small number of blocks to prevent crashes
-    return result.slice(0, 50); // Only render max 50 blocks per chunk
+    // Allow more blocks now that we've verified it works
+    return result.slice(0, 200); // Render up to 200 blocks per chunk
   }, [blocks, minX, minZ, maxX, maxZ]);
   
   // No visible blocks

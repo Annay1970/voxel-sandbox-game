@@ -27,7 +27,8 @@ export default function Player() {
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   
   // Store player position in state to reduce re-renders
-  const [position, setPosition] = useState<[number, number, number]>([0, 50, 0]);
+  // Start player closer to the ground and slightly to the side for better view of the platform
+  const [position, setPosition] = useState<[number, number, number]>([2, 16, 2]);
   
   // Get game state from the store
   const blocks = useVoxelGame(state => state.blocks);
