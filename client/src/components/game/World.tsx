@@ -7,6 +7,7 @@ import Player from "./Player";
 import Chunk from "./Chunk";
 import Creature from "./Creature";
 import Rock from "./Rock";
+import SkyDome from "./Sky";
 import { generateTerrain } from "../../lib/terrain";
 import { useErrorTracking, updatePerformanceMetrics } from "../../lib/utils/errorTracker";
 import { textureManager } from "../../lib/utils/textureManager";
@@ -316,8 +317,8 @@ export default function World() {
 
   return (
     <group ref={worldRef}>
-      {/* Environment */}
-      <Sky {...skyProps} />
+      {/* Environment with custom sky */}
+      <SkyDome timeOfDay={timeOfDay} weather={weather} />
       {isNight && <Stars radius={100} depth={50} count={1000} factor={4} />}
       
       {/* Debug controls (press F3 to toggle) */}

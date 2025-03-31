@@ -563,48 +563,44 @@ export default function Player() {
     }
     
     // Check for damaging blocks
-    if (blockAtFeetLevel && isBlockDamaging(blockAtFeetLevel)) {
-      isPlayerDamaged = true;
+    if (blockAtFeetLevel) {
+      // Get damage info from the block
+      const damageInfo = isBlockDamaging(blockAtFeetLevel);
       
-      // Apply damage every second
-      if (!useVoxelGame.getState().player.takingBlockDamage) {
-        useVoxelGame.getState().setPlayerTakingBlockDamage(true);
+      if (damageInfo.isDamaging) {
+        isPlayerDamaged = true;
         
-        // Set damage amount based on block type
-        let damageAmount = 1; // Default damage
-        let soundVolume = 0.7;
-        
-        // Adjust damage for different block types
-        if (blockAtFeetLevel === 'lava') {
-          damageAmount = 4; // Lava deals significant damage
-          soundVolume = 0.8;
+        // Apply damage based on cooldown
+        if (!useVoxelGame.getState().player.takingBlockDamage) {
+          useVoxelGame.getState().setPlayerTakingBlockDamage(true);
           
-          // Log special message for lava
-          console.log(`🔥 Player burning in lava! Taking ${damageAmount} damage`);
+          // Use damage amount from block configuration
+          const damageAmount = damageInfo.damage;
+          let soundVolume = 0.7;
           
-          // Add burning particles effect (for future implementation)
-        } else if (blockAtFeetLevel === 'cactus') {
-          damageAmount = 1; // Cactus deals standard damage
+          // Log appropriate message based on block type
+          if (blockAtFeetLevel === 'lava') {
+            console.log(`🔥 Player burning in lava! Taking ${damageAmount} damage`);
+            soundVolume = 0.8;
+            // Add burning particles effect (for future implementation)
+          } else if (blockAtFeetLevel === 'cactus') {
+            console.log(`🌵 Player pricked by cactus! Taking ${damageAmount} damage`);
+          } else {
+            console.log(`Player taking damage from ${blockAtFeetLevel} block: ${damageAmount} damage`);
+          }
           
-          // Log special message for cactus
-          console.log(`🌵 Player pricked by cactus! Taking ${damageAmount} damage`);
-        } else {
-          // Generic message for other damaging blocks
-          console.log(`Player taking damage from ${blockAtFeetLevel} block: ${damageAmount} damage`);
+          // Apply damage
+          useVoxelGame.getState().damagePlayer(damageAmount);
+          
+          // Play sound based on block type
+          // Use a known sound for damage
+          useAudio.getState().playSound('damageSound', { volume: soundVolume });
+          
+          // Use cooldown time from block configuration
+          setTimeout(() => {
+            useVoxelGame.getState().setPlayerTakingBlockDamage(false);
+          }, damageInfo.cooldown);
         }
-        
-        // Apply damage
-        useVoxelGame.getState().damagePlayer(damageAmount);
-        
-        // Play appropriate damage sound - use 'damageSound' as it's defined in GameSounds
-        useAudio.getState().playSound('damageSound', { volume: soundVolume });
-        
-        // Create damage cooldown
-        // Lava has a quicker damage rate, other blocks are standard
-        const cooldownTime = blockAtFeetLevel === 'lava' ? 750 : 1000; // ms
-        setTimeout(() => {
-          useVoxelGame.getState().setPlayerTakingBlockDamage(false);
-        }, cooldownTime);
       }
     }
     

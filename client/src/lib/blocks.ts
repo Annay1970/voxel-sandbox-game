@@ -268,10 +268,33 @@ export function getBlockDrops(type: BlockType): { type: BlockType, count: number
 // Special block property detection functions
 
 /**
- * Check if a block is damaging to players on contact
+ * Check if a block is damaging to players on contact and get damage values
+ * Returns an object with damage information
  */
-export function isBlockDamaging(type: BlockType): boolean {
-  return type === 'lava' || type === 'cactus';
+export function isBlockDamaging(type: BlockType): { 
+  isDamaging: boolean, 
+  damage: number, 
+  cooldown: number, // in milliseconds
+  damageSound?: string 
+} {
+  switch (type) {
+    case 'lava':
+      return { 
+        isDamaging: true, 
+        damage: 4, // Higher damage for lava
+        cooldown: 750, // Faster damage tick rate
+        damageSound: 'player_burn' 
+      };
+    case 'cactus':
+      return { 
+        isDamaging: true, 
+        damage: 1, // Less damage for cactus
+        cooldown: 1000, // Standard damage tick rate
+        damageSound: 'player_damage' 
+      };
+    default:
+      return { isDamaging: false, damage: 0, cooldown: 1000 };
+  }
 }
 
 /**

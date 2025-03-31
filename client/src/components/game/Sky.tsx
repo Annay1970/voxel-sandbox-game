@@ -1,11 +1,21 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { useVoxelGame } from '../../lib/stores/useVoxelGame';
+import { useVoxelGame, WeatherType } from '../../lib/stores/useVoxelGame';
 
-export default function SkyDome() {
-  const timeOfDay = useVoxelGame(state => state.timeOfDay);
-  const weather = useVoxelGame(state => state.weather);
+interface SkyDomeProps {
+  timeOfDay?: number;
+  weather?: WeatherType;
+}
+
+export default function SkyDome({ timeOfDay: propTimeOfDay, weather: propWeather }: SkyDomeProps = {}) {
+  // Use props if provided, otherwise get values from store
+  const storeTimeOfDay = useVoxelGame(state => state.timeOfDay);
+  const storeWeather = useVoxelGame(state => state.weather);
   const bloodMoonEvent = useVoxelGame(state => state.bloodMoonEvent);
+  
+  // Use props if provided, otherwise fallback to store values
+  const timeOfDay = propTimeOfDay !== undefined ? propTimeOfDay : storeTimeOfDay;
+  const weather = propWeather !== undefined ? propWeather : storeWeather;
   
   // Check if Blood Moon is active
   const isBloodMoonActive = bloodMoonEvent.active;
@@ -225,6 +235,10 @@ export default function SkyDome() {
       density = 0.02;
     } else if (weather === 'cloudy') {
       density = 0.01;
+    } else if (weather === 'fog') {
+      density = 0.04;
+    } else if (weather === 'snow') {
+      density = 0.015;
     }
     
     // During Blood Moon, increase fog density for ominous effect
