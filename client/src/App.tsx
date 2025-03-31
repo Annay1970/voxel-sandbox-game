@@ -2,11 +2,12 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Sky, KeyboardControls, Stars, Loader } from '@react-three/drei';
 import GamepadDisplay from './components/game/GamepadDisplay';
+import Player from './components/game/Player';
 import { useIsMobile } from './hooks/use-is-mobile';
 import { gamepadManager } from './lib/controls/GamepadManager';
 
 // Define game controls
-enum Controls {
+export enum Controls {
   forward = 'forward',
   back = 'back',
   left = 'left',
@@ -62,11 +63,7 @@ const GameWorld = () => {
   );
 };
 
-// Placeholder for player component
-const Player = () => {
-  // This would include player movement, camera controls, etc.
-  return null;
-};
+// We now have an actual Player component imported from './components/game/Player'
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -127,7 +124,7 @@ function App() {
                 <Sky sunPosition={[10, 5, 10]} />
                 <Stars radius={100} depth={50} count={5000} factor={4} />
                 <GameWorld />
-                <Player />
+                <Player position={[0, 1, 0]} />
               </Suspense>
             </Canvas>
           </KeyboardControls>

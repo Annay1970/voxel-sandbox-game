@@ -1,689 +1,236 @@
-import { useRef, useEffect, useState } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
-import { PointerLockControls, useKeyboardControls } from '@react-three/drei';
+import { useRef, useState, useEffect } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useKeyboardControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { BlockType, getBlockMovementEffect, isBlockDamaging } from '../../lib/blocks';
-import { useVoxelGame } from '../../lib/stores/useVoxelGame';
-import { useSkills } from '../../lib/stores/useSkills';
-import { useAudio } from '../../lib/stores/useAudio';
+import { Controls } from '../../App'; // Import the Controls enum from App.tsx
+import { useGamepadControls } from '../../lib/controls/useGamepadControls';
 
-// Controls mapping
-enum Controls {
-  forward = 'forward',
-  back = 'back',
-  left = 'left',
-  right = 'right',
-  jump = 'jump',
-  sprint = 'sprint',
-  attack = 'attack',
-  place = 'place'
+// Player configuration
+const PLAYER_SPEED = 5;
+const PLAYER_JUMP_FORCE = 8;
+const PLAYER_SPRINT_MULTIPLIER = 1.7;
+const GRAVITY = 25;
+const CAMERA_DISTANCE = 5;
+const CAMERA_HEIGHT = 2.5;
+const CAMERA_LERP_FACTOR = 0.1;
+
+interface PlayerProps {
+  position?: [number, number, number];
 }
 
-export default function Player() {
+function Player({ position = [0, 1, 0] }: PlayerProps) {
   // References
   const playerRef = useRef<THREE.Group>(null);
-  const controlsRef = useRef<any>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
+  const velocityRef = useRef(new THREE.Vector3());
+  const cameraRef = useRef(new THREE.Vector3(0, CAMERA_HEIGHT, CAMERA_DISTANCE));
   
-  // Store player position in state to reduce re-renders
-  // Start player closer to the ground and slightly to the side for better view of the platform
-  const [position, setPosition] = useState<[number, number, number]>([2, 16, 2]);
+  // State
+  const [onGround, setOnGround] = useState(true);
+  const [cameraMode, setCameraMode] = useState<'first-person' | 'third-person'>('third-person');
+  const [toggleCameraPressed, setToggleCameraPressed] = useState(false);
   
-  // Get game state from the store
-  const blocks = useVoxelGame(state => state.blocks);
-  const placeBlock = useVoxelGame(state => state.placeBlock);
-  const removeBlock = useVoxelGame(state => state.removeBlock);
-  const setSelectedBlock = useVoxelGame(state => state.setSelectedBlock);
+  // Controls using subscribe method to avoid re-renders
+  const [subscribeKeys, getKeys] = useKeyboardControls<Controls>();
+  const gamepad = useGamepadControls();
   
-  // Get character stats from skills
-  const characterSpeed = useSkills(state => state.characterSpeed);
-  const addXp = useSkills(state => state.addXp);
-  
-  // Get audio functions from audio store
-  const playFootsteps = useAudio(state => state.playFootsteps);
-  const stopFootsteps = useAudio(state => state.stopFootsteps);
-  const playBlockBreakSound = useAudio(state => state.playBlockBreakSound);
-  const playBlockPlaceSound = useAudio(state => state.playBlockPlaceSound);
-  
-  // Camera mode state from the game store
-  const cameraMode = useVoxelGame(state => state.player.cameraMode);
-  
-  // Get the three.js camera
-  const { camera } = useThree();
-  
-  // Store camera reference
-  useEffect(() => {
-    cameraRef.current = camera as THREE.PerspectiveCamera;
-  }, [camera]);
-  
-  // Set up keyboard controls through useKeyboardControls
-  const forward = useKeyboardControls<Controls>(state => state.forward);
-  const back = useKeyboardControls<Controls>(state => state.back);
-  const left = useKeyboardControls<Controls>(state => state.left);
-  const right = useKeyboardControls<Controls>(state => state.right);
-  const jump = useKeyboardControls<Controls>(state => state.jump);
-  const sprint = useKeyboardControls<Controls>(state => state.sprint);
-  
-  // Debug keyboard controls
-  useEffect(() => {
-    console.log('useKeyboardControls Status:', { forward, back, left, right, jump, sprint });
-  }, [forward, back, left, right, jump, sprint]);
-  
-  // Set up direct keyboard controls as backup
-  const [manualControls, setManualControls] = useState({
-    forward: false,
-    back: false,
-    left: false,
-    right: false,
-    jump: false,
-    sprint: false
-  });
-  
-  // Update manual controls in the handleKeyDown and handleKeyUp functions
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      console.log('Direct keydown event:', e.code);
-      
-      switch(e.code) {
-        case 'KeyW':
-          setManualControls(prev => ({ ...prev, forward: true }));
-          break;
-        case 'KeyS':
-          setManualControls(prev => ({ ...prev, back: true }));
-          break;
-        case 'KeyA':
-          setManualControls(prev => ({ ...prev, left: true }));
-          break;
-        case 'KeyD':
-          setManualControls(prev => ({ ...prev, right: true }));
-          break;
-        case 'Space':
-          setManualControls(prev => ({ ...prev, jump: true }));
-          break;
-        case 'ShiftLeft':
-          setManualControls(prev => ({ ...prev, sprint: true }));
-          break;
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      console.log('Direct keyup event:', e.code);
-      
-      switch(e.code) {
-        case 'KeyW':
-          setManualControls(prev => ({ ...prev, forward: false }));
-          break;
-        case 'KeyS':
-          setManualControls(prev => ({ ...prev, back: false }));
-          break;
-        case 'KeyA':
-          setManualControls(prev => ({ ...prev, left: false }));
-          break;
-        case 'KeyD':
-          setManualControls(prev => ({ ...prev, right: false }));
-          break;
-        case 'Space':
-          setManualControls(prev => ({ ...prev, jump: false }));
-          break;
-        case 'ShiftLeft':
-          setManualControls(prev => ({ ...prev, sprint: false }));
-          break;
-      }
-    };
-
-    // Add event listeners
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('keyup', handleKeyUp);
-
-    // Cleanup
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
-  
-  // Movement parameters
-  const speed = 0.15 * characterSpeed; // Base movement speed
-  const sprintMultiplier = 1.5; // Speed multiplier when sprinting
-  const jumpForce = 0.2; // Initial upward velocity when jumping
-  const gravity = 0.01; // Downward acceleration
-  
-  // Physics state
-  const [velocity, setVelocity] = useState<THREE.Vector3>(new THREE.Vector3(0, 0, 0));
-  const [grounded, setGrounded] = useState<boolean>(false);
-  
-  // Interaction cooldowns
-  const [attackCooldown, setAttackCooldown] = useState<boolean>(false);
-  const [placeCooldown, setPlaceCooldown] = useState<boolean>(false);
-  
-  // Animation flags
-  const [swingingTool, setSwingingTool] = useState(false);
-  const [attackAnimProgress, setAttackAnimProgress] = useState(0);
-  
-  // Player dimensions
-  const playerHeight = 1.6; // Player is 1.6 blocks tall
-  const eyeHeight = playerHeight * 0.9; // Eyes are slightly below the top of the head
-  const playerWidth = 0.6; // Player is 0.6 blocks wide
-  const playerDepth = 0.6; // Player is 0.6 blocks deep
-  
-  // Get block at position
-  const getBlockAt = (x: number, y: number, z: number): BlockType => {
-    const blockKey = `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
-    return blocks[blockKey] || 'air';
+  // Helper to get combined input from keyboard and gamepad
+  const getInput = (
+    keyboardKey: Controls,
+    gamepadValue: number | boolean,
+    isAxis = false
+  ): number => {
+    const keyboardValue = getKeys()[keyboardKey] ? 1 : 0;
+    
+    if (isAxis) {
+      // For axes (like movement), combine both inputs
+      return Math.abs(gamepadValue as number) > 0.1 
+        ? gamepadValue as number 
+        : keyboardValue;
+    } else {
+      // For buttons, either input can activate
+      return (keyboardValue > 0 || gamepadValue) ? 1 : 0;
+    }
   };
   
-  // Check collision with blocks
-  const checkCollision = (position: THREE.Vector3): boolean => {
-    // Check all blocks that could collide with the player
-    const playerMinX = position.x - playerWidth / 2;
-    const playerMaxX = position.x + playerWidth / 2;
-    const playerMinY = position.y;
-    const playerMaxY = position.y + playerHeight;
-    const playerMinZ = position.z - playerDepth / 2;
-    const playerMaxZ = position.z + playerDepth / 2;
-    
-    // Check all potentially colliding blocks
-    for (let x = Math.floor(playerMinX); x <= Math.floor(playerMaxX); x++) {
-      for (let y = Math.floor(playerMinY); y <= Math.floor(playerMaxY); y++) {
-        for (let z = Math.floor(playerMinZ); z <= Math.floor(playerMaxZ); z++) {
-          const blockType = getBlockAt(x, y, z);
-          
-          // Skip non-solid blocks
-          if (blockType === 'air' || blockType === 'water') {
-            continue;
-          }
-          
-          // Simplified AABB collision check
-          const blockMinX = x;
-          const blockMaxX = x + 1;
-          const blockMinY = y;
-          const blockMaxY = y + 1;
-          const blockMinZ = z;
-          const blockMaxZ = z + 1;
-          
-          if (
-            playerMaxX > blockMinX && playerMinX < blockMaxX &&
-            playerMaxY > blockMinY && playerMinY < blockMaxY &&
-            playerMaxZ > blockMinZ && playerMinZ < blockMaxZ
-          ) {
-            return true; // Collision detected
-          }
+  // Toggle camera effect
+  useEffect(() => {
+    // Subscribe to camera toggle changes
+    return subscribeKeys(
+      (state) => state[Controls.toggleCamera], 
+      (pressed) => {
+        if (pressed && !toggleCameraPressed) {
+          setCameraMode(prev => prev === 'third-person' ? 'first-person' : 'third-person');
         }
+        setToggleCameraPressed(pressed);
       }
-    }
-    
-    return false; // No collision
-  };
-  
-  // Handle attack (break blocks)
-  const handleAttack = () => {
-    if (attackCooldown) return;
-    
-    // Set cooldown
-    setAttackCooldown(true);
-    setTimeout(() => setAttackCooldown(false), 250);
-    
-    // Show attack animation
-    setSwingingTool(true);
-    setTimeout(() => setSwingingTool(false), 200);
-    
-    // Get the currently selected block
-    const selectedBlock = useVoxelGame.getState().selectedBlock;
-    if (!selectedBlock) return;
-    
-    const [x, y, z] = selectedBlock;
-    
-    // Try to remove the block
-    const blockKey = `${x},${y},${z}`;
-    const blockType = blocks[blockKey];
-    
-    if (blockType && blockType !== 'air') {
-      // Remove the block
-      removeBlock(x, y, z);
-      
-      // Play sound
-      playBlockBreakSound(blockType);
-      
-      // Grant mining XP
-      if (blockType === 'stone' || blockType === 'coal') {
-        addXp('mining', 5);
-      } else if (blockType === 'dirt' || blockType === 'grass' || blockType === 'sand') {
-        addXp('farming', 2);
-      } else if (blockType === 'wood' || blockType === 'log' || blockType === 'leaves') {
-        addXp('woodcutting', 5);
-      }
-    }
-  };
-  
-  // Handle block placement
-  const handlePlace = () => {
-    if (placeCooldown) return;
-    
-    // Set cooldown
-    setPlaceCooldown(true);
-    setTimeout(() => setPlaceCooldown(false), 250);
-    
-    // Get the currently selected block face
-    const selectedBlockFace = useVoxelGame.getState().selectedBlockFace;
-    if (!selectedBlockFace) return;
-    
-    const [x, y, z, face] = selectedBlockFace;
-    
-    // Calculate the position of the new block based on the face
-    let newX = x;
-    let newY = y;
-    let newZ = z;
-    
-    switch (face) {
-      case 'top': newY += 1; break;
-      case 'bottom': newY -= 1; break;
-      case 'north': newZ -= 1; break;
-      case 'south': newZ += 1; break;
-      case 'east': newX += 1; break;
-      case 'west': newX -= 1; break;
-    }
-    
-    // Get currently selected block type from inventory
-    const inventory = useVoxelGame.getState().inventory;
-    const selectedInventorySlot = useVoxelGame.getState().selectedInventorySlot;
-    const selectedBlockType = inventory[selectedInventorySlot]?.type;
-    if (!selectedBlockType || selectedBlockType === 'air') return;
-    
-    // Check if the position is valid (not intersecting with the player)
-    const playerBox = new THREE.Box3().setFromObject(playerRef.current!);
-    const blockBox = new THREE.Box3(
-      new THREE.Vector3(newX, newY, newZ),
-      new THREE.Vector3(newX + 1, newY + 1, newZ + 1)
     );
-    
-    if (playerBox.intersectsBox(blockBox)) {
-      console.log("Can't place block inside player");
-      return;
-    }
-    
-    // Place the block
-    placeBlock(newX, newY, newZ, selectedBlockType);
-    
-    // Play sound
-    playBlockPlaceSound(selectedBlockType);
-    
-    // Grant building XP
-    addXp('building', 2);
-  };
-
-  // Process interactions with the world
-  useEffect(() => {
-    const handleMouseDown = (e: MouseEvent) => {
-      if (!controlsRef.current?.isLocked) return;
-      
-      // Left click to break blocks
-      if (e.button === 0) {
-        handleAttack();
-      }
-      
-      // Right click to place blocks
-      if (e.button === 2) {
-        handlePlace();
-      }
-    };
-    
-    // Debug keyboard events
-    const handleKeyDown = (e: KeyboardEvent) => {
-      console.log('Key down event:', e.code);
-      
-      // Manual keyboard handling for debugging
-      switch (e.code) {
-        case 'KeyW':
-          console.log('Manual W key detected');
-          break;
-        case 'KeyA':
-          console.log('Manual A key detected');
-          break;
-        case 'KeyS':
-          console.log('Manual S key detected');
-          break;
-        case 'KeyD':
-          console.log('Manual D key detected');
-          break;
-      }
-    };
-    
-    // Add event listeners
-    document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('keydown', handleKeyDown);
-    
-    // Add right-click prevention
-    const preventContextMenu = (e: Event) => e.preventDefault();
-    document.addEventListener('contextmenu', preventContextMenu);
-    
-    // Cleanup
-    return () => {
-      document.removeEventListener('mousedown', handleMouseDown);
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('contextmenu', preventContextMenu);
-    };
-  }, [attackCooldown, placeCooldown, blocks, removeBlock, placeBlock, addXp, playBlockBreakSound, playBlockPlaceSound]);
+  }, [toggleCameraPressed, subscribeKeys]);
   
-  // Raycast to find blocks
-  const performRaycast = () => {
-    if (!cameraRef.current) return;
-    
-    // Get current camera position and direction
-    const cameraPosition = new THREE.Vector3();
-    cameraRef.current.getWorldPosition(cameraPosition);
-    
-    const cameraDirection = new THREE.Vector3();
-    cameraRef.current.getWorldDirection(cameraDirection);
-    
-    // Set up raycaster
-    raycasterRef.current.set(cameraPosition, cameraDirection);
-    
-    // Maximum distance to check for blocks
-    const maxDistance = 5;
-    
-    // Check for intersections with blocks
-    let closestBlock: [number, number, number] | null = null;
-    let closestBlockFace: [number, number, number, string] | null = null;
-    let closestDistance = maxDistance;
-    
-    // Check each block in range
-    for (let x = Math.floor(cameraPosition.x - maxDistance); x <= Math.floor(cameraPosition.x + maxDistance); x++) {
-      for (let y = Math.floor(cameraPosition.y - maxDistance); y <= Math.floor(cameraPosition.y + maxDistance); y++) {
-        for (let z = Math.floor(cameraPosition.z - maxDistance); z <= Math.floor(cameraPosition.z + maxDistance); z++) {
-          const blockType = getBlockAt(x, y, z);
-          
-          // Skip non-solid blocks
-          if (blockType === 'air' || blockType === 'water') {
-            continue;
-          }
-          
-          // Simple box for each block
-          const blockBox = new THREE.Box3(
-            new THREE.Vector3(x, y, z),
-            new THREE.Vector3(x + 1, y + 1, z + 1)
-          );
-          
-          // Calculate ray intersection
-          const intersectionPoint = new THREE.Vector3();
-          const intersected = raycasterRef.current.ray.intersectBox(blockBox, intersectionPoint);
-          
-          if (intersected) {
-            // Calculate distance to intersection
-            const distance = cameraPosition.distanceTo(intersectionPoint);
-            
-            // If this is the closest block so far, update
-            if (distance < closestDistance) {
-              closestDistance = distance;
-              closestBlock = [x, y, z];
-              
-              // Determine which face was hit
-              const eps = 0.001;
-              let face: string = 'top';
-              
-              if (Math.abs(intersectionPoint.x - x) < eps) face = 'west';
-              else if (Math.abs(intersectionPoint.x - (x + 1)) < eps) face = 'east';
-              else if (Math.abs(intersectionPoint.y - y) < eps) face = 'bottom';
-              else if (Math.abs(intersectionPoint.y - (y + 1)) < eps) face = 'top';
-              else if (Math.abs(intersectionPoint.z - z) < eps) face = 'north';
-              else if (Math.abs(intersectionPoint.z - (z + 1)) < eps) face = 'south';
-              
-              closestBlockFace = [x, y, z, face];
-            }
-          }
-        }
-      }
-    }
-    
-    // Update selected block in game state
-    if (closestBlock) {
-      useVoxelGame.getState().setSelectedBlock(closestBlock);
-    } else {
-      useVoxelGame.getState().setSelectedBlock(null);
-    }
-    
-    // Update selected block face in game state
-    if (closestBlockFace) {
-      useVoxelGame.getState().setSelectedBlockFace(closestBlockFace);
-    } else {
-      useVoxelGame.getState().setSelectedBlockFace(null);
-    }
-  };
-  
-  // Physics and movement update
-  useFrame(() => {
+  // Player movement
+  useFrame((state, delta) => {
     if (!playerRef.current) return;
     
-    // Perform raycast for block selection
-    performRaycast();
+    const player = playerRef.current;
+    const velocity = velocityRef.current;
     
-    // Get current position
-    const [px, py, pz] = position;
-    const currentPosition = new THREE.Vector3(px, py, pz);
+    // Get the current keyboard state
+    const keys = getKeys();
     
-    // Calculate new velocity based on input
-    let xVel = 0;
-    let zVel = 0;
+    // Get input from keyboard and gamepad
+    const forwardInput = getInput(
+      Controls.forward, 
+      gamepad.movementY > 0 ? 0 : -gamepad.movementY, // Negative because forward is -Z
+      true
+    ) - getInput(
+      Controls.back, 
+      gamepad.movementY < 0 ? 0 : gamepad.movementY,
+      true
+    );
     
-  
-
-  // Apply movement based on camera direction
-  const isForward = forward || manualControls.forward;
-  const isBack = back || manualControls.back;
-  const isLeft = left || manualControls.left;
-  const isRight = right || manualControls.right;
-  const isJump = jump || manualControls.jump;
-  const isSprint = sprint || manualControls.sprint;
-  
-  if (isForward || isBack || isLeft || isRight) {
-      // Get camera direction
-      const cameraDirection = new THREE.Vector3();
-      cameraRef.current?.getWorldDirection(cameraDirection);
+    const rightInput = getInput(
+      Controls.right, 
+      gamepad.movementX, 
+      true
+    ) - getInput(
+      Controls.left, 
+      -gamepad.movementX, 
+      true
+    );
+    
+    const jumpInput = getInput(Controls.jump, gamepad.jump);
+    const sprintInput = getInput(Controls.sprint, gamepad.sprint);
+    
+    // Apply camera rotation from gamepad right stick
+    if (Math.abs(gamepad.cameraX) > 0.1 || Math.abs(gamepad.cameraY) > 0.1) {
+      player.rotation.y -= gamepad.cameraX * delta * 3;
       
-      // Flatten to XZ plane
-      cameraDirection.y = 0;
-      cameraDirection.normalize();
-      
-      // Calculate move direction
-      if (isForward) {
-        xVel += cameraDirection.x;
-        zVel += cameraDirection.z;
-      }
-      if (isBack) {
-        xVel -= cameraDirection.x;
-        zVel -= cameraDirection.z;
-      }
-      
-      // Calculate right vector (perpendicular to camera direction)
-      const rightVector = new THREE.Vector3(
-        cameraDirection.z,
-        0,
-        -cameraDirection.x
+      // Camera rotation on vertical axis limited to avoid flipping
+      const verticalRotation = Math.max(
+        -Math.PI / 3, // Look up limit (60 degrees)
+        Math.min(Math.PI / 3, player.rotation.x + gamepad.cameraY * delta * 3)
       );
+      player.rotation.x = verticalRotation;
+    }
+    
+    // Apply speed based on sprint
+    const speed = PLAYER_SPEED * (sprintInput ? PLAYER_SPRINT_MULTIPLIER : 1);
+    
+    // Create movement direction vector
+    const direction = new THREE.Vector3();
+    
+    // Forward/backward
+    if (forwardInput !== 0) {
+      direction.z = forwardInput > 0 ? -1 : 1;
+    }
+    
+    // Left/right
+    if (rightInput !== 0) {
+      direction.x = rightInput > 0 ? 1 : -1;
+    }
+    
+    // Normalize direction if moving diagonally
+    if (direction.length() > 0) {
+      direction.normalize();
       
-      if (isRight) {
-        xVel += rightVector.x;
-        zVel += rightVector.z;
-      }
-      if (isLeft) {
-        xVel -= rightVector.x;
-        zVel -= rightVector.z;
-      }
+      // Apply rotation to movement
+      direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.rotation.y);
       
-      // Normalize movement vector if moving diagonally
-      const length = Math.sqrt(xVel * xVel + zVel * zVel);
-      if (length > 0) {
-        xVel /= length;
-        zVel /= length;
-      }
-    }
-    
-    // Apply speed to movement
-    let moveSpeed = (sprint || manualControls.sprint) ? speed * sprintMultiplier : speed;
-    
-    xVel *= moveSpeed;
-    zVel *= moveSpeed;
-    
-    // Update velocity
-    let newVel = new THREE.Vector3(
-      xVel,
-      velocity.y,
-      zVel
-    );
-    
-    // Apply gravity if not grounded
-    if (!grounded) {
-      newVel.y -= gravity;
-    } else if (jump || manualControls.jump) {
-      // Jump if grounded and jump key pressed
-      newVel.y = jumpForce;
-      setGrounded(false);
+      // Apply speed to movement
+      velocity.x = direction.x * speed;
+      velocity.z = direction.z * speed;
     } else {
-      // Make sure y velocity is 0 when grounded
-      newVel.y = 0;
+      // Apply friction when not actively moving
+      velocity.x *= 0.85;
+      velocity.z *= 0.85;
+      
+      // Clamp small values to zero to avoid sliding
+      if (Math.abs(velocity.x) < 0.01) velocity.x = 0;
+      if (Math.abs(velocity.z) < 0.01) velocity.z = 0;
     }
     
-    // Calculate new position
-    const newPosition = currentPosition.clone().add(newVel);
-    
-    // Check for collisions in each axis separately for better movement
-    // X-axis movement
-    const xCollision = checkCollision(
-      new THREE.Vector3(newPosition.x, currentPosition.y, currentPosition.z)
-    );
-    if (xCollision) {
-      newPosition.x = currentPosition.x;
-      newVel.x = 0;
+    // Jump if on ground
+    if (onGround && jumpInput) {
+      velocity.y = PLAYER_JUMP_FORCE;
+      setOnGround(false);
     }
     
-    // Z-axis movement
-    const zCollision = checkCollision(
-      new THREE.Vector3(newPosition.x, currentPosition.y, newPosition.z)
-    );
-    if (zCollision) {
-      newPosition.z = currentPosition.z;
-      newVel.z = 0;
+    // Apply gravity
+    if (!onGround) {
+      velocity.y -= GRAVITY * delta;
     }
     
-    // Y-axis movement
-    const yCollision = checkCollision(
-      new THREE.Vector3(newPosition.x, newPosition.y, newPosition.z)
-    );
-    if (yCollision) {
-      if (newVel.y < 0) {
-        // Colliding while moving down means we hit the ground
-        setGrounded(true);
-        
-        // Move to surface of the block
-        newPosition.y = Math.ceil(currentPosition.y);
-      } else {
-        // Colliding while moving up means we hit the ceiling
-        newPosition.y = currentPosition.y;
-      }
-      newVel.y = 0;
-    } else if (newVel.y <= 0) {
-      // Check if still grounded by checking for a block below
-      const groundCheck = new THREE.Vector3(
-        newPosition.x,
-        newPosition.y - 0.05, // Check just below feet
-        newPosition.z
-      );
-      const stillGrounded = checkCollision(groundCheck);
-      setGrounded(stillGrounded);
+    // Simple ground check (improve this with raycasting later)
+    if (player.position.y <= 1) {
+      player.position.y = 1;
+      velocity.y = 0;
+      setOnGround(true);
     }
     
-    // Update position and velocity
-    setPosition([newPosition.x, newPosition.y, newPosition.z]);
-    setVelocity(newVel);
-    
-    // Play footstep sounds if moving and grounded
-    const isMoving = Math.abs(newVel.x) > 0.01 || Math.abs(newVel.z) > 0.01;
-    const isRunning = (sprint || manualControls.sprint) && isMoving;
-    if (isMoving && grounded) {
-      playFootsteps(isMoving, isRunning, grounded, 'grass');
-    } else {
-      stopFootsteps();
-    }
-    
-    // Update player mesh position
-    playerRef.current.position.set(
-      newPosition.x,
-      newPosition.y,
-      newPosition.z
-    );
+    // Apply velocity
+    player.position.x += velocity.x * delta;
+    player.position.y += velocity.y * delta;
+    player.position.z += velocity.z * delta;
     
     // Update camera position
-    if (cameraRef.current) {
-      // Position camera at player's eye level
-      cameraRef.current.position.set(
-        newPosition.x,
-        newPosition.y + eyeHeight,
-        newPosition.z
+    if (cameraMode === 'third-person') {
+      // Third-person camera follows behind player
+      const cameraTarget = new THREE.Vector3(
+        player.position.x,
+        player.position.y + CAMERA_HEIGHT,
+        player.position.z + CAMERA_DISTANCE
       );
+      
+      // Apply player rotation to camera position
+      cameraTarget.sub(player.position)
+        .applyAxisAngle(new THREE.Vector3(0, 1, 0), player.rotation.y)
+        .add(player.position);
+      
+      // Smoothly move the camera (lerp)
+      state.camera.position.lerp(cameraTarget, CAMERA_LERP_FACTOR);
+      
+      // Make camera look at player
+      state.camera.lookAt(
+        player.position.x,
+        player.position.y + 1,
+        player.position.z
+      );
+    } else {
+      // First-person camera
+      state.camera.position.copy(new THREE.Vector3(
+        player.position.x,
+        player.position.y + 1.6, // Eye height
+        player.position.z
+      ));
+      
+      // Use player rotation for camera
+      state.camera.rotation.y = player.rotation.y;
+      state.camera.rotation.x = player.rotation.x;
     }
   });
   
-  // Return the player components
   return (
-    <>
-      {/* Camera controls */}
-      <PointerLockControls ref={controlsRef} />
-      
-      {/* Player model */}
-      <group ref={playerRef} position={[position[0], position[1], position[2]]}>
-        {cameraMode === 'third' ? (
-          // Third-person model
-          <group>
-            {/* Player head */}
-            <mesh position={[0, playerHeight - 0.25, 0]}>
-              <boxGeometry args={[0.5, 0.5, 0.5]} />
-              <meshStandardMaterial color="#FFD3B4" />
-            </mesh>
-            
-            {/* Player body */}
-            <mesh position={[0, playerHeight - 0.8, 0]}>
-              <boxGeometry args={[0.5, 0.6, 0.3]} />
-              <meshStandardMaterial color="#2196F3" />
-            </mesh>
-            
-            {/* Player arms */}
-            <mesh position={[0.4, playerHeight - 0.8, 0]}>
-              <boxGeometry args={[0.2, 0.6, 0.2]} />
-              <meshStandardMaterial color="#2196F3" />
-            </mesh>
-            <mesh position={[-0.4, playerHeight - 0.8, 0]}>
-              <boxGeometry args={[0.2, 0.6, 0.2]} />
-              <meshStandardMaterial color="#2196F3" />
-            </mesh>
-            
-            {/* Player legs */}
-            <mesh position={[0.15, playerHeight - 1.45, 0]}>
-              <boxGeometry args={[0.2, 0.6, 0.2]} />
-              <meshStandardMaterial color="#0D47A1" />
-            </mesh>
-            <mesh position={[-0.15, playerHeight - 1.45, 0]}>
-              <boxGeometry args={[0.2, 0.6, 0.2]} />
-              <meshStandardMaterial color="#0D47A1" />
-            </mesh>
-          </group>
-        ) : (
-          // First-person view - just show the arm
-          <group position={[0.4, -0.5, -0.4]} rotation={[0, 0, 0]}>
-            <mesh position={[0, 0, 0]}>
-              <boxGeometry args={[0.2, 0.6, 0.2]} />
-              <meshStandardMaterial color="#FFD3B4" />
-            </mesh>
-          </group>
-        )}
-        
-        {/* Player light */}
-        <pointLight 
-          position={[0, eyeHeight, 0]} 
-          intensity={0.5} 
-          distance={10} 
-          color="#FFD700"
-        />
-      </group>
-    </>
+    <group 
+      ref={playerRef} 
+      position={position instanceof Array ? position : [0, 1, 0]}
+    >
+      {/* Player mesh - only visible in third person */}
+      {cameraMode === 'third-person' && (
+        <>
+          {/* Player body */}
+          <mesh position={[0, 0.9, 0]} castShadow>
+            <boxGeometry args={[0.6, 1.8, 0.6]} />
+            <meshStandardMaterial color="#4287f5" />
+          </mesh>
+          
+          {/* Player head */}
+          <mesh position={[0, 1.9, 0]} castShadow>
+            <boxGeometry args={[0.5, 0.5, 0.5]} />
+            <meshStandardMaterial color="#ffe6cc" />
+          </mesh>
+        </>
+      )}
+    </group>
   );
 }
+
+export default Player;
