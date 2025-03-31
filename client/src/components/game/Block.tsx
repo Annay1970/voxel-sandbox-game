@@ -1,5 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 import { BlockType, isBlockTransparent } from '../../lib/blocks';
 
@@ -58,6 +59,19 @@ const getBlockOpacity = (type: BlockType): number => {
   return 1;
 };
 
+// Map block types to texture files
+const getBlockTexture = (type: BlockType): string | null => {
+  switch (type) {
+    case 'grass': return '/textures/grass.png';
+    case 'dirt': return null; // Keep dirt as a solid color for now
+    case 'stone': return '/textures/asphalt.png'; // Using asphalt texture for stone
+    case 'sand': return '/textures/sand.jpg';
+    case 'wood': return '/textures/wood.jpg';
+    case 'log': return '/textures/wood.jpg';
+    default: return null;
+  }
+};
+
 export default function Block({ 
   position, 
   type,
@@ -68,6 +82,21 @@ export default function Block({
 }: BlockProps) {
   // Reference to the mesh
   const meshRef = useRef<THREE.Mesh>(null);
+  
+  // Get texture path for this block type
+  const texturePath = getBlockTexture(type);
+  
+  // Load texture if available
+  const texture = useMemo(() => {
+    if (!texturePath) return null;
+    
+    try {
+      return useTexture(texturePath);
+    } catch (error) {
+      console.error(`Error loading texture: ${texturePath}`, error);
+      return null;
+    }
+  }, [texturePath]);
   
   // Highlight the block when selected
   useFrame(() => {
@@ -112,6 +141,8 @@ export default function Block({
         color={color} 
         transparent={transparent}
         opacity={opacity}
+        // Apply texture if available
+        map={texture || undefined}
         // Special material properties for different block types
         emissive={renderFire ? new THREE.Color('#ff2000') : undefined}
         emissiveIntensity={renderFire ? 0.5 : 0}
