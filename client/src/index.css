@@ -11,6 +11,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow: hidden;
+  overscroll-behavior: none; /* Prevent pull-to-refresh on mobile */
+  touch-action: none; /* Prevent default touch behaviors */
 }
 
 #root {
@@ -25,4 +27,28 @@ canvas {
 
 :focus {
   outline: none;
+}
+
+/* Mobile control styles */
+.mobile-controls {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none; /* Allow clicks to pass through to the canvas */
+}
+
+.mobile-controls * {
+  pointer-events: auto; /* But enable pointer events on the controls themselves */
+}
+
+.touch-joystick {
+  z-index: 30;
+}
+
+.touch-button {
+  z-index: 30;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.1s ease-out;
 }

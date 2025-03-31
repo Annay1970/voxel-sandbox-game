@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import { Sky, KeyboardControls, Stars, Loader } from '@react-three/drei';
 import GamepadDisplay from './components/game/GamepadDisplay';
 import Crosshair from './components/game/Crosshair';
+import MobileControls from './components/game/MobileControls';
 import Player from './components/game/Player';
 import BlockInteraction from './components/game/BlockInteraction';
 import { useIsMobile } from './hooks/use-is-mobile';
@@ -131,12 +132,8 @@ function App() {
           {/* Gamepad display (press G to toggle) */}
           <GamepadDisplay showByDefault={false} />
           
-          {/* Mobile controls would be added here */}
-          {isMobile && (
-            <div className="absolute bottom-4 left-4 text-white bg-black bg-opacity-50 px-3 py-1 rounded-md">
-              Mobile controls placeholder
-            </div>
-          )}
+          {/* Mobile controls for touch devices */}
+          {isMobile && <MobileControls />}
         </>
       )}
       
