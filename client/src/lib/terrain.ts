@@ -1,187 +1,333 @@
 import { BlockType } from './blocks';
 import { CHUNK_SIZE } from '../components/game/Chunk';
 
-// Enhanced terrain with multiple biomes
+// Enhanced terrain generator with optimized chunk-based loading
 export function generateTerrain() {
-  console.log("Generating enhanced terrain with multiple biomes...");
+  console.log("Initializing terrain generator with optimized chunk-based loading...");
   
   try {
-    // Just one chunk for performance
+    // Initialize with center chunk
     const chunks: Record<string, { x: number, z: number }> = {
       '0,0': { x: 0, z: 0 }
     };
     
     const blocks: Record<string, BlockType> = {};
     
-    // Larger platform with biomes
-    const platformSize = 12;
+    // Base platform values
     const platformHeight = 15;
     const waterLevel = platformHeight - 1;
     
-    // Biome distribution - divide the platform into sections
-    // We'll create several biomes in different areas to showcase variety
-    const getBiome = (x: number, z: number): string => {
-      // Center area is plains
-      if (Math.abs(x) < 3 && Math.abs(z) < 3) {
-        return 'plains';
-      }
+    // Set up seed values for deterministic generation
+    const SEED = Math.floor(Math.random() * 1000000);
+    
+    // Biome map for the world - defines which biomes are where
+    // Using a deterministic approach for chunk generation
+    const BIOME_MAP = [
+      ['mountains', 'snow',      'snow',     'mountains'],
+      ['forest',    'plains',    'cactus',   'desert'],
+      ['mushroom',  'riverbank', 'swamp',    'beach'],
+      ['forest',    'plains',    'riverbank','desert']
+    ];
+    
+    // Using the biome map to make deterministic biome selection
+    const getBiomeForCoordinates = (x: number, z: number): string => {
+      // Scale coordinates to match the biome map
+      // Each biome is 32x32 blocks
+      const biomeX = Math.floor((x + 1000) / 32) % BIOME_MAP[0].length;
+      const biomeZ = Math.floor((z + 1000) / 32) % BIOME_MAP.length;
       
-      // Four quadrants get their own biome
-      if (x >= 3 && z >= 3) {
-        return 'desert';
-      } else if (x <= -3 && z >= 3) {
-        return 'snow';
-      } else if (x <= -3 && z <= -3) {
-        return 'mountains';
-      } else if (x >= 3 && z <= -3) {
-        return 'forest';
-      }
-      
-      // Border regions
-      if (x >= 3 && Math.abs(z) < 3) {
-        return 'riverbank';
-      } else if (x <= -3 && Math.abs(z) < 3) {
-        return 'swamp';
-      } else if (Math.abs(x) < 3 && z >= 3) {
-        return 'cactus';
-      } else if (Math.abs(x) < 3 && z <= -3) {
-        return 'mushroom';
-      }
-      
-      // Should never reach here, but just in case
-      return 'plains';
+      // Get biome type from map
+      return BIOME_MAP[biomeZ][biomeX];
     };
     
-    // Create varying heights for terrain
+    // Create more interesting varying heights using multiple noise functions
     const getHeight = (x: number, z: number, biome: string): number => {
       let baseHeight = platformHeight;
       
-      // Add some noise based on coordinates
-      const noiseVal = (Math.sin(x * 0.3) + Math.cos(z * 0.3)) * 0.5;
+      // Generate different noise values using sine/cosine
+      // Using different frequencies to create more interesting terrain
+      const noise1 = (Math.sin(x * 0.1) * Math.cos(z * 0.1)) * 2;
+      const noise2 = (Math.sin(x * 0.05 + 0.3) * Math.cos(z * 0.05 + 0.3)) * 4;
+      const noise3 = (Math.sin(x * 0.3 + 0.7) * Math.cos(z * 0.3 + 0.7)) * 1;
       
       // Different height modifiers per biome
-      if (biome === 'mountains') {
-        baseHeight += Math.floor(Math.abs(x + z) * 0.5) + Math.floor(noiseVal * 3);
-      } else if (biome === 'plains') {
-        baseHeight += Math.floor(noiseVal);
-      } else if (biome === 'desert') {
-        baseHeight += Math.floor(Math.abs(Math.sin(x * 0.2) * Math.cos(z * 0.2) * 2));
-      } else if (biome === 'forest') {
-        baseHeight += Math.floor(noiseVal * 1.5);
-      } else if (biome === 'riverbank') {
-        baseHeight -= 1; // Slightly lower for water
-      } else if (biome === 'swamp') {
-        baseHeight -= 1; // Slightly lower for swamp
+      switch (biome) {
+        case 'mountains':
+          // More dramatic height changes
+          baseHeight += Math.floor(noise1 + noise2 * 1.5);
+          baseHeight += Math.floor(Math.abs(Math.sin(x * 0.05) * Math.cos(z * 0.05) * 8));
+          break;
+        case 'plains':
+          // Gentle rolling hills
+          baseHeight += Math.floor(noise1 * 0.7 + noise3 * 0.3);
+          break;
+        case 'desert':
+          // Sand dunes with varied heights
+          baseHeight += Math.floor(Math.abs(Math.sin(x * 0.08) * Math.cos(z * 0.08) * 3));
+          break;
+        case 'forest':
+          // Slightly hilly
+          baseHeight += Math.floor(noise1 + noise3);
+          break;
+        case 'riverbank':
+        case 'beach':
+          // Lower than surroundings
+          baseHeight -= 1 + Math.floor(Math.abs(noise1 * 0.5));
+          break;
+        case 'swamp':
+          // Varied but generally low
+          baseHeight -= Math.floor(noise3 * 0.7);
+          break;
+        case 'snow':
+          // Snow-covered mountains
+          baseHeight += Math.floor(noise2 * 0.8 + noise1 * 0.5);
+          break;
+        case 'mushroom':
+          // Somewhat weird and uneven
+          baseHeight += Math.floor((noise1 * noise3) * 1.2);
+          break;
+        default:
+          // Default terrain
+          baseHeight += Math.floor(noise1);
       }
       
       return baseHeight;
     };
     
-    // Generate the base terrain
-    for (let x = -platformSize; x <= platformSize; x++) {
-      for (let z = -platformSize; z <= platformSize; z++) {
-        const biome = getBiome(x, z);
-        const height = getHeight(x, z, biome);
-        
-        // Generate column from deep underground to surface
-        for (let y = height - 10; y <= height; y++) {
-          const blockType = getBlockType(height, y, biome, waterLevel);
-          blocks[`${x},${y},${z}`] = blockType;
+    // Generate a specific chunk of terrain
+    // This is the key function for on-demand generation
+    const generateChunkTerrain = (chunkX: number, chunkZ: number) => {
+      console.log(`Generating chunk at ${chunkX},${chunkZ}`);
+      
+      // Add chunk to the chunks record
+      chunks[`${chunkX},${chunkZ}`] = { x: chunkX, z: chunkZ };
+      
+      // Calculate block coordinates
+      const startX = chunkX * 16;
+      const startZ = chunkZ * 16;
+      const endX = startX + 16;
+      const endZ = startZ + 16;
+      
+      // Track added features for better distribution
+      const addedFeatures: Map<string, Set<string>> = new Map();
+      
+      // Generate all blocks in this chunk
+      for (let x = startX; x < endX; x++) {
+        for (let z = startZ; z < endZ; z++) {
+          // Get biome for this location
+          const biome = getBiomeForCoordinates(x, z);
+          
+          // Create a feature key for tracking features in this area
+          const featureKey = `${Math.floor(x/4)},${Math.floor(z/4)}`;
+          
+          // Initialize feature set if needed
+          if (!addedFeatures.has(featureKey)) {
+            addedFeatures.set(featureKey, new Set());
+          }
+          
+          // Calculate terrain height at this position
+          const height = getHeight(x, z, biome);
+          
+          // Generate underground and surface
+          for (let y = Math.max(0, height - 10); y <= height; y++) {
+            blocks[`${x},${y},${z}`] = getBlockType(height, y, biome, waterLevel);
+          }
+          
+          // Add features above ground with distance-based limitations
+          if (biome === 'riverbank' || biome === 'swamp' || biome === 'beach') {
+            // Add water in low areas
+            if (height <= waterLevel) {
+              for (let y = height + 1; y <= waterLevel; y++) {
+                blocks[`${x},${y},${z}`] = 'water';
+              }
+            }
+          } else if (biome === 'forest' && Math.random() < 0.03 && 
+                    !addedFeatures.get(featureKey)?.has('tree')) {
+            // Add trees in forest biome - limit to avoid overcrowding
+            addedFeatures.get(featureKey)?.add('tree');
+            generateTree(x, height, z, blocks);
+          } else if (biome === 'desert' && Math.random() < 0.02 && 
+                    !addedFeatures.get(featureKey)?.has('cactus')) {
+            // Add cacti in desert
+            addedFeatures.get(featureKey)?.add('cactus');
+            generateCactus(x, height, z, blocks);
+          } else if (biome === 'snow' && Math.random() < 0.1) {
+            // Add ice and snow layers
+            if (height > waterLevel && !blocks[`${x},${height+1},${z}`]) {
+              blocks[`${x},${height+1},${z}`] = Math.random() < 0.7 ? 'snow' : 'ice';
+            }
+          } else if (biome === 'mushroom' && Math.random() < 0.05 && 
+                    !addedFeatures.get(featureKey)?.has('mushroom')) {
+            // Add mushrooms in mushroom biome
+            addedFeatures.get(featureKey)?.add('mushroom');
+            if (height > waterLevel && !blocks[`${x},${height+1},${z}`]) {
+              blocks[`${x},${height+1},${z}`] = 'mushroom';
+            }
+          } else if ((biome === 'plains' || biome === 'forest') && Math.random() < 0.15) {
+            // Add flowers and grass in plains
+            if (height > waterLevel && !blocks[`${x},${height+1},${z}`]) {
+              const randomPlant = Math.random();
+              if (randomPlant < 0.3) {
+                blocks[`${x},${height+1},${z}`] = 'flower';
+              } else if (randomPlant < 0.5) {
+                blocks[`${x},${height+1},${z}`] = 'roseflower';
+              } else if (randomPlant < 0.7) {
+                blocks[`${x},${height+1},${z}`] = 'blueflower';
+              } else {
+                blocks[`${x},${height+1},${z}`] = 'tallGrass';
+              }
+            }
+          } else if (biome === 'mountains' && Math.random() < 0.01 && 
+                    !addedFeatures.get(featureKey)?.has('ore_vein')) {
+            // Add exposed ore veins in mountains
+            addedFeatures.get(featureKey)?.add('ore_vein');
+            if (Math.random() < 0.3) {
+              generateOreVein(x, height, z, 'ironOre', 3, blocks);
+            } else if (Math.random() < 0.2) {
+              generateOreVein(x, height, z, 'goldOre', 2, blocks);
+            } else if (Math.random() < 0.1) {
+              generateOreVein(x, height, z, 'diamond', 1, blocks);
+            }
+          }
+          
+          // Always add air above solid ground
+          for (let y = height + 1; y < height + 20; y++) {
+            if (!blocks[`${x},${y},${z}`]) {
+              blocks[`${x},${y},${z}`] = 'air';
+            }
+          }
         }
+      }
+      
+      // For the center chunk, add some special features
+      if (chunkX === 0 && chunkZ === 0) {
+        // Center crafting table
+        blocks[`0,${platformHeight+1},0`] = 'craftingTable';
         
-        // Add water or features above the surface based on biome
-        if (biome === 'riverbank' || biome === 'swamp') {
-          if (blocks[`${x},${height},${z}`] !== 'water') {
-            blocks[`${x},${height+1},${z}`] = 'water';
-          }
-        } else if (biome === 'forest' && Math.random() < 0.15) {
-          // Add trees in forest biome
-          const treeHeight = 3 + Math.floor(Math.random() * 2);
-          
-          // Tree trunk
-          for (let y = 1; y <= treeHeight; y++) {
-            blocks[`${x},${height+y},${z}`] = 'wood';
-          }
-          
-          // Tree leaves
-          for (let lx = -2; lx <= 2; lx++) {
-            for (let lz = -2; lz <= 2; lz++) {
-              for (let ly = 0; ly <= 2; ly++) {
-                const distFromCenter = Math.abs(lx) + Math.abs(lz) + ly;
-                
-                if (distFromCenter <= 3) {
-                  const leafX = x + lx;
-                  const leafY = height + treeHeight - ly;
-                  const leafZ = z + lz;
-                  
-                  // Don't place leaves where the trunk is
-                  if (!(lx === 0 && lz === 0)) {
-                    blocks[`${leafX},${leafY},${leafZ}`] = 'leaves';
-                  }
-                }
+        // Torches around center
+        blocks[`2,${getHeight(2, 2, 'plains')+1},2`] = 'torch';
+        blocks[`-2,${getHeight(-2, 2, 'plains')+1},2`] = 'torch';
+        blocks[`2,${getHeight(2, -2, 'plains')+1},-2`] = 'torch';
+        blocks[`-2,${getHeight(-2, -2, 'plains')+1},-2`] = 'torch';
+        
+        // Example ores
+        blocks[`4,${platformHeight-5},4`] = 'diamond';
+        blocks[`-4,${platformHeight-6},-4`] = 'emerald';
+        
+        // Sample blocks
+        blocks[`3,${platformHeight+1},0`] = 'gravel';
+        blocks[`-3,${platformHeight+1},0`] = 'clay';
+        blocks[`0,${platformHeight+1},3`] = 'pumpkin';
+        blocks[`0,${platformHeight+1},-3`] = 'melon';
+        
+        // Glowstone example
+        blocks[`5,${platformHeight+1},5`] = 'glowstone';
+        
+        // Small lava pool
+        blocks[`-5,${platformHeight+1},-5`] = 'lava';
+        blocks[`-5,${platformHeight+1},-6`] = 'lava';
+        blocks[`-6,${platformHeight+1},-5`] = 'lava';
+        blocks[`-6,${platformHeight+1},-6`] = 'obsidian';
+      }
+    };
+    
+    // Helper to generate a tree
+    const generateTree = (x: number, baseHeight: number, z: number, blockMap: Record<string, BlockType>) => {
+      // Tree height varies
+      const treeHeight = 3 + Math.floor(Math.random() * 3);
+      
+      // Tree trunk
+      for (let y = 1; y <= treeHeight; y++) {
+        blockMap[`${x},${baseHeight+y},${z}`] = 'wood';
+      }
+      
+      // Tree leaves - with optimization to skip hidden leaves
+      const leafRadius = 2;
+      for (let lx = -leafRadius; lx <= leafRadius; lx++) {
+        for (let lz = -leafRadius; lz <= leafRadius; lz++) {
+          for (let ly = 0; ly <= 2; ly++) {
+            // Skip if too far from trunk (make spherical leaves)
+            const distFromCenter = Math.sqrt(lx*lx + lz*lz + ly*ly);
+            
+            if (distFromCenter <= 2.5) {
+              const leafX = x + lx;
+              const leafY = baseHeight + treeHeight - ly;
+              const leafZ = z + lz;
+              
+              // Don't place leaves where the trunk is
+              if (!(lx === 0 && lz === 0)) {
+                blockMap[`${leafX},${leafY},${leafZ}`] = 'leaves';
               }
             }
           }
-        } else if (biome === 'desert' && Math.random() < 0.08) {
-          // Add cacti in desert
-          const cactusHeight = 1 + Math.floor(Math.random() * 2);
-          for (let y = 1; y <= cactusHeight; y++) {
-            blocks[`${x},${height+y},${z}`] = 'cactus';
-          }
-        } else if (biome === 'snow' && Math.random() < 0.1) {
-          // Add ice in snow biome
-          blocks[`${x},${height+1},${z}`] = Math.random() < 0.7 ? 'snow' : 'ice';
-        } else if (biome === 'mushroom' && Math.random() < 0.2) {
-          // Add mushrooms in mushroom biome
-          blocks[`${x},${height+1},${z}`] = 'mushroom';
-        } else if (biome === 'plains' && Math.random() < 0.15) {
-          // Add flowers and grass in plains
-          const randomPlant = Math.random();
-          if (randomPlant < 0.3) {
-            blocks[`${x},${height+1},${z}`] = 'flower';
-          } else if (randomPlant < 0.5) {
-            blocks[`${x},${height+1},${z}`] = 'roseflower';
-          } else if (randomPlant < 0.7) {
-            blocks[`${x},${height+1},${z}`] = 'blueflower';
-          } else {
-            blocks[`${x},${height+1},${z}`] = 'tallGrass';
-          }
-        } else if (biome === 'cactus' && Math.random() < 0.1) {
-          // Add cacti in cactus biome
-          blocks[`${x},${height+1},${z}`] = 'cactus';
         }
       }
-    }
+    };
     
-    // Add special features
-    // Add a crafting table at the center
-    blocks[`0,${platformHeight+1},0`] = 'craftingTable';
+    // Helper to generate a cactus
+    const generateCactus = (x: number, baseHeight: number, z: number, blockMap: Record<string, BlockType>) => {
+      // Cactus height varies
+      const cactusHeight = 1 + Math.floor(Math.random() * 3);
+      
+      // Simple cactus column
+      for (let y = 1; y <= cactusHeight; y++) {
+        blockMap[`${x},${baseHeight+y},${z}`] = 'cactus';
+      }
+      
+      // Occasionally add "arms" to cactus
+      if (cactusHeight > 1 && Math.random() < 0.4) {
+        const armHeight = Math.floor(Math.random() * (cactusHeight - 1)) + 1;
+        const armDirection = Math.floor(Math.random() * 4);
+        
+        let armX = x;
+        let armZ = z;
+        
+        switch(armDirection) {
+          case 0: armX = x + 1; break;
+          case 1: armX = x - 1; break;
+          case 2: armZ = z + 1; break;
+          case 3: armZ = z - 1; break;
+        }
+        
+        blockMap[`${armX},${baseHeight+armHeight},${armZ}`] = 'cactus';
+      }
+    };
     
-    // Add torches for lighting
-    blocks[`2,${getHeight(2, 2, 'plains')+1},2`] = 'torch';
-    blocks[`-2,${getHeight(-2, 2, 'plains')+1},2`] = 'torch';
-    blocks[`2,${getHeight(2, -2, 'plains')+1},-2`] = 'torch';
-    blocks[`-2,${getHeight(-2, -2, 'plains')+1},-2`] = 'torch';
+    // Helper to generate an ore vein
+    const generateOreVein = (
+      x: number, 
+      baseHeight: number, 
+      z: number, 
+      oreType: BlockType,
+      size: number,
+      blockMap: Record<string, BlockType>
+    ) => {
+      // Place ore cluster
+      for (let ox = -size; ox <= size; ox++) {
+        for (let oy = -size; oy <= size; oy++) {
+          for (let oz = -size; oz <= size; oz++) {
+            const distance = Math.sqrt(ox*ox + oy*oy + oz*oz);
+            
+            // Random distribution based on distance
+            if (distance <= size && Math.random() < 0.5) {
+              const oreX = x + ox;
+              const oreY = baseHeight - Math.abs(oy);
+              const oreZ = z + oz;
+              
+              // Don't place ores above ground
+              if (oreY < baseHeight) {
+                blockMap[`${oreX},${oreY},${oreZ}`] = oreType;
+              }
+            }
+          }
+        }
+      }
+    };
     
-    // Add some valuable ores for the player to find
-    blocks[`4,${platformHeight-5},4`] = 'diamond';
-    blocks[`-4,${platformHeight-6},-4`] = 'emerald';
-    blocks[`-3,${platformHeight-4},5`] = 'ironOre';
-    blocks[`5,${platformHeight-4},-3`] = 'goldOre';
+    // Generate just the initial center chunk for startup
+    generateChunkTerrain(0, 0);
     
-    // Add some small features of the other block types so player can see examples
-    blocks[`3,${platformHeight+1},0`] = 'gravel';
-    blocks[`-3,${platformHeight+1},0`] = 'clay';
-    blocks[`0,${platformHeight+1},3`] = 'pumpkin';
-    blocks[`0,${platformHeight+1},-3`] = 'melon';
-    
-    // Add a lava pool in one area
-    blocks[`-5,${platformHeight+1},-5`] = 'lava';
-    blocks[`-5,${platformHeight+1},-6`] = 'lava';
-    blocks[`-6,${platformHeight+1},-5`] = 'lava';
-    blocks[`-6,${platformHeight+1},-6`] = 'obsidian';
-    
-    console.log(`Created enhanced terrain with ${Object.keys(blocks).length} blocks across multiple biomes`);
+    console.log(`Created initial terrain with ${Object.keys(blocks).length} blocks`);
     return { generatedChunks: chunks, generatedBlocks: blocks };
     
   } catch (error) {
@@ -193,12 +339,20 @@ export function generateTerrain() {
     };
     const fallbackBlocks: Record<string, BlockType> = {};
     
-    // Just create a 3x3 platform
-    for (let x = -1; x <= 1; x++) {
-      for (let z = -1; z <= 1; z++) {
+    // Create a simple platform
+    for (let x = -4; x <= 4; x++) {
+      for (let z = -4; z <= 4; z++) {
         fallbackBlocks[`${x},15,${z}`] = 'grass';
+        
+        // Add some depth
+        for (let y = 10; y < 15; y++) {
+          fallbackBlocks[`${x},${y},${z}`] = 'dirt';
+        }
       }
     }
+    
+    // Add a crafting table
+    fallbackBlocks['0,16,0'] = 'craftingTable';
     
     console.log("Generated emergency fallback platform");
     return { generatedChunks: fallbackChunks, generatedBlocks: fallbackBlocks };
